@@ -1,14 +1,13 @@
-#!/usr/bin/python
 
 import sys
 import subprocess
-import urllib
+import urllib.parse
 from limitedstringqueue import LimitedStringQueue
 
 PROGRAM = sys.argv[1]
 COMPILER = sys.argv[2]
 #ARGS = sys.argv[3]
-ARGS = urllib.unquote(sys.argv[3])
+ARGS = urllib.parse.unquote(sys.argv[3])
 IMAGE_ADDR = sys.argv[4]
 IMAGE_PASSWD = sys.argv[5]
 LOG_FILE = sys.argv[6]
@@ -24,8 +23,9 @@ class RunProgram():
         q = LimitedStringQueue()
         with open(LOG_FILE, "a") as myfile:
             for line in p.stdout.readlines():
+                line = str(line)
                 q.push(line)
-                myfile.write(line,)
+                myfile.write(line)
             myfile.write("\n")     # separate previous outputs
             myfile.write("exec-result: "+EXECID+" "+q.concaturlenc())
             myfile.write("\n")     # separate following outputs
@@ -38,12 +38,15 @@ class RunProgram():
         # get the appropriate compiler
         if COMPILER == "python":
             program_compiler = "python"
-        if COMPILER == "ruby":
+        elif COMPILER == "ruby":
             program_compiler = "ruby"
-        if COMPILER == "powershell":
+        elif COMPILER == "powershell":
             program_compiler = "powershell"
-        if COMPILER == "bash":
+        elif COMPILER == "bash":
             program_compiler = "bash"
+        elif COMPILER == "expect":
+            program_compiler = "expect"
+
         # process args
         if ARGS == "none":
             program_args = ""
@@ -59,7 +62,7 @@ class RunProgram():
         else:
             command = "sshpass -p {0} ssh -E /dev/null -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no root@{1} {2} '{3} {4}'".format(IMAGE_PASSWD, IMAGE_ADDR, program_compiler, PROGRAM, program_args)
         self.execute_command(command)
-        print command
+        print(command)
 
 runProgram = RunProgram()
 runProgram.runProgram()

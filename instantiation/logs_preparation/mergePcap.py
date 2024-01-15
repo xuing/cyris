@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 
 import os
 import sys
@@ -29,13 +28,13 @@ class PcapCreation():
             list_timestamp = list(pcap_content)
             start_time = list_timestamp[0].time
             end_time = list_timestamp[-1].time
-       
-        print "{0}: {1} - {2}".format(pcapfile, start_time, end_time)
+
+        print("{0}: {1} - {2}".format(pcapfile, start_time, end_time))
         return (start_time + end_time)/2
-    
+
     def merge_pcap(self):
         noise_file = ""
-        
+
         # convert pcapng to pcap
         command = "editcap -F libpcap {0}attack.pcapng {0}attack.pcap;\n".format(CR_DIR)
         os.system(command)
@@ -44,9 +43,9 @@ class PcapCreation():
 
         sleep(0.5)
         if os.path.isfile(path):
-            print "yes"
+            print("yes")
         else:
-            print "no"
+            print("no")
 
         time1 = self.get_pcap_timestamp(path)
         if NOISE == "low":
@@ -55,10 +54,10 @@ class PcapCreation():
             noise_file = "{0}{1}/logs_preparation/noise_medium.pcap".format(ABSPATH, INSTANTIATION_DIR)
         elif NOISE == "high":
             noise_file = "{0}{1}/logs_preparation/noise_high.pcap".format(ABSPATH, INSTANTIATION_DIR)
-        print "{0} \n".format(noise_file)
+        print("{0} \n".format(noise_file))
         time2 = self.get_pcap_timestamp(noise_file)
 
-        print "{0}\n".format(FILE_NAME)
+        print("{0}\n".format(FILE_NAME))
         # shift time of noise pcap file
         command = "editcap -t {0} {1} {2}noise.pcap;\n".format(time1-time2, noise_file, CR_DIR)
         # merge pcap files

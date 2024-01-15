@@ -1,4 +1,4 @@
-#!/usr/bin/python
+
 import paramiko, sys, os, socket
 import threading
 import subprocess
@@ -17,7 +17,7 @@ class myThread (threading.Thread):
         self.assign_number = 0
 
     def run(self):
-        print "Starting " + self.name
+        print("Starting ", self.name)
         if(self.threadID != 5):
             self.assign_number = int(number)/5
         else:
@@ -27,13 +27,13 @@ class myThread (threading.Thread):
             try:
                 response = ssh_connect()
                 if response == 1:
-                    print "{}: {}".format(self.name, i)
+                    print("{}: {}".format(self.name, i))
                 elif response == 2:
-                    print "socket error"
-            except Exception, e:
-                print e
+                    print("socket error")
+            except Exception as e:
+                print(e)
                 pass
-        print "Exiting " + self.name
+        print("Exiting ", self.name)
 
 def ssh_connect():
     ssh = paramiko.SSHClient()

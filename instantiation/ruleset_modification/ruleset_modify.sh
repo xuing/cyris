@@ -37,7 +37,7 @@ if [ ${basevm_type} = "kvm" ]; then
     cp ${abs_path}${inst_dir}/ruleset_modification/iptables_template ${abs_path}${inst_dir}/ruleset_modification/iptables;
     ## Append 'firewall_rules' task rules to the 'iptables' file
     echo "ruleset_modify.sh: Append 'firewall_rules' task rules to file..."
-    python ${abs_path}${inst_dir}/ruleset_modification/append_ruleset.py ${ruleset_file} ${abs_path}${inst_dir}/ruleset_modification/iptables;
+    python3 ${abs_path}${inst_dir}/ruleset_modification/append_ruleset.py ${ruleset_file} ${abs_path}${inst_dir}/ruleset_modification/iptables;
     ## Copy the 'iptables' file to the base VM
     echo "ruleset_modify.sh: Copy iptables configuration file to base VM..."
     scp ${abs_path}${inst_dir}/ruleset_modification/iptables root@${image_addr}:/etc/sysconfig;
@@ -49,7 +49,7 @@ if [ ${basevm_type} = "kvm" ]; then
 elif [ ${basevm_type} = "aws" ]; then
     if [ ${os_type} = "amazon_linux" -o ${os_type} = "amazon_linux2" ]; then
         cp ${abs_path}${inst_dir}/ruleset_modification/iptables_template ${abs_path}${inst_dir}/ruleset_modification/iptables;
-        python ${abs_path}${inst_dir}/ruleset_modification/append_ruleset.py ${ruleset_file} ${abs_path}${inst_dir}/ruleset_modification/iptables;
+        python3 ${abs_path}${inst_dir}/ruleset_modification/append_ruleset.py ${ruleset_file} ${abs_path}${inst_dir}/ruleset_modification/iptables;
         scp -i TESTKEY.pem -o StrictHostKeyChecking=no ${abs_path}${inst_dir}/ruleset_modification/iptables ec2-user@${image_addr}:
         ssh -i TESTKEY.pem ec2-user@${image_addr} "sudo mv iptables /etc/sysconfig/iptables"
         ssh -i TESTKEY.pem ec2-user@${image_addr} "sudo iptables-restore /etc/sysconfig/iptables";
@@ -58,13 +58,13 @@ elif [ ${basevm_type} = "aws" ]; then
         ssh -i TESTKEY.pem ec2-user@${image_addr} "sudo systemctl start iptables; sudo systemctl start ip6tables";
         ssh -i TESTKEY.pem ec2-user@${image_addr} "sudo systemctl enable iptables; sudo systemctl enable ip6tables";
         cp ${abs_path}${inst_dir}/ruleset_modification/iptables_template ${abs_path}${inst_dir}/ruleset_modification/iptables;
-        python ${abs_path}${inst_dir}/ruleset_modification/append_ruleset.py ${ruleset_file} ${abs_path}${inst_dir}/ruleset_modification/iptables;
+        python3 ${abs_path}${inst_dir}/ruleset_modification/append_ruleset.py ${ruleset_file} ${abs_path}${inst_dir}/ruleset_modification/iptables;
         scp -i TESTKEY.pem ${abs_path}${inst_dir}/ruleset_modification/iptables ec2-user@${image_addr}:
         ssh -i TESTKEY.pem ec2-user@${image_addr} "sudo mv iptables /etc/sysconfig/iptables"
         ssh -i TESTKEY.pem ec2-user@${image_addr} "sudo iptables-restore /etc/sysconfig/iptables";
     elif [ ${os_type} = "ubuntu_20" -o ${os_type} = "ubuntu_18" -o ${os_type} = "ubuntu_16" ]; then
         cp ${abs_path}${inst_dir}/ruleset_modification/iptables_template ${abs_path}${inst_dir}/ruleset_modification/iptables;
-        python ${abs_path}${inst_dir}/ruleset_modification/append_ruleset.py ${ruleset_file} ${abs_path}${inst_dir}/ruleset_modification/iptables;
+        python3 ${abs_path}${inst_dir}/ruleset_modification/append_ruleset.py ${ruleset_file} ${abs_path}${inst_dir}/ruleset_modification/iptables;
         scp -i TESTKEY.pem -o StrictHostKeyChecking=no ${abs_path}${inst_dir}/ruleset_modification/iptables ubuntu@${image_addr}:
         ssh -i TESTKEY.pem ubuntu@${image_addr} "sudo mv iptables /etc/iptables"
         ssh -i TESTKEY.pem ubuntu@${image_addr} "sudo iptables-restore /etc/iptables";

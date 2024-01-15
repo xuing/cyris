@@ -1,5 +1,4 @@
-#!/usr/bin/python
-#
+
 # LimitedStringQueue:
 #   - store result string lines as queue
 #   - if orient is 0, store first several lines
@@ -16,7 +15,7 @@
 #       x.dumpconcaturlenc()
 #
 
-import urllib
+import urllib.parse
 
 class LimitedStringQueue:
     def __init__(self, xqorient=0, xqnummax=10, xqelelenmax=10):
@@ -30,16 +29,14 @@ class LimitedStringQueue:
             pre = ""
         else:
             pre = xprefix + ": "
-        print pre+"orient    ",self.qorient
-        print pre+"num*      ",len(self.q)
-        print pre+"nummax    ",self.qnummax
-#       print pre+"elelenmax ",self.qelelenmax
+        print(pre+"orient    ", self.qorient)
+        print(pre+"num*      ", len(self.q))
+        print(pre+"nummax    ", self.qnummax)
 
     def clear(self):
         self.q = []
 
     def push(self, x):
-#        print self.qorient," ",len(self.q)," vs ",self.qnummax
         if(self.qorient==0):
             if(len(self.q)<self.qnummax):
                 self.q.append(x)
@@ -49,15 +46,15 @@ class LimitedStringQueue:
             self.q.append(x)
         else:
             self.q.append(x)
-    
+
     def dump(self):
         for x in self.q:
-            print x
+            print(x)
 
     def dumpwc(self):
         i = 0
         for x in self.q:
-            print i,x
+            print(i, x)
             i = i + 1
 
     def dumpconcat(self,xprefix="",xsep=""):
@@ -73,9 +70,9 @@ class LimitedStringQueue:
                     cont = cont + xsep + x
             i = i + 1
         if(xprefix==""):
-            print cont
+            print(cont)
         else:
-            print xprefix,cont
+            print(xprefix, cont)
 
     def dumpconcaturlenc(self,xprefix="",xsep=""):
         i = 0
@@ -90,9 +87,9 @@ class LimitedStringQueue:
                     cont = cont + xsep + x
             i = i + 1
         if(xprefix==""):
-            print urllib.quote(cont)
+            print(urllib.parse.quote(cont))
         else:
-            print xprefix,urllib.quote(cont)
+            print(xprefix, urllib.parse.quote(cont))
 
 
     def concat(self,xsep=""):
@@ -121,7 +118,7 @@ class LimitedStringQueue:
                 else:
                     cont = cont + xsep + x
             i = i + 1
-        return urllib.quote(cont)
+        return urllib.parse.quote(cont)
 
 ###
 ### TEST CODE
@@ -159,5 +156,4 @@ if __name__ == '__main__':
     q3.dumpconcaturlenc(xprefix="q3-urlenc",xsep="|")
     q3.dumpconcaturlenc(xprefix="q3-urlenc",xsep="\n")
 
-    print "q3-urlenc",q3.concaturlenc(xsep="\n")," <- print w/o dump*"
-
+    print("q3-urlenc", q3.concaturlenc(xsep="\n"), " <- print w/o dump*")

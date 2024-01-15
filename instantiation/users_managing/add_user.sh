@@ -10,7 +10,7 @@ if id -u "$username" >/dev/null 2>&1; then
 	echo "user exists";
 	exit 1;
 else
-	useradd -s /bin/bash -p $(echo $passwd | openssl passwd -1 -stdin) $username;
+	useradd -m -s /bin/bash -p $(echo $passwd | openssl passwd -1 -stdin) $username;
 fi
 
 # provide root privilege to that user

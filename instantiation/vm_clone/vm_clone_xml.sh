@@ -28,7 +28,7 @@ fi
 
 echo "** Create disk image '${VM_ID}_img' for the cloned VM"
 # Create overlay image from base image
-qemu-img create -b ${ABSPATH}${IMAGE_NAME} -f qcow2 ${ABSPATH}images/${VM_ID}_img
+qemu-img create -b ${ABSPATH}${IMAGE_NAME} -F qcow2 -f qcow2 ${ABSPATH}images/${VM_ID}_img
 sudo chown libvirt-qemu: ${ABSPATH}images/${VM_ID}_img
 
 echo "** Create XML config file '${VM_ID}_config.xml' for the cloned VM"

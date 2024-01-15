@@ -34,7 +34,7 @@ sudo tcprewrite -S ${virbr_addr}/32:${image_addr}/32 -i ${cr_dir}virbr0_2.pcap -
 sudo tcprewrite -D ${virbr_addr}/32:${image_addr}/32 -i ${cr_dir}virbr0_3.pcap -o ${cr_dir}attack.pcapng;
 
 # change timestamp of noise file and merge with the attack pcap file
-sudo python ${abs_path}${inst_dir}/logs_preparation/mergePcap.py ${noise_level} ${file_name} ${abs_path} ${cr_dir};
+sudo python3 ${abs_path}${inst_dir}/logs_preparation/mergePcap.py ${noise_level} ${file_name} ${abs_path} ${cr_dir};
 
 # remove unecessary pcap files
 sudo rm ${cr_dir}virbr0*.pcap;
