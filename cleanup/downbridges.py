@@ -1,4 +1,3 @@
-#!/usr/bin/python
 
 # this script is to bring down cyber range 's bridges. It gets the job done by open and see how many bridges are there in the create_bridges.sh file
 
@@ -28,8 +27,8 @@ def down_bridges():
                 gap = 11 * count
             else:
                 gap = 10
-            print "starting line: ", number - 1
-            print "ending line: ", number + gap + 1
+            print("starting line: ", number - 1)
+            print("ending line: ", number + gap + 1)
             first_part = file_lines[:(number-1)]
             second_part = file_lines[(number+gap):]
         my_file.seek(0)
