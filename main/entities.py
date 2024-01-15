@@ -1,4 +1,3 @@
-#!/usr/bin/python
 
 #########################################################################################
 # Classes related to entities that CyRIS uses for reading the cyber range description file.
@@ -27,7 +26,7 @@ def represent_ordereddict(dumper, data):
 
 yaml.add_representer(OrderedDict, represent_ordereddict)
 
-''' 
+'''
 Object host is created for containing information about hosts that are 
 specified in the description. It has variables for:
     + host_id: id of the host.
@@ -96,7 +95,7 @@ class Guest(object):
 
     def getRootPasswd(self):
         return self.root_passwd
-    
+
     def setRootPasswd(self, new_passwd):
         self.root_passwd = new_passwd
 
@@ -330,8 +329,8 @@ class CloneSubnetwork(object):
 
     def setNodeList(self, members_str):
         if DEBUG:
-            print members_str
-	# Remove all whitespaces in the members_str.
+            print(members_str)
+        # Remove all whitespaces in the members_str.
         members_str = members_str.replace(" ", "")
         node_list = []
         if "," in members_str:
@@ -432,7 +431,7 @@ class CloneInstance(object):
             # List of nodes.interface in the network.
             node_list = []
             if DEBUG:
-                print subnw_element.getNodeList()
+                print(subnw_element.getNodeList())
             for node_element in subnw_element.getNodeList():
                 # Split the segment value to get node_id and node_nic.
                 node_id, node_nic = node_element.split(".")
@@ -444,7 +443,7 @@ class CloneInstance(object):
                         ip_addr = "{0}.{1}.{2}.{3}".format(range_id, self.getIndex(), i+1, j+2)
                         if node_element != subnw_element.getGateway():
                             if DEBUG:
-                                print ip_addr
+                                print(ip_addr)
                             # Add element to ipaddr_list (gateway is not included).
                             ipaddr_list.append(ip_addr)
                             # Add elements to node_list (gateway is not included).
@@ -486,9 +485,9 @@ class CloneInstance(object):
                             gateway_addr = ".".join(bits)
                             guest.addNicGwDict(guest_nic, gateway_addr)
                             break
-                
+
         if DEBUG:
-            print nwname_ipaddrs_dict, nwname_nodes_dict
+            print(nwname_ipaddrs_dict, nwname_nodes_dict)
 
         # Set rules for each guest in list clone_guest based on src=ipaddr, dst=ipaddr.
         for guest in self.getCloneGuestList():
@@ -534,7 +533,6 @@ class CloneInstance(object):
                 if len(fwrule_list) != 0:
                     fw_rule = "iptables -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT"
                     fwrule_list.append(fw_rule)
-                #print fwrule_list
                 guest.setFwRuleList(fwrule_list)
 
     # Function for generating ip addresses for bridges in the instance.
@@ -562,12 +560,11 @@ class CloneInstance(object):
 
     def setEntryPoint(self, instance_id, port, host_id):
         for clone_guest in self.getCloneGuestList():
-            #if clone_guest.getGuestId() == "desktop" and clone_guest.getIndex() == 1:
             if clone_guest.getIsEntryPoint() == True and clone_guest.getIndex() == 1:
                 self.entry_point.setAddr(clone_guest.getNicAddrDict()["eth0"])
         self.entry_point.setPort(port) 
         # Generate random account and passwd for entry point.
-        s = string.lowercase+string.digits
+        s = string.ascii_lowercase + string.digits
         # OLD VERSION: Random suffix of 5 digits
         #account = "trainee{0}".format(''.join(random.sample(s,5)))
         # NEW VERSION: Use instance id as suffix (add 1 so as to start from 1)
@@ -577,7 +574,7 @@ class CloneInstance(object):
         self.entry_point.setAccount(account)
         self.entry_point.setPasswd(passwd)
         self.entry_point.setHostId(host_id)
-    
+
 '''
 Object CloneHost is created for containing information of the tag "hosts" in the cyber range
 description. It has two variables:
@@ -700,23 +697,22 @@ class CloneSetting(object):
         with open(filename_tmp, 'w') as yaml_file:
             yaml.dump(data, yaml_file, width=float("inf"), allow_unicode=True, default_flow_style=False, explicit_start=True)
         os.rename(filename_tmp, filename)
-        #print data
 
     def generateNetworkMembership(self, clone_subnw_list, guest_id):
         networks_dict = OrderedDict()
         if DEBUG:
-            print "* DEBUG: cyris: Network info in cyber range of guest '{0}': ".format(guest_id)
+            print("* DEBUG: cyris: Network info in cyber range of guest '{0}': ".format(guest_id))
         for clone_subnw in clone_subnw_list:
             if DEBUG:
-                print "* DEBUG: cyris:   Network name: ", clone_subnw.getName()
-                print "* DEBUG: cyris:   Node list: ", clone_subnw.getNodeList()
+                print("* DEBUG: cyris:   Network name: ", clone_subnw.getName())
+                print("* DEBUG: cyris:   Node list: ", clone_subnw.getNodeList())
             for node_interface in clone_subnw.getNodeList():
                 node_interface_list = node_interface.split(".")
                 if node_interface_list:
                     if node_interface_list[0] == guest_id:
                         networks_dict[node_interface_list[1]] = clone_subnw.getName()
         if DEBUG:
-            print "* DEBUG: cyris: Generated networks dictionary: ", networks_dict
+            print("* DEBUG: cyris: Generated networks dictionary: ", networks_dict)
         return networks_dict
 
 class Command(object):
@@ -734,125 +730,3 @@ class Command(object):
 
     def __str__(self):
         return "command: " + self.getCommand() + " description: " + self.getDescription()
-
-"""
-def main():
-    yaml_file = sys.argv[1]
-    try:
-        with open(yaml_file, "r") as f:
-            doc = yaml.load(f)
-    except yaml.YAMLError, exc:
-        print "Error in the cyber range description file: ", exc
-        return
-    hosts = []
-    clone_setting = None
-    for element in doc:
-	if "host_settings" in element.keys():
-	    for i in element["host_settings"]:
-		if i == 0:
-		    MSTNODE_ACCOUNT = i["account"]
-		    MSTNODE_MGMT_ADDR = i["mgmt_addr"]
-		host = Host(i["id"], i["virbr_addr"], i["mgmt_addr"], i["account"])
-		hosts.append(host)
-
-        if "clone_settings" in element.keys():
-            range_id = element["clone_settings"][0]["range_id"]
-            clone_host_list = []
-            for host in element["clone_settings"][0]["hosts"]:
-                host_id_str = host["host_id"].strip()
-                host_id_list = []
-                if "," in host_id_str:
-                    host_id_list = host_id_str.replace(" ","").split(",")
-                else:
-                    host_id_list.append(host_id_str)
-                for host_id in host_id_list:
-                    instance_num = host["instance_number"]
-                    nw_type = host["topology"][0]["type"]
-#                    for subnetwork in host["topology"][0]["networks"]:
-#                        name = subnetwork["name"]
-#                        members = subnetwork["members"]
-#                        if "gateway" in subnetwork.keys():
-#                            gateway = subnetwork["gateway"]
-#                        else:
-#                            gateway = ""
-#                        clone_subnetwork = CloneSubnetwork(name, members, gateway)
-#                        clone_subnw_list.append(clone_subnetwork)
-                    instance_list = []
-                    for i in range(1, instance_num+1):
-                        # Since each instance reuse the information of the guest, it's important to 
-                        # recreate a clone_guest_list when creating a new instance. It is the main
-                        # reason why clone_guest_list is created here but not in the same place with
-                        # the clone_subnw_list.
-                        clone_subnw_list = []
-                        for subnetwork in host["topology"][0]["networks"]:
-                            name = subnetwork["name"]
-                            members = subnetwork["members"]
-                            if "gateway" in subnetwork.keys():
-                                gateway = subnetwork["gateway"]
-                            else:
-                                gateway = ""
-                            clone_subnetwork = CloneSubnetwork(name, members, gateway)
-                            clone_subnw_list.append(clone_subnetwork)
-                        clone_guest_list = []
-                        for guest in host["guests"]:
-                            guest_id = guest["guest_id"]
-                            number = guest["number"]
-                            firewall_rules = []
-                            if "forwarding_rules" in guest.keys():
-                                has_fw_setup = True
-                                for rule in guest["forwarding_rules"]:
-                                    firewall_rules.append(rule["rule"])
-                            else:
-                                has_fw_setup = False
-
-                            if "entry_point" in guest.keys():
-                                is_entry_point = True
-                            else:
-                                is_entry_point = False
-                            # Create a list of clone_guest with size=number.
-                            for k in range(1, number+1):
-                                clone_guest = CloneGuest(guest_id, k, has_fw_setup, firewall_rules, is_entry_point)
-                                clone_guest_list.append(clone_guest)
-                        instance = CloneInstance(i, clone_guest_list, clone_subnw_list)
-                        instance_list.append(instance)
-                    clone_host = CloneHost(host_id, instance_list)
-                    clone_host_list.append(clone_host)
-            clone_setting = CloneSetting(range_id, nw_type, clone_host_list)
-            clone_setting.setCloneHostList([2,3,4,5,6,7,8,9,10])
-            clone_setting.writeConfig("result.yml")
-
-    for host in clone_setting.getCloneHostList():
-        print host.getHostId()
-        for i,instance in enumerate(host.getInstanceList()):
-            print "instance",i
-            for bridge in instance.getBridgeList():
-                print bridge
-            for guest in instance.getCloneGuestList():
-                print guest
-                print "\n"
-            print "entry point: ", instance.getEntryPoint()
-    # Send email function
-#    f = open("/home/cyuser/cyris-development/main/mail_template", "r")
-#    contents = f.readlines()
-#    f.close()
-#    contents.insert(0, "Dear John Doe,")
-#    contents.insert(4, "\n- Number of cyber range instances: {0}".format(clone_setting.getTotalInstanceNum()))
-#    information = ""
-#    instance_index = 1
-#    for host in clone_setting.getCloneHostList():
-#        for instance in host.getInstanceList():
-#            for host in hosts:
-#                if instance.getEntryPoint().getHostId() == host.getHostId():
-#                    entry_point = instance.getEntryPoint()
-#                    information += "\n- Cyber range instance {0}:\n\turl: ssh {1}@{2} -p {3}\n\tpasswd: {4}\n".format(instance_index, entry_point.getAccount(), host.getMgmtAddr(), entry_point.getPort(), entry_point.getPasswd())	
-#                    instance_index += 1
-#                    break
-#    contents.insert(6, "{0}\n".format(information))
-#    f = open("/home/cyuser/cyris-development/main/inform_email", "w")
-#    contents = "".join(contents)
-#    f.write(contents)
-#    f.close()
-
-            
-main()
-"""

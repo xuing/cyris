@@ -1,4 +1,3 @@
-#!/usr/bin/python
 
 import yaml
 import os
@@ -15,7 +14,7 @@ FLAG = True
 DEBUG = False
 
 def raise_flag(error):
-    print "* ERROR: check_description:", error
+    print("* ERROR: check_description:", error)
     global FLAG
     if FLAG == True:
         FLAG = False
@@ -58,12 +57,12 @@ def get_network_set(fw_rules):
 def check_description(filename, cr_dir):
     try:
         with open(filename, "r") as f:
-            doc = yaml.load(f)
-    except IOError, e:
-        raise_flag(e)
+            doc = yaml.safe_load(f)
+    except IOError as e_io:
+        raise_flag(e_io)
         return FLAG
-    except yaml.YAMLError, e:
-        raise_flag(e)
+    except yaml.YAMLError as e_yaml:
+        raise_flag(e_yaml)
         return FLAG
 
     # For each playbook in the training description.
@@ -96,9 +95,9 @@ def check_description(filename, cr_dir):
         raise_flag("Section '{0}' is missing.".format(Storyboard.HOST_SETTINGS))
     else:
         for host in host_section[Storyboard.HOST_SETTINGS]:
-            
+
             host_id = Storyboard.NOT_AVAIL
-            host_keys = host.keys()
+            host_keys = list(host.keys())
 
             # ID tag
             if Storyboard.ID not in host_keys:
@@ -150,7 +149,7 @@ def check_description(filename, cr_dir):
         for guest in guest_section[Storyboard.GUEST_SETTINGS]:
 
             guest_id = Storyboard.NOT_AVAIL
-            guest_keys = guest.keys()
+            guest_keys = list(guest.keys())
 
             # ID4GUEST tag
             if Storyboard.ID4GUEST not in guest_keys:
@@ -183,8 +182,8 @@ def check_description(filename, cr_dir):
                 if ".xml" in config_file:
                     harddisk_file = config_file.replace(".xml", "")
                 if DEBUG:
-                    print config_file
-                    print harddisk_file
+                    print(config_file)
+                    print(harddisk_file)
                 # Check whether the VM config file and disk image have valid names
                 if not os.path.exists(config_file):
                     raise_flag("Tag '{0}' for guest '{1}' in section '{2}' references a non-existing VM configuration file: {3}".format(Storyboard.BASEVM_CONFIG_FILE, guest_id, Storyboard.GUEST_SETTINGS, config_file))
@@ -207,13 +206,13 @@ def check_description(filename, cr_dir):
             if Storyboard.TASKS in guest_keys and guest.get(Storyboard.TASKS):
                 for task in guest[Storyboard.TASKS]:
 
-                    task_keys = task.keys()
+                    task_keys = list(task.keys())
 
                     # ADD_ACCOUNT tag
                     if Storyboard.ADD_ACCOUNT in task_keys:
                         for account in task[Storyboard.ADD_ACCOUNT]:
 
-                            account_keys = account.keys()
+                            account_keys = list(account.keys())
 
                             # ACCOUNT tag
                             if Storyboard.ACCOUNT not in account_keys:
@@ -241,7 +240,7 @@ def check_description(filename, cr_dir):
                     if Storyboard.MODIFY_ACCOUNT in task_keys:
                         for account in task[Storyboard.MODIFY_ACCOUNT]:
 
-                            account_keys = account.keys()
+                            account_keys = list(account.keys())
 
                             # ACCOUNT tag
                             if Storyboard.ACCOUNT not in account_keys:
@@ -270,7 +269,7 @@ def check_description(filename, cr_dir):
                     if Storyboard.INSTALL_PACKAGE in task_keys:
                         for package in task[Storyboard.INSTALL_PACKAGE]:
 
-                            package_keys = package.keys()
+                            package_keys = list(package.keys())
 
                             # PACKAGE_MANAGER tag (optional)
                             if Storyboard.PACKAGE_MANAGER in package_keys:
@@ -296,7 +295,7 @@ def check_description(filename, cr_dir):
                     if Storyboard.EMULATE_ATTACK in task_keys:
                         for attack in task[Storyboard.EMULATE_ATTACK]:
 
-                            attack_keys = attack.keys()
+                            attack_keys = list(attack.keys())
 
                             # ATTACK_TYPE tag
                             if Storyboard.ATTACK_TYPE not in attack_keys:
@@ -337,7 +336,7 @@ def check_description(filename, cr_dir):
                         for capture in task[Storyboard.EMULATE_TRAFFIC_CAPTURE_FILE]:
 
                             attack_type = Storyboard.NOT_AVAIL
-                            capture_keys = capture.keys()
+                            capture_keys = list(capture.keys())
 
                             # FORMAT tag
                             if Storyboard.FORMAT not in capture_keys:
@@ -385,7 +384,7 @@ def check_description(filename, cr_dir):
                         for malware in task[Storyboard.EMULATE_MALWARE]:
 
                             malware_mode = Storyboard.NOT_AVAIL
-                            malware_keys = malware.keys()
+                            malware_keys = list(malware.keys())
 
                             # NAME4MALWARE tag
                             if Storyboard.NAME4MALWARE not in malware_keys:
@@ -428,7 +427,7 @@ def check_description(filename, cr_dir):
                     if Storyboard.COPY_CONTENT in task_keys:
                         for content in task[Storyboard.COPY_CONTENT]:
 
-                            content_keys = content.keys()
+                            content_keys = list(content.keys())
 
                             # SRC tag
                             if Storyboard.SRC not in content_keys:
@@ -456,7 +455,7 @@ def check_description(filename, cr_dir):
                     if Storyboard.EXECUTE_PROGRAM in task_keys:
                         for program in task[Storyboard.EXECUTE_PROGRAM]:
 
-                            program_keys = program.keys()
+                            program_keys = list(program.keys())
 
                             # PROGRAM tag
                             if Storyboard.PROGRAM not in program_keys:
@@ -492,7 +491,7 @@ def check_description(filename, cr_dir):
                     if Storyboard.FIREWALL_RULES in task_keys:
                         for rule in task[Storyboard.FIREWALL_RULES]:
 
-                            rule_keys = rule.keys()
+                            rule_keys = list(rule.keys())
 
                             # RULE tag
                             if Storyboard.RULE not in rule_keys:
@@ -535,7 +534,7 @@ def check_description(filename, cr_dir):
         # Only one clone entry is supported in CLONE_SETTINGS, so we just get the first element
         # TODO: Print error if more entries are found
         clone = clone_section[Storyboard.CLONE_SETTINGS][0]
-        clone_keys = clone.keys()
+        clone_keys = list(clone.keys())
 
         # RANGE_ID tag
         if Storyboard.RANGE_ID not in clone_keys:
@@ -561,7 +560,7 @@ def check_description(filename, cr_dir):
             for host in clone[Storyboard.HOSTS]:
 
                 host_id = Storyboard.NOT_AVAIL
-                host_keys = host.keys()
+                host_keys = list(host.keys())
 
                 # HOST_ID tag
                 if Storyboard.HOST_ID not in host_keys:
@@ -590,7 +589,7 @@ def check_description(filename, cr_dir):
                 else:
                     entry_point_count = 0
                     for guest in host[Storyboard.GUESTS]:
-                        hosts_guest_keys = guest.keys()
+                        hosts_guest_keys = list(guest.keys())
 
                         # GUEST_ID tag
                         if Storyboard.GUEST_ID not in hosts_guest_keys:
@@ -625,7 +624,7 @@ def check_description(filename, cr_dir):
 
                         # Check whether there are any (unknown) tags left in the list
                         if hosts_guest_keys:
-                            raise_flag("Unknown tag(s) in section '{0}', subsection '{1}', for subsection '{2}' of host '{3}': {4}".format(Storyboard.CLONE_SETTINGS, Storyboard.HOSTS, Storyboard.GUESTS, host_id, host_keys))
+                            raise_flag("Unknown tag(s) in section '{0}', subsection '{1}', for subsection '{2}' of host '{3}': {4}".format(Storyboard.CLONE_SETTINGS, Storyboard.HOSTS, Storyboard.GUESTS, host_id, hosts_guest_keys))
 
                     # TODO: How to check this in case multiple hosts are used?!
                     if entry_point_count == 0:
@@ -640,7 +639,7 @@ def check_description(filename, cr_dir):
                     raise_flag("Tag '{0}' is missing in section '{1}', subsection '{2}' for subsection '{3}' of host '{4}'.".format(Storyboard.TOPOLOGY, Storyboard.CLONE_SETTINGS, Storyboard.HOSTS, Storyboard.GUESTS, host_id))
                 else:
                     topology = host[Storyboard.TOPOLOGY][0]
-                    topology_keys = topology.keys()
+                    topology_keys = list(topology.keys())
 
                     # TYPE tag
                     if Storyboard.TYPE not in topology_keys:
@@ -658,7 +657,7 @@ def check_description(filename, cr_dir):
                         for network in topology[Storyboard.NETWORKS]:
 
                             nw_name = Storyboard.NOT_AVAIL
-                            network_keys = network.keys()
+                            network_keys = list(network.keys())
 
                             # NAME tag
                             if Storyboard.NAME not in network_keys:
@@ -674,6 +673,13 @@ def check_description(filename, cr_dir):
                             if Storyboard.MEMBERS not in network_keys:
                                 raise_flag("Tag '{0}' is missing in section '{1}', subsection '{2}' for subsection '{3}', subsubsection '{4}' of host '{5}'.".format(Storyboard.MEMBERS, Storyboard.CLONE_SETTINGS, Storyboard.HOSTS, Storyboard.TOPOLOGY, Storyboard.NETWORKS, host_id))
                             else:
+                                member_list = network[Storyboard.MEMBERS].replace(" ","").split(",")
+                                for member in member_list:
+                                    member_id = member.split(".")[0]
+                                    if member_id not in defined_guest_ids:
+                                        raise_flag("Guest with id '{0}' mentioned in section '{1}', subsection '{2}' for subsection '{3}', subsubsection '{4}', key '{5}' of host '{6}' was not defined in the section '{7}'.".format(member_id,
+                                            Storyboard.CLONE_SETTINGS, Storyboard.HOSTS, Storyboard.TOPOLOGY, Storyboard.NETWORKS, Storyboard.MEMBERS, host_id, Storyboard.GUEST_SETTINGS))
+
                                 network_keys.remove(Storyboard.MEMBERS)
 
                             # GATEWAY tag
@@ -693,7 +699,7 @@ def check_description(filename, cr_dir):
 
                     # Check whether there are any (unknown) tags left in the list
                     if topology_keys:
-                        raise_flag("Unknown tag(s) in section '{0}', subsection '{1}', for subsection '{2}', subsubsection '{3}' of host '{4}': {5}".format(Storyboard.CLONE_SETTINGS, Storyboard.HOSTS, Storyboard.GUESTS, Storyboard.TOPOLOGY, host_id, host_keys))
+                        raise_flag("Unknown tag(s) in section '{0}', subsection '{1}', for subsection '{2}', subsubsection '{3}' of host '{4}': {5}".format(Storyboard.CLONE_SETTINGS, Storyboard.HOSTS, Storyboard.GUESTS, Storyboard.TOPOLOGY, host_id, topology_keys))
 
                     host_keys.remove(Storyboard.TOPOLOGY)
 

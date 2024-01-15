@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 #############################################################################
 # Range cleanup program
@@ -8,6 +8,7 @@ import os
 import sys
 import subprocess
 import logging
+import psutil
 
 import parse_config
 
@@ -68,7 +69,7 @@ def storage_cleanup(range_id, cyris_path, range_path):
     logging.info("Clean up range host files: " + pscp_filename + " and " + pssh_filename)
     subprocess.call(["rm", "-f", pscp_filename])
     subprocess.call(["rm", "-f", pssh_filename])
-    
+
 # Forceful cleanup via KVM virsh
 def kvm_cleanup(range_id):
 
@@ -79,10 +80,10 @@ def kvm_cleanup(range_id):
     cleanup_done = False
     logging.info("Clean up KVM domains containing 'cr{}'.".format(range_id))
     for line in lines:
-        if range_string in line:
+        if range_string.encode("utf-8") in line:
             fields = line.split()
             for field in fields:
-                if range_string in field:
+                if range_string.encode("utf-8") in field:
                     cleanup_done = True
                     subprocess.call(["virsh", "destroy", field])
                     subprocess.call(["virsh", "undefine", field])
@@ -94,19 +95,23 @@ def kvm_cleanup(range_id):
 def network_cleanup(range_id):
     logging.info("Clean up bridges containing 'br{}'.".format(range_id))
 
-    # TODO: Use ifconfig to determine all bridge names that start with br{range_id}
-    bridge_name = "br{}-1-1".format(range_id)
+    # for instance_id in range(1,21):
 
-    try:
-        # Shut down bridge
-        ifdown_command = "sudo ifconfig {} down".format(bridge_name)
-        output = subprocess.check_output(ifdown_command, shell=True, stderr=subprocess.STDOUT)
-        # Delete bridge
-        brctl_command = "sudo brctl delbr {}".format(bridge_name)
-        output = subprocess.check_output(brctl_command, shell=True, stderr=subprocess.STDOUT)
-    except subprocess.CalledProcessError as error:
-        logging.warning("Error when removing bridge {}.\n  Error message: {}"
-                        .format(bridge_name, error.output.rstrip()))
+    #     # TODO: Use ifconfig to determine all bridge names that start with br{range_id}
+    #     bridge_name = "br{}-{}-1".format(range_id, instance_id)
+    bridge_prefix = "br{}".format(range_id)
+    for bridge_name, _ in psutil.net_if_stats().items():
+        if (bridge_prefix in bridge_name):
+            try:
+                # Shut down bridge
+                ifdown_command = "sudo ifconfig {} down".format(bridge_name)
+                output = subprocess.check_output(ifdown_command, shell=True, stderr=subprocess.STDOUT)
+                # Delete bridge
+                brctl_command = "sudo brctl delbr {}".format(bridge_name)
+                output = subprocess.check_output(brctl_command, shell=True, stderr=subprocess.STDOUT)
+            except subprocess.CalledProcessError as error:
+                logging.warning("Error when removing bridge {}.\n  Error message: {}"
+                                .format(bridge_name, error.output.rstrip()))
 
 
 def main(argv):

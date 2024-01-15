@@ -1,6 +1,5 @@
-#!/usr/bin/python
 
-import ConfigParser
+from configparser import ConfigParser
 import logging
 import os.path
 
@@ -23,7 +22,7 @@ def parse_config(config_file):
     if os.path.exists(config_file):
 
         # Create object and read config file
-        config = ConfigParser.ConfigParser()
+        config = ConfigParser()
         config.read(config_file)
 
         # Process the options

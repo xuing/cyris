@@ -1,4 +1,3 @@
-#!/usr/bin/python
 
 #############################################################################
 # Classes of CyRIS features
@@ -48,8 +47,8 @@ class SSHKeygenHostname(Modules):
 # and edit info of existing accounts.
 class ManageUsers(Modules):
     def __init__(self, addr, abspath):
-	Modules.__init__(self, "ManageUsers", abspath)
-	self.addr = addr
+        Modules.__init__(self, "ManageUsers", abspath)
+        self.addr = addr
 
     def add_account(self, new_account, new_passwd, full_name, os_type, basevm_type):
         desc = "Add user account '{0}'".format(new_account)
@@ -258,14 +257,14 @@ class ExecuteProgram(Modules):
     def command_post_clone(self, image_addr):
         desc = "Execute program post-cloning '{0}'".format(self.program)
         #command_string = "python {0}{7}/content_copy_program_run/run_program.py \"{1}\" {2} {3} {4} {5} {6} {8}".format(self.getAbsPath(), self.program, self.interpreter, self.args, self.image_addr, self.image_passwd, self.log_file, INSTANTIATION_DIR, self.os_type)
-        command_string = "python {0}{7}/content_copy_program_run/run_program.py \"{1}\" {2} {3} {4} {5} {6} {8} {9}".format(self.getAbsPath(), self.program, self.interpreter, self.args, self.image_addr, self.image_passwd, self.log_file, INSTANTIATION_DIR, self.os_type, self.comtag)
+        command_string = "python3 {0}{7}/content_copy_program_run/run_program.py \"{1}\" {2} {3} {4} {5} {6} {8} {9}".format(self.getAbsPath(), self.program, self.interpreter, self.args, self.image_addr, self.image_passwd, self.log_file, INSTANTIATION_DIR, self.os_type, self.comtag)
         command = Command(command_string, desc)
         return command
 
     def command(self):
         desc = "Execute program '{0}'".format(self.program)
         #command_string = "python {0}{7}/content_copy_program_run/run_program.py \"{1}\" {2} {3} {4} {5} {6} {8}".format(self.getAbsPath(), self.program, self.interpreter, self.args, self.image_addr, self.image_passwd, self.log_file, INSTANTIATION_DIR, self.os_type)
-        command_string = "python {0}{7}/content_copy_program_run/run_program.py \"{1}\" {2} {3} {4} {5} {6} {8} {9}".format(self.getAbsPath(), self.program, self.interpreter, self.args, self.image_addr, self.image_passwd, self.log_file, INSTANTIATION_DIR, self.os_type, self.comtag)
+        command_string = "python3 {0}{7}/content_copy_program_run/run_program.py \"{1}\" {2} {3} {4} {5} {6} {8} {9}".format(self.getAbsPath(), self.program, self.interpreter, self.args, self.image_addr, self.image_passwd, self.log_file, INSTANTIATION_DIR, self.os_type, self.comtag)
         command = Command(command_string, desc)
         return command
 

@@ -1,9 +1,8 @@
-#!/usr/bin/python
 #
 # Variables for Cy series
 #
 
-import urllib
+import urllib.parse
 import string
 
 class CyVarBase(string.Template):
@@ -32,9 +31,9 @@ class CyVarForm:
 
     # print contents
     def dump(self):
-        print "form |"+self.formbackup+"|"
+        print("form |"+self.formbackup+"|")
         for k in sorted(self.dict.keys()):
-            print "  {0:<16} {1:<16}".format(k,str(self.dict[k]))
+            print("  {0:<16} {1:<16}".format(k,str(self.dict[k])))
 
 class CyVarBox:
     def __init__(self):
@@ -63,9 +62,9 @@ class CyVarBox:
     def project_URL(self, source, safe=0):
         owr = x
         if "%" in x:
-            orw = urllib.unquote(owr)
+            orw = urllib.parse.unquote(owr)
             crw = self.project(orw, safe)
-            cwr = urllib.quote(crw)
+            cwr = urllib.parse.quote(crw)
         else:
             cwr = owr
         return cwr
@@ -78,9 +77,9 @@ class CyVarBox:
         for x in source.split(" "):
             owr = x
             if "%" in x:
-                orw = urllib.unquote(owr)
+                orw = urllib.parse.unquote(owr)
                 crw = self.project(orw, safe)
-                cwr = urllib.quote(crw)
+                cwr = urllib.parse.quote(crw)
             else:
                 cwr = owr
             parts.append(cwr)
@@ -88,7 +87,6 @@ class CyVarBox:
 
     def safe_project_URLchunks(self, source):
         return self.project_URLchunks(source, safe=1)
-     
 
 ###
 ### TEST CODE
@@ -97,30 +95,30 @@ if __name__ == '__main__':
 
    form = CyVarBase('cr@crid,ins@incid,@guestname,@guestindex')
    a1   = form.substitute(crid='3', incid='1', guestname="desktop", guestindex="1")
-   print "a1  ",a1
+   print("a1  ", a1)
 
    v  = CyVarForm('cr@crid,ins@incid,@guestname,@guestindex\n@{incid}name')
    v.entry1("guestname","websrv")
    v.entrymany(crid=4,incid=3)
    v.dump()
    b1 = v.safe_output()
-   print "b1  ",b1
+   print("b1  ", b1)
 
    v.entry1("guestindex","8")
    v.dump()
    b1 = v.output()
-   print "b1  ",b1
+   print("b1  ", b1)
 
    qbox = CyVarBox()
    qbox.entry1("name","orange")
    mixin = "abc def %40name ghi"
    mixou = qbox.safe_project(mixin)
-   print "mixin |"+mixin+"|"
-   print "mixou |"+mixou+"|"
+   print("mixin |"+mixin+"|")
+   print("mixou |"+mixou+"|")
    mixin = "abc def %40name ghi"
    mixou = qbox.safe_project_URLchunks(mixin)
-   print "mixin |"+mixin+"|"
-   print "mixou |"+mixou+"|"
+   print("mixin |"+mixin+"|")
+   print("mixou |"+mixou+"|")
 
 
 

@@ -1,7 +1,6 @@
-#!/usr/bin/python
 
 #############################################################################
-# Classes of CyRIS clone feature
+# Classes of CyRIS clone features
 #############################################################################
 
 # External imports
@@ -12,7 +11,7 @@ import paramiko
 #import subprocess
 #import string
 #import random
-import urllib
+import urllib.parse
 import string
 from cyvar import CyVarBox
 
@@ -109,9 +108,6 @@ class VMClone(object):
             # Setup and create an SSH connection
             ssh = paramiko.SSHClient()
             ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            # The command below causes a warning to be displayed => inform users that it's harmless
-            # NOTE: After upgrade to Ubuntu 18.04 warning disappeared, so message was commented out
-            #print "* NOTE: cyris: The warning below can be safely ignored (caused by use of paramiko library in 'clone_environment.py')."
             ssh.connect(mgmt_addr, username=account)
 
             # Open an SFTP session on the SSH server
@@ -174,14 +170,14 @@ class VMClone(object):
                         #        break
                         # For each vmaddr in the vm addresses list, create an 
                         # vm_id = <guest_id>_<range_id>_<instance_index>_<guest_index>,
-                        
+
                         # The KVM domain name is now defined in entities.py, writeConfig function
                         if clone_guest.kvm_domain:
                             if DEBUG:
-                                print "* DEBUG: KVM domain name already defined => use it."
+                                print("* DEBUG: KVM domain name already defined => use it.")
                             vm_id = clone_guest.kvm_domain # Save KVM domain name
                         else:
-                            print "* WARNING: KVM domain name not yet defined => generate now."
+                            print("* WARNING: KVM domain name not yet defined => generate now.")
                             vm_id = "{0}_cr{1}_{2}_{3}".format(clone_guest.getGuestId(), self.clone_setting.getRangeId(), instance.getIndex(), clone_guest.getIndex())
 
                         # Generate bridge_id_list and addr_list for the vm
@@ -224,7 +220,7 @@ class VMClone(object):
                     for guest in instance.getCloneGuestList():
                         if len(guest.getFwRuleList()) != 0:
                             rule_str = ";".join(guest.getFwRuleList()[:])
-                            command += "ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no root@{0} \"{1}\"\n".format(guest.getNicAddrDict().values()[0], rule_str)
+                            command += "ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no root@{0} \"{1}\"\n".format(list(guest.getNicAddrDict().values())[0], rule_str)
                     fwrule_file.write(command)
 
     #########################################################################
@@ -249,12 +245,12 @@ class VMClone(object):
                             for nic,gw in guest.getNicGwDict().items():
                                 if guest.getOsType() == "windows.7":
                                     add_gw_str= "route delete 0.0.0.0 mask 0.0.0.0"
-                                    command += "ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no root@{0} \"{1}\"\n".format(guest.getNicAddrDict().values()[0], add_gw_str)
+                                    command += "ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no root@{0} \"{1}\"\n".format(list(guest.getNicAddrDict().values())[0], add_gw_str)
                                     add_gw_str= "route add 0.0.0.0 mask 0.0.0.0 {0}".format(gw)
-                                    command += "ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no root@{0} \"{1}\"\n".format(guest.getNicAddrDict().values()[0], add_gw_str)
+                                    command += "ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no root@{0} \"{1}\"\n".format(list(guest.getNicAddrDict().values())[0], add_gw_str)
                                 else:
                                     add_gw_str = "route add default gw {0} {1}".format(gw, nic)
-                                    command += "ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no root@{0} \"{1}\"\n".format(guest.getNicAddrDict().values()[0], add_gw_str)
+                                    command += "ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no root@{0} \"{1}\"\n".format(list(guest.getNicAddrDict().values())[0], add_gw_str)
                     dfgw_file.write(command)
 
 
