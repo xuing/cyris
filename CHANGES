@@ -1,4 +1,14 @@
 
+CyRIS v1.3
+----------
+* Converted the source code to Python 3; support for Python 2 was
+  dropped
+* Improved the reliability of the range cleanup script in terms of how
+  bridges are deleted
+* Improved the validation mechanism for cyber range descriptions in
+  terms of network members definition
+* Other minor improvements and bug fixes
+
 CyRIS v1.2
 ----------
 * Improved execution messages and logged information
