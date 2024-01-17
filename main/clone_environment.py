@@ -388,7 +388,7 @@ class VMClone(object):
             sftp_client = ssh.open_sftp()
             with sftp_client.open(self.destruction_file, "a+") as f:
                 # down the bridges
-                f.write("sudo python {0}{1}/downbridges.py /etc/network/interfaces {2};\n".format(self.abspath, CLEANUP_DIR, self.clone_setting.getRangeId()))
+                f.write("sudo python3 {0}{1}/downbridges.py /etc/network/interfaces {2};\n".format(self.abspath, CLEANUP_DIR, self.clone_setting.getRangeId()))
                 # delete vms
                 # TODO: Script should be in cleanup directory...
                 f.write("{0}{3}/vm_clone/vm_destroy_xml.sh {1} {2};\n".format(self.abspath, self.clone_setting.getRangeId(), self.directory, INSTANTIATION_DIR))

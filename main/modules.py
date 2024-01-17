@@ -154,7 +154,7 @@ class EmulateAttacks(Modules):
     def command(self):
         if self.attack_type == "ssh_attack":
             desc = "Perform ssh attack on account '{0}' (repeat {1} times)".format(self.target_account, self.number)
-            command_string = "{0}{5}/attacks_emulation/install_paramiko.sh; python {0}{5}/attacks_emulation/attack_paramiko_ssh.py {1} {2} {3} {4} {6}".format(self.getAbsPath(), self.target_addr, self.target_account, self.number, self.attack_time, INSTANTIATION_DIR, self.basevm_type)
+            command_string = "{0}{5}/attacks_emulation/install_paramiko.sh; python3 {0}{5}/attacks_emulation/attack_paramiko_ssh.py {1} {2} {3} {4} {6}".format(self.getAbsPath(), self.target_addr, self.target_account, self.number, self.attack_time, INSTANTIATION_DIR, self.basevm_type)
             command = Command(command_string, desc)
             return command
 
@@ -256,14 +256,12 @@ class ExecuteProgram(Modules):
     # This command_post_clone is for tasks that are required to be executed after the cloning step
     def command_post_clone(self, image_addr):
         desc = "Execute program post-cloning '{0}'".format(self.program)
-        #command_string = "python {0}{7}/content_copy_program_run/run_program.py \"{1}\" {2} {3} {4} {5} {6} {8}".format(self.getAbsPath(), self.program, self.interpreter, self.args, self.image_addr, self.image_passwd, self.log_file, INSTANTIATION_DIR, self.os_type)
         command_string = "python3 {0}{7}/content_copy_program_run/run_program.py \"{1}\" {2} {3} {4} {5} {6} {8} {9}".format(self.getAbsPath(), self.program, self.interpreter, self.args, self.image_addr, self.image_passwd, self.log_file, INSTANTIATION_DIR, self.os_type, self.comtag)
         command = Command(command_string, desc)
         return command
 
     def command(self):
         desc = "Execute program '{0}'".format(self.program)
-        #command_string = "python {0}{7}/content_copy_program_run/run_program.py \"{1}\" {2} {3} {4} {5} {6} {8}".format(self.getAbsPath(), self.program, self.interpreter, self.args, self.image_addr, self.image_passwd, self.log_file, INSTANTIATION_DIR, self.os_type)
         command_string = "python3 {0}{7}/content_copy_program_run/run_program.py \"{1}\" {2} {3} {4} {5} {6} {8} {9}".format(self.getAbsPath(), self.program, self.interpreter, self.args, self.image_addr, self.image_passwd, self.log_file, INSTANTIATION_DIR, self.os_type, self.comtag)
         command = Command(command_string, desc)
         return command
