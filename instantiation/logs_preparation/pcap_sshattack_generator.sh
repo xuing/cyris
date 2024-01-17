@@ -20,6 +20,7 @@ sudo bash -c "exec -a virbr0_ssh_pcap tcpdump -i virbr0 -w ${cr_dir}virbr0_ssh.p
 
 # base image starts attacking the host by ssh
 sshpass -p ${image_passwd} scp ${abs_path}${inst_dir}/attacks_emulation/attack_paramiko_ssh.py root@${image_addr}:/bin/cyberrange/;
+# NOTE: For the line below we need to use python not python3, as it is executed within the guest VM
 sshpass -p ${image_passwd} ssh -o StrictHostKeyChecking=no root@${image_addr} "python /bin/cyberrange/attack_paramiko_ssh.py ${virbr_addr} ${host_account} ${num} none ${basevm_type}";
 
 sudo pkill -f virbr0_ssh_pcap;
