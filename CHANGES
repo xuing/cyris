@@ -1,4 +1,10 @@
 
+CyRIS v1.4
+----------
+* Fixed minor issues and validated the functionality on Ubuntu 24.04.1 LTS
+* Revised the package installation commands in HOST-PREPARE 
+  to ensure compatibility with Ubuntu 24
+
 CyRIS v1.3
 ----------
 * Converted the source code to Python 3; support for Python 2 was
