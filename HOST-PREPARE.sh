@@ -14,7 +14,7 @@ sudo apt-get install virt-manager
 sudo apt-get install python-pip
 
 # 4. Install python-paramiko.
-sudo apt-get install python-paramiko
+sudo apt-get install python3-paramiko
 
 # 5. Install tcpreplay.
 sudo apt-get install tcpreplay
@@ -41,4 +41,4 @@ sudo apt-get install sendemail
 ssh-copy-id localhost
 
 # 13. Other Python 3 packages
-sudo pip3 install psutil
+sudo apt-get install python3-psutil 
