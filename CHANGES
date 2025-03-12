@@ -1,9 +1,10 @@
 
 CyRIS v1.4
 ----------
-* Fixed minor issues and validated the functionality on Ubuntu 24.04.1 LTS
-* Revised the package installation commands in HOST-PREPARE 
-  to ensure compatibility with Ubuntu 24
+* Fixed minor issues and validated the functionality of CyRIS on
+  Ubuntu 24.04.1 LTS
+* Revised the package installation commands in HOST-PREPARE.sh to
+  ensure compatibility with Ubuntu 24.04 LTS
 
 CyRIS v1.3
 ----------
