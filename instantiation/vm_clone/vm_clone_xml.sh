@@ -61,7 +61,7 @@ echo "    </disk>" >> ${ABSPATH}images/${VM_ID}_config.xml;
 echo "    <controller type='ide' index='0'>" >> ${ABSPATH}images/${VM_ID}_config.xml;
 echo "      <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x1'/>" >> ${ABSPATH}images/${VM_ID}_config.xml;
 echo "    </controller>" >> ${ABSPATH}images/${VM_ID}_config.xml;
-# This inteface setup is for connecting one vm from one server to another vm in another server
+# This interface setup is for connecting one vm from one server to another vm in another server
 for i in "${!ADDR_LIST[@]}"
 do
     IFS="." read -r -a  BIT_LIST <<< "${ADDR_LIST[i]}"

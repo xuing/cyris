@@ -96,7 +96,7 @@ A typical sequence of operations is as follows:
 
 ### Recovery from errors
 
-Ocasionally an error such as `No route to host` appears. We are
+Occasionally an error such as `No route to host` appears. We are
 currently investigating its exact cause, but for the moment you should
 just destroy the partially created cyber range and repeat the creation
 process.
