@@ -665,7 +665,7 @@ class CyberRangeCreation():
         return command_list, post_execute_program_list
 
     #########################################################################
-    # Generate commands for shuting down and undefining base images
+    # Generate commands for shutting down and undefining base images
     def shut_down_baseimg(self):
         shutdown_command = ""
         for guest in self.guests:

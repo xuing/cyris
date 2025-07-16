@@ -88,7 +88,7 @@ def publicIp_get(client,ins_ids):
     return response['Reservations'][0]['Instances'][0]['PublicIpAddress']
 
 # Stop AWS instances
-# - input: ins_ids: list, the id of the instances to be stoped
+# - input: ins_ids: list, the id of the instances to be stopped
 # - output: status: dictionary, the id and the status
 def stop_instances(client,ins_ids):
     response = client.stop_instances(
