@@ -726,15 +726,22 @@ class CyberRangeCreation():
         # This function is to check and generate new ports for current cyber range instances
         used_port_list = []           # Contains a set of used ports for previous cyber range instances
         process_list = []
-        p = subprocess.Popen("ps -aux | grep 'ssh -f -L | {0}@localhost'".format(MSTNODE_ACCOUNT), shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        p = subprocess.Popen(
+            "ps -aux | grep 'ssh -f -L | {0}@localhost'".format(MSTNODE_ACCOUNT),
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT)
         for line in p.stdout.readlines():
             process_list.append(line)
-        nfields = len(process_list[0].split()) - 1
-        for line in process_list:
-            for element in line.split(None, nfields):
-                if "0.0.0.0".encode("utf-8") in element:
-                    used_port = element.split(":".encode("utf-8"))[1]
-                    used_port_list.append(used_port)
+
+        # Avoid IndexError when no matching processes are found
+        if process_list:
+            nfields = len(process_list[0].split()) - 1
+            for line in process_list:
+                for element in line.split(None, nfields):
+                    if "0.0.0.0".encode("utf-8") in element:
+                        used_port = element.split(":".encode("utf-8"))[1]
+                        used_port_list.append(used_port)
 
         if DEBUG2: print("* DEBUG: cyris: clone_vm_commands: INITIAL: used_port_list={}".format(used_port_list))
 
