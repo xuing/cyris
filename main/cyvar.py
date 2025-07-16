@@ -60,8 +60,9 @@ class CyVarBox:
         return self.project(source, safe=1)
 
     def project_URL(self, source, safe=0):
-        owr = x
-        if "%" in x:
+        """Project variables in a URL string, safely handling quoting."""
+        owr = source
+        if "%" in source:
             orw = urllib.parse.unquote(owr)
             crw = self.project(orw, safe)
             cwr = urllib.parse.quote(crw)
