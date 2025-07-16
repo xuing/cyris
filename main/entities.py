@@ -409,7 +409,7 @@ class CloneInstance(object):
         return ip_list
 
     # Functions for generating ip addresses, gateway, and firewall rules for each guest 
-    # in the instance. Since there's no ip addressess in the beginning, it's mandatory to 
+    # in the instance. Since there's no ip addresses in the beginning, it's mandatory to
     # generate ip addresses before parsing gateway address for each guest in the instance.
     def setCloneGuestList(self, range_id):
         # Dictionary of <network_name>:<a list of members' ipaddr>.
@@ -418,7 +418,7 @@ class CloneInstance(object):
         nwname_nodes_dict = dict()
         # For each subnetwork/segment in the clone_subnetwork_list.
         # i is the index, start from 0. i is used as the third byte in the ipaddr.
-        # Bytes in ip addr couldnt be 0, that's why it's i+1.
+        # Bytes in ip addr couldn't be 0, that's why it's i+1.
         for i, subnw_element in enumerate(self.getCloneSubnwList()):
             # j is used as the index of node_element in each subnetwork/segment.
             # j is the fourth byte in the ipaddr.
@@ -529,7 +529,7 @@ class CloneInstance(object):
                     else:
                         fw_rule = "iptables -A FORWARD -m state -p tcp -s {0} -d {1} --state NEW,ESTABLISHED,RELATED -j ACCEPT".format(src_ip_str, dst_ip_str)
                     fwrule_list.append(fw_rule)
-                # Append the final rules as allowing all allowed traffic above comming back.
+                # Append the final rules as allowing all allowed traffic above coming back.
                 if len(fwrule_list) != 0:
                     fw_rule = "iptables -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT"
                     fwrule_list.append(fw_rule)

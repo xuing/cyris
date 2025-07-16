@@ -2,7 +2,7 @@
 
 # The flow of the emulation will be as followed:
 # - Install the tool hping3 for the base image
-# - Start tcpdump on the host to listen to traffic comming to the virtual bridge virbr0 (kvm)
+# - Start tcpdump on the host to listen to traffic coming to the virtual bridge virbr0 (kvm)
 # - Copy the script attacks_emulation/launch_dos.sh to the base image and start the attack to nic virbr0 of the host
 #   with user-specified source address (source_addr) and destination port (dport)
 # - Terminate the attack after two seconds
