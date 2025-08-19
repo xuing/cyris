@@ -1,0 +1,89 @@
+#!/usr/bin/env python3
+"""
+CyRIS 统一入口脚本
+根据参数自动选择使用现代化CLI还是传统接口
+"""
+import sys
+import os
+from pathlib import Path
+
+def main():
+    """主函数"""
+    args = sys.argv[1:]
+    
+    # 如果没有参数，显示帮助
+    if not args:
+        print("CyRIS - 网络安全培训环境部署工具")
+        print()
+        print("现代化命令:")
+        print("  cyris --help                    # 显示现代化CLI帮助")
+        print("  cyris create <yaml_file>        # 创建靶场")
+        print("  cyris list                      # 列出靶场")
+        print("  cyris destroy <id>              # 销毁靶场")
+        print("  cyris status <id>               # 查看状态")
+        print("  cyris validate                  # 验证环境")
+        print()
+        print("传统兼容性:")
+        print("  cyris legacy <yaml_file> CONFIG # 运行传统命令")
+        print("  python main/cyris.py ...        # 直接使用传统接口")
+        return
+    
+    # 检测是否使用现代化命令
+    modern_commands = {
+        'create', 'list', 'destroy', 'status', 'validate',
+        'config-show', 'config-init', '--help', '-h', '--version'
+    }
+    
+    first_arg = args[0]
+    
+    # 如果第一个参数是现代化命令，使用现代CLI
+    if first_arg in modern_commands:
+        try:
+            script_dir = Path(__file__).parent.resolve()
+            src_dir = script_dir / 'src'
+            sys.path.insert(0, str(src_dir))
+            
+            from cyris.cli.main import main as cli_main
+            sys.argv = ['cyris'] + args  # 重设argv
+            cli_main()
+        except ImportError:
+            print("❌ 现代化CLI不可用，请确保环境已正确设置")
+            print("   运行: source .venv/bin/activate")
+            sys.exit(1)
+    
+    # 否则检测传统格式: cyris <yaml_file> CONFIG
+    elif len(args) >= 2 and args[1] in ['CONFIG', 'config'] or args[1].endswith('.ini'):
+        # 传统格式，调用传统脚本
+        import subprocess
+        
+        script_dir = Path(__file__).parent.resolve()
+        legacy_script = script_dir / 'main' / 'cyris.py'
+        
+        if not legacy_script.exists():
+            print(f"❌ 传统脚本不存在: {legacy_script}")
+            sys.exit(1)
+        
+        cmd = ['python3', str(legacy_script)] + args
+        try:
+            result = subprocess.run(cmd, cwd=script_dir)
+            sys.exit(result.returncode)
+        except KeyboardInterrupt:
+            print("\n操作被用户中断")
+            sys.exit(1)
+    
+    else:
+        # 未识别的格式，提供帮助
+        print("❌ 未识别的命令格式")
+        print()
+        print("现代化用法:")
+        print("  cyris create examples/basic.yml")
+        print("  cyris list")
+        print("  cyris --help")
+        print()
+        print("传统用法:")
+        print("  cyris examples/basic.yml CONFIG")
+        print("  python main/cyris.py examples/basic.yml CONFIG")
+        sys.exit(1)
+
+if __name__ == '__main__':
+    main()
