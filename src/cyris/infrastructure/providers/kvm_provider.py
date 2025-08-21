@@ -658,15 +658,17 @@ class KVMProvider(InfrastructureProvider):
                 if vcpu_elem is not None:
                     vcpu_elem.text = str(vcpus)
                 
-                # Update network interface for session mode
-                interface_elem = root.find('.//interface[@type="bridge"]')
-                if interface_elem is not None and self.libvirt_uri == "qemu:///session":
-                    # Change to user networking for session mode to avoid permission issues
-                    interface_elem.set('type', 'user')
-                    # Remove bridge source element
+                # Configure network interface - use bridge networking for SSH access
+                # Create bridge network if not exists and use it for VMs
+                interface_elem = root.find('.//interface')
+                if interface_elem is not None:
+                    # Set to bridge networking for external SSH access
+                    interface_elem.set('type', 'network')
+                    # Use default network or create custom one
                     source_elem = interface_elem.find('source')
-                    if source_elem is not None:
-                        interface_elem.remove(source_elem)
+                    if source_elem is None:
+                        source_elem = ET.SubElement(interface_elem, 'source')
+                    source_elem.set('network', 'default')  # Use libvirt default network
                 
                 # Update MAC address to be unique
                 mac_elem = root.find('.//interface/mac')
@@ -713,7 +715,8 @@ class KVMProvider(InfrastructureProvider):
       <source file='{disk_path}'/>
       <target dev='vda' bus='virtio'/>
     </disk>
-    <interface type='user'>
+    <interface type='network'>
+      <source network='default'/>
       <model type='virtio'/>
     </interface>
     <serial type='pty'>
