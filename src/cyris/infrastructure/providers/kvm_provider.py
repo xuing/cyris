@@ -132,6 +132,11 @@ class KVMProvider(InfrastructureProvider):
         self.vm_template_dir = Path(config.get("vm_template_dir", "/var/lib/libvirt/templates"))
         self.base_image_dir = Path(config.get("base_image_dir", "/var/lib/libvirt/images"))
         
+        # Network configuration
+        self.network_mode = config.get("network_mode", "user")  # "user" or "bridge"
+        self.bridge_name = config.get("bridge_name", "virbr0")  # Default libvirt bridge
+        self.enable_ssh = config.get("enable_ssh", False)  # Enable SSH-accessible networking
+        
         # Connection state
         self._connection: Optional[libvirt.virConnect] = None
         self.logger = logging.getLogger(__name__)
@@ -658,17 +663,10 @@ class KVMProvider(InfrastructureProvider):
                 if vcpu_elem is not None:
                     vcpu_elem.text = str(vcpus)
                 
-                # Configure network interface - use bridge networking for SSH access
-                # Create bridge network if not exists and use it for VMs
+                # Configure network interface based on configuration
                 interface_elem = root.find('.//interface')
                 if interface_elem is not None:
-                    # Set to bridge networking for external SSH access
-                    interface_elem.set('type', 'network')
-                    # Use default network or create custom one
-                    source_elem = interface_elem.find('source')
-                    if source_elem is None:
-                        source_elem = ET.SubElement(interface_elem, 'source')
-                    source_elem.set('network', 'default')  # Use libvirt default network
+                    self._configure_network_interface(interface_elem)
                 
                 # Update MAC address to be unique
                 mac_elem = root.find('.//interface/mac')
@@ -783,3 +781,126 @@ class KVMProvider(InfrastructureProvider):
             time.sleep(2)
         
         raise ResourceCreationError(f"VM did not reach expected state within {timeout} seconds")
+    
+    def _configure_network_interface(self, interface_elem: ET.Element) -> None:
+        """
+        Configure network interface based on network mode settings.
+        
+        Args:
+            interface_elem: XML interface element to configure
+        """
+        if self.network_mode == "bridge" or self.enable_ssh:
+            # Configure bridge networking for SSH access
+            self.logger.info("Configuring bridge networking for SSH access")
+            
+            # Determine the libvirt URI to decide on bridge configuration
+            if "system" in self.libvirt_uri:
+                # System mode - use network mode with default network
+                interface_elem.set('type', 'network')
+                source_elem = interface_elem.find('source')
+                if source_elem is None:
+                    source_elem = ET.SubElement(interface_elem, 'source')
+                source_elem.set('network', 'default')
+                
+                self.logger.info("Configured system-level bridge networking")
+            else:
+                # Session mode - use user networking with port forwarding
+                interface_elem.set('type', 'user')
+                
+                # Remove existing source
+                source_elem = interface_elem.find('source')
+                if source_elem is not None:
+                    interface_elem.remove(source_elem)
+                    
+                self.logger.info("Configured user-mode networking (SSH through port forwarding)")
+        else:
+            # Use user-mode networking (isolated)
+            interface_elem.set('type', 'user')
+            
+            # Remove source element as it's not needed for user networking
+            source_elem = interface_elem.find('source')
+            if source_elem is not None:
+                interface_elem.remove(source_elem)
+                
+            self.logger.info("Configured user-mode networking (isolated)")
+    
+    def get_vm_ssh_info(self, vm_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get SSH connection information for a VM.
+        
+        Args:
+            vm_id: VM identifier
+            
+        Returns:
+            Dictionary with SSH connection info or None if not available
+        """
+        if not self.is_connected():
+            self.connect()
+            
+        try:
+            domain = self._connection.lookupByName(vm_id)
+            
+            # Get network interfaces - handle both libvirt types
+            if LIBVIRT_TYPE == "virsh-client":
+                # Use virsh command to get XML
+                import subprocess
+                result = subprocess.run(['virsh', '--connect', self.libvirt_uri, 'dumpxml', vm_id], 
+                                        capture_output=True, text=True)
+                if result.returncode != 0:
+                    self.logger.error(f"Failed to get XML for {vm_id}: {result.stderr}")
+                    return None
+                desc = result.stdout
+            else:
+                # Use python libvirt binding
+                desc = domain.XMLDesc(0)
+                
+            root = ET.fromstring(desc)
+            
+            # Look for interface information
+            interface_elem = root.find('.//interface')
+            if interface_elem is not None:
+                interface_type = interface_elem.get('type')
+                
+                if interface_type == 'network':
+                    # Try to get DHCP lease information
+                    try:
+                        # Get MAC address
+                        mac_elem = interface_elem.find('mac')
+                        if mac_elem is not None:
+                            mac_addr = mac_elem.get('address')
+                            
+                            # Try to find IP from DHCP leases
+                            network_name = 'default'
+                            source_elem = interface_elem.find('source')
+                            if source_elem is not None:
+                                network_name = source_elem.get('network', 'default')
+                            
+                            # This would require libvirt network lease lookup
+                            # For now, provide general information
+                            return {
+                                'connection_type': 'bridge',
+                                'network': network_name,
+                                'mac_address': mac_addr,
+                                'ssh_port': 22,
+                                'notes': 'VM is on bridged network. Use network scanning to find IP address.',
+                                'suggested_commands': [
+                                    'nmap -sP 192.168.122.0/24  # Scan default network',
+                                    f'arp -a | grep {mac_addr}  # Find IP by MAC'
+                                ]
+                            }
+                    except Exception as e:
+                        self.logger.warning(f"Could not get network details for {vm_id}: {e}")
+                
+                elif interface_type == 'user':
+                    return {
+                        'connection_type': 'user_mode',
+                        'ssh_port': None,
+                        'notes': 'VM uses user-mode networking. SSH access not directly available.',
+                        'alternative': 'Use VNC console or configure port forwarding'
+                    }
+            
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"Failed to get SSH info for VM {vm_id}: {e}")
+            return None

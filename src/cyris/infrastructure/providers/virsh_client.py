@@ -212,5 +212,5 @@ class VirshLibvirt:
     def open(uri: str = None) -> VirshConnection:
         """Open connection to hypervisor"""
         if uri is None:
-            uri = "qemu:///session"  # Default to user session to avoid permission issues
+            uri = "qemu:///session"  # Default to user session
         return VirshConnection(uri)
