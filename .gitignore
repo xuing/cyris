@@ -11,14 +11,12 @@ instantiation/ruleset_modification/iptables
 .DS_Store
 
 # Cyber range runtime files
-cyber_range/*.qcow2
 cyber_range/ranges_*.json
-cyber_range/base.qcow2
 
-# VM disk images
-images/*.qcow2
-images/*.img
-images/*.iso
+# VM disk images - ignore all VM disk files globally
+*.qcow2
+*.img
+*.iso
 images/meta-data
 images/user-data
 

@@ -1,0 +1,26 @@
+{
+  "888": {
+    "hosts": [
+      "host_1"
+    ],
+    "guests": [
+      "cyris-desktop-41d0f777",
+      "cyris-webserver-8c5d6401",
+      "cyris-firewall-f46392e9"
+    ]
+  },
+  "999": {
+    "hosts": [],
+    "guests": []
+  },
+  "777": {
+    "hosts": [
+      "host_1"
+    ],
+    "guests": [
+      "cyris-desktop-63b04521",
+      "cyris-webserver-139e88bc",
+      "cyris-firewall-1d3cd3d6"
+    ]
+  }
+}
