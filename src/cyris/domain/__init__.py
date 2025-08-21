@@ -1,1 +1,1 @@
-"""领域模型模块"""
+"""Domain Model Module"""

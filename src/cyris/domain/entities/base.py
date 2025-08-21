@@ -1,5 +1,5 @@
 """
-基础实体类
+Base Entity Class
 """
 from abc import ABC
 from typing import Any, Dict, Optional
@@ -8,23 +8,23 @@ from pydantic import BaseModel, Field
 
 
 class Entity(BaseModel, ABC):
-    """基础实体类"""
+    """Base Entity Class"""
     
     id: str = Field(default_factory=lambda: str(uuid4()))
     
     model_config = {
-        # 允许任意类型（向后兼容）
+        # Allow any type (backwards compatible)
         "arbitrary_types_allowed": True,
-        # 使用枚举值
+        # Use enumeration values
         "use_enum_values": True
     }
 
 
 class ValueObject(BaseModel, ABC):
-    """值对象基类"""
+    """Value Object Base Class"""
     
     model_config = {
-        # 值对象不可变
+        # Value objects are immutable
         "frozen": True,
         "arbitrary_types_allowed": True
     }

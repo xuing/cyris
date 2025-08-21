@@ -1,5 +1,5 @@
 """
-主机实体模块
+Host Entity Module
 """
 from typing import Optional, List, Union
 from pydantic import Field, field_validator
@@ -11,37 +11,37 @@ from .base import Entity
 
 class Host(Entity):
     """
-    主机实体
-    表示物理主机或虚拟主机的配置信息
+    Host Entity
+    Represents physical or virtual host configuration information
     """
     
-    host_id: str = Field(..., description="主机唯一标识符")
-    mgmt_addr: str = Field(..., description="管理地址", json_schema_extra={"format": "hostname-or-ip"})
-    virbr_addr: str = Field(..., description="虚拟桥接地址", json_schema_extra={"format": "hostname-or-ip"})
-    account: str = Field(..., description="主机账户名")
+    host_id: str = Field(..., description="Host unique identifier")
+    mgmt_addr: str = Field(..., description="Management address", json_schema_extra={"format": "hostname-or-ip"})
+    virbr_addr: str = Field(..., description="Virtual bridge address", json_schema_extra={"format": "hostname-or-ip"})
+    account: str = Field(..., description="Host account name")
     
     @field_validator('mgmt_addr', 'virbr_addr', mode='before')
     @classmethod
     def validate_address(cls, v):
-        """验证地址不为空"""
+        """Validate address is not empty"""
         if not isinstance(v, str) or len(v.strip()) == 0:
             raise ValueError("Address cannot be empty")
         return v.strip()
     
     def get_host_id(self) -> str:
-        """获取主机ID"""
+        """Get host ID"""
         return self.host_id
     
     def get_mgmt_addr(self) -> str:
-        """获取管理地址"""
+        """Get management address"""
         return self.mgmt_addr
     
     def get_virbr_addr(self) -> str:
-        """获取虚拟桥接地址"""
+        """Get virtual bridge address"""
         return self.virbr_addr
     
     def get_account(self) -> str:
-        """获取账户名"""
+        """Get account name"""
         return self.account
     
     def __str__(self) -> str:
@@ -50,7 +50,7 @@ class Host(Entity):
 
 
 class HostBuilder:
-    """主机构建器"""
+    """Host Builder"""
     
     def __init__(self):
         self._host_id: Optional[str] = None
@@ -75,7 +75,7 @@ class HostBuilder:
         return self
     
     def build(self) -> Host:
-        """构建主机实例"""
+        """Build host instance"""
         if not all([self._host_id, self._mgmt_addr, self._virbr_addr, self._account]):
             raise ValueError("Missing required fields for Host")
         

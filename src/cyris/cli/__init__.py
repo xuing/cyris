@@ -1,1 +1,1 @@
-"""现代化CLI接口模块"""
+"""Modern CLI Interface Module"""

@@ -1,6 +1,6 @@
 """
-配置解析器模块
-支持传统INI格式和现代YAML格式配置
+Configuration Parser Module
+Supports legacy INI and modern YAML configuration formats
 """
 import logging
 from configparser import ConfigParser
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class ConfigurationError(Exception):
-    """配置相关错误"""
+    """Configuration-related errors"""
     pass
 
 
@@ -26,8 +26,8 @@ def parse_legacy_config(config_file: Union[str, Path]) -> Tuple[
     Optional[str], Optional[str], Optional[str]
 ]:
     """
-    解析传统INI格式配置文件
-    保持与原始parse_config函数的兼容性
+    Parse legacy INI format configuration file
+    Maintain compatibility with original parse_config function
     
     Returns:
         tuple: (abs_path, cr_dir, gw_mode, gw_account, gw_mgmt_addr, gw_inside_addr, user_email)
@@ -46,11 +46,11 @@ def parse_legacy_config(config_file: Union[str, Path]) -> Tuple[
         if not config.has_section(section_name):
             raise ConfigurationError(f"Missing [{section_name}] section in config file")
         
-        # 解析各个配置项
+        # Parse individual configuration items
         abs_path = config.get(section_name, "cyris_path", fallback=None)
         cr_dir = config.get(section_name, "cyber_range_dir", fallback=None)
         
-        # gw_mode 特殊处理
+        # Special handling for gw_mode
         gw_mode_str = config.get(section_name, "gw_mode", fallback="off")
         gw_mode = gw_mode_str.lower() not in ('off', 'false', '0', 'no')
         
@@ -70,16 +70,16 @@ def parse_legacy_config(config_file: Union[str, Path]) -> Tuple[
 
 def parse_modern_config(config_file: Union[str, Path]) -> CyRISSettings:
     """
-    解析现代YAML格式配置文件
+    Parse modern YAML format configuration file
     
     Args:
-        config_file: 配置文件路径
+        config_file: Configuration file path
         
     Returns:
-        CyRISSettings: 解析后的配置对象
+        CyRISSettings: Parsed configuration object
         
     Raises:
-        ConfigurationError: 配置文件解析或验证失败
+        ConfigurationError: Configuration file parsing or validation failed
     """
     config_file = Path(config_file)
     
@@ -91,7 +91,7 @@ def parse_modern_config(config_file: Union[str, Path]) -> CyRISSettings:
             if config_file.suffix.lower() in ['.yml', '.yaml']:
                 config_data = yaml.safe_load(f)
             else:
-                # 尝试解析为INI格式并转换
+                # Try parsing as INI format and convert
                 legacy_result = parse_legacy_config(config_file)
                 if legacy_result[0] is False:
                     raise ConfigurationError("Failed to parse legacy config")
@@ -120,18 +120,18 @@ def parse_modern_config(config_file: Union[str, Path]) -> CyRISSettings:
 
 def create_default_config(config_file: Union[str, Path]) -> CyRISSettings:
     """
-    创建默认配置文件
+    Create default configuration file
     
     Args:
-        config_file: 配置文件路径
+        config_file: Configuration file path
         
     Returns:
-        CyRISSettings: 默认配置对象
+        CyRISSettings: Default configuration object
     """
     config_file = Path(config_file)
     settings = CyRISSettings()
     
-    # 创建YAML格式的配置文件
+    # Create YAML format configuration file
     config_data = {
         'cyris_path': str(settings.cyris_path),
         'cyber_range_dir': str(settings.cyber_range_dir),

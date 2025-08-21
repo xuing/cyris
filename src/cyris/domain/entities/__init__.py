@@ -1,1 +1,1 @@
-"""领域实体模块"""
+"""Domain Entity Module"""
