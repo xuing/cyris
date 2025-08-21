@@ -21,14 +21,24 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def get_config(ctx) -> 'CyRISSettings':
+    """Get configuration from context with fallback"""
+    if ctx.obj is None:
+        ctx.obj = {'config': CyRISSettings()}
+    elif 'config' not in ctx.obj:
+        ctx.obj['config'] = CyRISSettings()
+    
+    return ctx.obj['config']
+
+
 @click.group()
 @click.option('--config', '-c', 
-              type=click.Path(exists=True, path_type=Path),
+              type=click.Path(exists=True),
               help='Path to configuration file')
 @click.option('--verbose', '-v', is_flag=True, help='Verbose output')
 @click.option('--version', is_flag=True, help='Show version information')
 @click.pass_context
-def cli(ctx, config: Optional[Path], verbose: bool, version: bool):
+def cli(ctx, config: Optional[str], verbose: bool, version: bool):
     """
     CyRIS - Modern Cyber Security Training Environment Deployment Tool
     
@@ -50,7 +60,8 @@ def cli(ctx, config: Optional[Path], verbose: bool, version: bool):
     # Load configuration
     if config:
         try:
-            settings = parse_modern_config(config)
+            config_path = Path(config)
+            settings = parse_modern_config(config_path)
             ctx.obj['config'] = settings
             if verbose:
                 click.echo(f"Configuration loaded: {config}")
@@ -101,7 +112,7 @@ def create(ctx, description_file: Path, range_id: Optional[int], dry_run: bool, 
     
     DESCRIPTION_FILE: YAML format cyber range description file
     """
-    config: CyRISSettings = ctx.obj['config']
+    config: CyRISSettings = get_config(ctx)
     verbose = ctx.obj['verbose']
     
     click.echo(f"Creating cyber range: {description_file}")
@@ -198,7 +209,7 @@ def create(ctx, description_file: Path, range_id: Optional[int], dry_run: bool, 
 @click.pass_context
 def list(ctx, range_id: Optional[int], list_all: bool):
     """List cyber ranges"""
-    config: CyRISSettings = ctx.obj['config']
+    config: CyRISSettings = get_config(ctx)
     
     try:
         from ..services.orchestrator import RangeOrchestrator
@@ -279,7 +290,7 @@ def destroy(ctx, range_id: int, force: bool):
     
     RANGE_ID: ID of the cyber range to destroy
     """
-    config: CyRISSettings = ctx.obj['config']
+    config: CyRISSettings = get_config(ctx)
     verbose = ctx.obj['verbose']
     
     if not force:
@@ -337,7 +348,7 @@ def status(ctx, range_id: int):
     
     RANGE_ID: Cyber range ID
     """
-    config: CyRISSettings = ctx.obj['config']
+    config: CyRISSettings = get_config(ctx)
     verbose = ctx.obj['verbose']
     
     click.echo(f"Cyber range {range_id} status:")
@@ -388,8 +399,10 @@ def status(ctx, range_id: int):
             click.echo(f"  📁 Directory: {range_dir}")
             
             # Find related files
-            detail_files = list(range_dir.glob("range_details-*.yml"))
-            notification_files = list(range_dir.glob("range_notification-*.txt"))
+            import os
+            all_files = os.listdir(range_dir)
+            detail_files = [f for f in all_files if f.startswith("range_details-") and f.endswith(".yml")]
+            notification_files = [f for f in all_files if f.startswith("range_notification-") and f.endswith(".txt")]
             
             if detail_files:
                 click.echo(f"  📄 Detail files: {len(detail_files)}")
@@ -432,7 +445,7 @@ def status(ctx, range_id: int):
 @click.pass_context
 def config_show(ctx):
     """Show current configuration"""
-    config: CyRISSettings = ctx.obj['config']
+    config: CyRISSettings = get_config(ctx)
     
     click.echo("Current configuration:")
     click.echo(f"  CyRIS path: {config.cyris_path}")
@@ -475,7 +488,7 @@ def validate(ctx):
     """Validate environment configuration and dependencies"""
     click.echo("Validating CyRIS environment...")
     
-    config: CyRISSettings = ctx.obj['config']
+    config: CyRISSettings = get_config(ctx)
     errors = 0
     
     # Check paths
@@ -502,7 +515,8 @@ def validate(ctx):
     examples_dir = config.cyris_path / 'examples'
     if examples_dir.exists():
         try:
-            example_files = list(examples_dir.glob('*.yml'))
+            import os
+            example_files = [f for f in os.listdir(examples_dir) if f.endswith('.yml')]
             click.echo(f"✅ Example files: {len(example_files)} found")
         except Exception as e:
             click.echo(f"⚠️  Error checking example files: {e}")
@@ -527,7 +541,7 @@ def legacy_run(ctx, args):
     """
     import subprocess
     
-    config: CyRISSettings = ctx.obj['config']
+    config: CyRISSettings = get_config(ctx)
     legacy_script = config.cyris_path / 'main' / 'cyris.py'
     
     if not legacy_script.exists():
@@ -605,7 +619,7 @@ def ssh_info(ctx, range_id: str):
     
     RANGE_ID: ID of the cyber range to get SSH info for
     """
-    config: CyRISSettings = ctx.obj['config']
+    config: CyRISSettings = get_config(ctx)
     verbose = ctx.obj['verbose']
     
     try:
