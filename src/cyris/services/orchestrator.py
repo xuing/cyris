@@ -15,6 +15,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 from ..config.settings import CyRISSettings
+from ..infrastructure.network.topology_manager import NetworkTopologyManager
+from .task_executor import TaskExecutor, TaskResult
 
 # Import both modern and legacy entities for compatibility
 from ..domain.entities.host import Host as ModernHost
@@ -125,6 +127,14 @@ class RangeOrchestrator:
         self.provider = infrastructure_provider
         self.logger = logger or logging.getLogger(__name__)
         
+        # Initialize network topology and task execution managers
+        self.topology_manager = NetworkTopologyManager()
+        self.task_executor = TaskExecutor({
+            'base_path': settings.cyris_path,
+            'ssh_timeout': 30,
+            'ssh_retries': 3
+        })
+        
         # In-memory range registry (in production, would use persistent storage)
         self._ranges: Dict[str, RangeMetadata] = {}
         self._range_resources: Dict[str, Dict[str, List[str]]] = {}
@@ -133,7 +143,7 @@ class RangeOrchestrator:
         self.ranges_dir = Path(self.settings.cyber_range_dir)
         self.ranges_dir.mkdir(exist_ok=True)
         
-        self.logger.info("RangeOrchestrator initialized")
+        self.logger.info("RangeOrchestrator initialized with network topology and task execution")
     
     def create_range(
         self,
@@ -142,6 +152,7 @@ class RangeOrchestrator:
         description: str,
         hosts: List[Host],
         guests: List[Guest],
+        topology_config: Optional[Dict[str, Any]] = None,
         owner: Optional[str] = None,
         tags: Optional[Dict[str, str]] = None
     ) -> RangeMetadata:
@@ -207,10 +218,68 @@ class RangeOrchestrator:
             guest_ids = self.provider.create_guests(guests, host_mapping)
             self._range_resources[range_id]["guests"] = guest_ids
             
+            # Create network topology if specified
+            if topology_config:
+                self.logger.info(f"Creating network topology for range {range_id}")
+                # Connect topology manager to provider's libvirt connection if available
+                if hasattr(self.provider, '_connection'):
+                    self.topology_manager.libvirt_connection = self.provider._connection
+                
+                ip_assignments = self.topology_manager.create_topology(
+                    topology_config, guests, range_id
+                )
+                self.logger.info(f"Assigned IPs to {len(ip_assignments)} guests")
+                
+                # Store IP assignments for later task execution
+                metadata.tags['ip_assignments'] = json.dumps(ip_assignments)
+            
+            # Execute tasks on guests if they have task configurations
+            task_results = []
+            for guest in guests:
+                guest_id = getattr(guest, 'id', None) or getattr(guest, 'guest_id', 'unknown')
+                
+                # Get IP address for the guest
+                guest_ip = None
+                if topology_config and hasattr(self.topology_manager, 'ip_assignments'):
+                    guest_ip = self.topology_manager.get_guest_ip(guest_id)
+                
+                # Use predefined IP if available
+                if not guest_ip and hasattr(guest, 'ip_addr') and guest.ip_addr:
+                    guest_ip = guest.ip_addr
+                
+                # Execute tasks if guest has them and IP is available
+                if guest_ip and hasattr(guest, 'tasks') and guest.tasks:
+                    self.logger.info(f"Executing tasks for guest {guest_id} at {guest_ip}")
+                    try:
+                        results = self.task_executor.execute_guest_tasks(
+                            guest, guest_ip, guest.tasks
+                        )
+                        task_results.extend(results)
+                        
+                        # Log task results
+                        for result in results:
+                            if result.success:
+                                self.logger.info(f"Task {result.task_id}: {result.message}")
+                            else:
+                                self.logger.warning(f"Task {result.task_id} failed: {result.message}")
+                    except Exception as e:
+                        self.logger.error(f"Task execution failed for guest {guest_id}: {e}")
+            
+            # Store task results in metadata
+            if task_results:
+                metadata.tags['task_results'] = json.dumps([
+                    {
+                        'task_id': r.task_id,
+                        'task_type': r.task_type.value,
+                        'success': r.success,
+                        'message': r.message
+                    } for r in task_results
+                ])
+            
             # Update status to active
             metadata.update_status(RangeStatus.ACTIVE)
             
-            self.logger.info(f"Successfully created range {range_id}")
+            self.logger.info(f"Successfully created range {range_id} with {len(task_results)} tasks executed")
             return metadata
             
         except Exception as e:

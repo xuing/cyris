@@ -38,6 +38,7 @@ class Guest(Entity):
     """
     
     guest_id: str = Field(..., description="Virtual machine unique identifier")
+    ip_addr: Optional[str] = Field(default=None, description="IP address for the VM")
     basevm_addr: Optional[str] = Field(default=None, description="Base virtual machine address")
     root_passwd: Optional[str] = Field(default=None, description="Root password")
     basevm_host: str = Field(..., description="Host where base virtual machine is located")
@@ -46,6 +47,11 @@ class Guest(Entity):
     basevm_type: BaseVMType = Field(..., description="Virtualization platform type")
     basevm_name: Optional[str] = Field(default=None, description="Base virtual machine name")
     tasks: List[Dict[str, Any]] = Field(default_factory=list, description="Task list")
+    
+    @property
+    def id(self) -> str:
+        """Alias for guest_id to support both old and new interfaces"""
+        return self.guest_id
     
     @field_validator('basevm_config_file')
     @classmethod
