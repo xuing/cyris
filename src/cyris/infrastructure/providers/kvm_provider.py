@@ -25,6 +25,10 @@ except ImportError:
         VIR_DOMAIN_SHUTOFF = 5
         VIR_DOMAIN_PAUSED = 3
         
+        class virDomain:
+            """Mock domain class"""
+            pass
+            
         @staticmethod
         def open(uri=None):
             return None

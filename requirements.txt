@@ -1,8 +1,8 @@
 annotated-types==0.7.0
 bcrypt==4.3.0
 black==25.1.0
-boto3==1.40.12
-botocore==1.40.12
+boto3==1.40.14
+botocore==1.40.14
 cffi==1.17.1
 cfgv==3.4.0
 click==8.2.1

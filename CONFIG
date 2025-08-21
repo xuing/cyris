@@ -2,11 +2,11 @@
 
 # The absolute path of the top CyRIS directory
 # (remember to have the slash "/" at the end of the path)
-cyris_path = /home/cyuser/cyris/
+cyris_path = /home/ubuntu/cyris/
 
 # The absolute path where cyber ranges are to be instantiated
 # (remember to have the slash "/" at the end of the path)
-cyber_range_dir = /home/cyuser/cyris/cyber_range/
+cyber_range_dir = /home/ubuntu/cyris/cyber_range/
 
 # Information regarding the gateway
 # (details are not used if gw_mode is set to "off")
