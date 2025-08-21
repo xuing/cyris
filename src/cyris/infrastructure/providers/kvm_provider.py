@@ -27,11 +27,50 @@ except ImportError:
         
         class virDomain:
             """Mock domain class"""
+            def create(self):
+                return 0  # Success
+                
+            def destroy(self):
+                return 0  # Success
+                
+            def undefine(self):
+                return 0  # Success
+                
+            def state(self):
+                return [MockLibvirt.VIR_DOMAIN_RUNNING, 0]
+                
+            def info(self):
+                return [MockLibvirt.VIR_DOMAIN_RUNNING, 1024, 1024, 1, 0]
+                
+            def isActive(self):
+                return 1  # Active
+            
+        class libvirtError(Exception):
+            """Mock libvirt error"""
             pass
+            
+        class virConnect:
+            """Mock connection class"""
+            def isAlive(self):
+                return True
+            
+            def getHostname(self):
+                return "mock-host"
+            
+            def close(self):
+                pass
+                
+            def lookupByName(self, name):
+                """Mock domain lookup"""
+                return MockLibvirt.virDomain()
+                
+            def defineXML(self, xml):
+                """Mock domain definition"""
+                return MockLibvirt.virDomain()
             
         @staticmethod
         def open(uri=None):
-            return None
+            return MockLibvirt.virConnect()
     
     libvirt = MockLibvirt()
 
@@ -154,19 +193,21 @@ class KVMProvider(InfrastructureProvider):
         
         for host in hosts:
             try:
-                self.logger.info(f"Setting up host environment for {host.id}")
+                # Get host ID - legacy Host uses host_id, modern Host uses id
+                host_id = getattr(host, 'id', None) or getattr(host, 'host_id', 'unknown')
+                self.logger.info(f"Setting up host environment for {host_id}")
                 
                 # For KVM, host creation mainly involves network setup
                 # Create networks defined in host configuration
                 for network_config in getattr(host, 'networks', []):
-                    network_id = self._create_network(host.id, network_config)
-                    self.logger.info(f"Created network {network_id} for host {host.id}")
+                    network_id = self._create_network(host_id, network_config)
+                    self.logger.info(f"Created network {network_id} for host {host_id}")
                 
                 # Register host resource
                 host_resource = ResourceInfo(
-                    resource_id=host.id,
+                    resource_id=host_id,
                     resource_type="host",
-                    name=host.id,
+                    name=host_id,
                     status=ResourceStatus.ACTIVE,
                     metadata={
                         "provider": "kvm",
@@ -177,11 +218,12 @@ class KVMProvider(InfrastructureProvider):
                 )
                 
                 self._register_resource(host_resource)
-                host_ids.append(host.id)
+                host_ids.append(host_id)
                 
             except Exception as e:
-                self.logger.error(f"Failed to create host {host.id}: {e}")
-                raise ResourceCreationError(f"Host creation failed: {e}", "kvm", host.id)
+                host_id = getattr(host, 'id', None) or getattr(host, 'host_id', 'unknown')
+                self.logger.error(f"Failed to create host {host_id}: {e}")
+                raise ResourceCreationError(f"Host creation failed: {e}", "kvm", host_id)
         
         return host_ids
     
@@ -206,43 +248,50 @@ class KVMProvider(InfrastructureProvider):
         
         for guest in guests:
             try:
-                self.logger.info(f"Creating VM for guest {guest.id}")
+                # Get guest ID - legacy Guest uses guest_id, modern Guest uses id
+                guest_id = getattr(guest, 'id', None) or getattr(guest, 'guest_id', 'unknown')
+                self.logger.info(f"Creating VM for guest {guest_id}")
                 
                 # Generate unique VM name
-                vm_name = f"{self.network_prefix}-{guest.id}-{str(uuid.uuid4())[:8]}"
+                vm_name = f"{self.network_prefix}-{guest_id}-{str(uuid.uuid4())[:8]}"
                 
-                # Create VM disk from base image
-                disk_path = self._create_vm_disk(vm_name, guest)
-                
-                # Generate VM XML configuration
-                vm_xml = self._generate_vm_xml(vm_name, guest, disk_path, host_mapping)
-                
-                # Define and start VM
-                domain = self._connection.defineXML(vm_xml)
-                if domain is None:
-                    raise ResourceCreationError(f"Failed to define VM {vm_name}")
-                
-                # Start the VM
-                if domain.create() < 0:
-                    raise ResourceCreationError(f"Failed to start VM {vm_name}")
-                
-                # Wait for VM to be running
-                self._wait_for_vm_state(domain, libvirt.VIR_DOMAIN_RUNNING)
+                # In mock mode, simulate VM creation
+                if not LIBVIRT_AVAILABLE:
+                    self.logger.info(f"Mock mode: simulating VM creation for {vm_name}")
+                    disk_path = f"/mock/path/{vm_name}.qcow2"
+                else:
+                    # Create VM disk from base image
+                    disk_path = self._create_vm_disk(vm_name, guest)
+                    
+                    # Generate VM XML configuration
+                    vm_xml = self._generate_vm_xml(vm_name, guest, disk_path, host_mapping)
+                    
+                    # Define and start VM
+                    domain = self._connection.defineXML(vm_xml)
+                    if domain is None:
+                        raise ResourceCreationError(f"Failed to define VM {vm_name}")
+                    
+                    # Start the VM
+                    if domain.create() < 0:
+                        raise ResourceCreationError(f"Failed to start VM {vm_name}")
+                    
+                    # Wait for VM to be running
+                    self._wait_for_vm_state(domain, libvirt.VIR_DOMAIN_RUNNING)
                 
                 # Register guest resource
                 guest_resource = ResourceInfo(
                     resource_id=vm_name,
                     resource_type="guest",
-                    name=guest.id,
+                    name=guest_id,
                     status=ResourceStatus.ACTIVE,
                     metadata={
                         "provider": "kvm",
-                        "guest_id": guest.id,
+                        "guest_id": guest_id,
                         "vm_name": vm_name,
                         "disk_path": disk_path,
-                        "os_type": guest.os_type,
-                        "memory_mb": guest.memory_mb,
-                        "vcpus": guest.vcpus
+                        "os_type": getattr(guest, 'os_type', 'linux'),
+                        "memory_mb": getattr(guest, 'memory_mb', 1024),
+                        "vcpus": getattr(guest, 'vcpus', 1)
                     },
                     created_at=time.strftime("%Y-%m-%d %H:%M:%S")
                 )
@@ -250,11 +299,12 @@ class KVMProvider(InfrastructureProvider):
                 self._register_resource(guest_resource)
                 guest_ids.append(vm_name)
                 
-                self.logger.info(f"Successfully created VM {vm_name} for guest {guest.id}")
+                self.logger.info(f"Successfully created VM {vm_name} for guest {guest_id}")
                 
             except Exception as e:
-                self.logger.error(f"Failed to create guest {guest.id}: {e}")
-                raise ResourceCreationError(f"Guest creation failed: {e}", "kvm", guest.id)
+                guest_id = getattr(guest, 'id', None) or getattr(guest, 'guest_id', 'unknown')
+                self.logger.error(f"Failed to create guest {guest_id}: {e}")
+                raise ResourceCreationError(f"Guest creation failed: {e}", "kvm", guest_id)
         
         return guest_ids
     
@@ -620,6 +670,11 @@ class KVMProvider(InfrastructureProvider):
         timeout: int = 60
     ) -> None:
         """Wait for VM to reach expected state"""
+        # In mock mode, skip waiting
+        if not LIBVIRT_AVAILABLE:
+            self.logger.info(f"Mock mode: skipping VM state wait")
+            return
+            
         start_time = time.time()
         
         while time.time() - start_time < timeout:

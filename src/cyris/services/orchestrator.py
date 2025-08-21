@@ -15,8 +15,24 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 from ..config.settings import CyRISSettings
-from ..domain.entities.host import Host
-from ..domain.entities.guest import Guest
+
+# Import both modern and legacy entities for compatibility
+from ..domain.entities.host import Host as ModernHost
+from ..domain.entities.guest import Guest as ModernGuest
+
+# Import legacy entities for YAML parsing
+import sys
+import os
+legacy_path = os.path.join(os.path.dirname(__file__), '../../..', 'main')
+if legacy_path not in sys.path:
+    sys.path.insert(0, legacy_path)
+
+try:
+    from entities import Host, Guest
+except ImportError:
+    # Fallback to modern entities if legacy not available
+    Host = ModernHost
+    Guest = ModernGuest
 
 
 class RangeStatus(Enum):
@@ -183,7 +199,9 @@ class RangeOrchestrator:
             host_mapping = {}
             for i, host in enumerate(hosts):
                 if i < len(host_ids):
-                    host_mapping[host.id] = host_ids[i]
+                    # Get host ID - legacy Host uses host_id, modern Host uses id
+                    host_id = getattr(host, 'id', None) or getattr(host, 'host_id', 'unknown')
+                    host_mapping[host_id] = host_ids[i]
             
             self.logger.info(f"Creating {len(guests)} guests for range {range_id}")
             guest_ids = self.provider.create_guests(guests, host_mapping)
@@ -370,3 +388,89 @@ class RangeOrchestrator:
                 default=None
             )
         }
+    
+    def create_range_from_yaml(
+        self,
+        description_file: Path,
+        range_id: Optional[int] = None,
+        dry_run: bool = False
+    ) -> Optional[str]:
+        """
+        Create a cyber range from a YAML description file.
+        
+        Args:
+            description_file: Path to YAML description file
+            range_id: Optional specific range ID
+            dry_run: If True, validate but don't create
+        
+        Returns:
+            Range ID if successful, None if failed
+        """
+        import yaml
+        import random
+        
+        try:
+            # Parse YAML description
+            with open(description_file, 'r') as f:
+                doc = yaml.load(f, Loader=yaml.SafeLoader)
+            
+            # Extract components from YAML
+            hosts = []
+            guests = []
+            range_settings = {}
+            
+            for element in doc:
+                if 'host_settings' in element:
+                    for h in element['host_settings']:
+                        host = Host(
+                            h['id'], 
+                            h.get('virbr_addr', '192.168.122.1'), 
+                            h['mgmt_addr'], 
+                            h['account']
+                        )
+                        hosts.append(host)
+                
+                if 'guest_settings' in element:
+                    for g in element['guest_settings']:
+                        guest = Guest(
+                            guest_id=g['id'],
+                            basevm_addr=g.get('ip_addr', '192.168.1.100'),
+                            root_passwd=g.get('root_passwd', 'password'),
+                            basevm_host=g['basevm_host'],
+                            basevm_config_file=g.get('basevm_config_file', ''),
+                            basevm_os_type=g.get('os_type', 'linux'),
+                            basevm_type=g.get('basevm_type', 'kvm'),
+                            basevm_name=g.get('basevm_name', g['id']),
+                            tasks=g.get('tasks', [])
+                        )
+                        guests.append(guest)
+                
+                if 'clone_settings' in element:
+                    for c in element['clone_settings']:
+                        range_settings = c
+            
+            # Generate range ID if not provided
+            if range_id is None:
+                range_id = range_settings.get('range_id', random.randint(1000, 9999))
+            
+            range_id_str = str(range_id)
+            
+            if dry_run:
+                self.logger.info(f"DRY RUN: Would create range {range_id_str} with {len(hosts)} hosts and {len(guests)} guests")
+                return range_id_str
+            
+            # Create the range using existing method
+            result = self.create_range(
+                range_id=range_id_str,
+                name=f"Range {range_id_str}",
+                description=f"Range created from {description_file.name}",
+                hosts=hosts,
+                guests=guests,
+                tags={"source_file": str(description_file)}
+            )
+            
+            return result.range_id
+            
+        except Exception as e:
+            self.logger.error(f"Failed to create range from YAML {description_file}: {e}")
+            raise
