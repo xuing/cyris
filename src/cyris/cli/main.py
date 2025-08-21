@@ -219,6 +219,9 @@ def list(ctx, range_id: Optional[int], list_all: bool):
                             click.echo(f"  {range_dir.name} (filesystem only)")
                 else:
                     click.echo(f"Cyber range directory does not exist: {ranges_dir}")
+                
+                # Check for running VMs that might be orphaned
+                _check_running_vms(provider)
                 return
             
             # Display orchestrated ranges
@@ -539,6 +542,38 @@ def main(args=None):
     except Exception as e:
         click.echo(f"❌ Unexpected error: {e}", err=True)
         sys.exit(1)
+
+
+def _check_running_vms(provider):
+    """Check for running VMs that might not be tracked by orchestrator"""
+    try:
+        import subprocess
+        result = subprocess.run(
+            ['virsh', '--connect', 'qemu:///session', 'list', '--name'],
+            capture_output=True, text=True, check=True
+        )
+        
+        running_vms = [name.strip() for name in result.stdout.split('\n') if name.strip()]
+        
+        if running_vms:
+            cyris_vms = [vm for vm in running_vms if vm.startswith('cyris-')]
+            if cyris_vms:
+                click.echo(f"\nRunning KVM VMs (potentially orphaned):")
+                for vm in cyris_vms:
+                    click.echo(f"  🔴 {vm} (running but not in orchestrator)")
+                click.echo(f"  Found {len(cyris_vms)} CyRIS VMs running in KVM")
+                click.echo("  These VMs may be from previous sessions or failed cleanups.")
+                click.echo("  Use 'virsh --connect qemu:///session destroy <vm-name>' to stop them")
+            else:
+                click.echo("\nNo CyRIS VMs currently running in KVM")
+        
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        # virsh not available or not working
+        pass
+    except Exception as e:
+        # Don't fail the whole command if VM check fails
+        if click.get_current_context().obj.get('verbose', False):
+            click.echo(f"Warning: Failed to check running VMs: {e}")
 
 
 if __name__ == '__main__':

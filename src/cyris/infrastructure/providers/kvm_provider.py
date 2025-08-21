@@ -17,13 +17,22 @@ import uuid
 try:
     import libvirt
     LIBVIRT_AVAILABLE = True
+    LIBVIRT_TYPE = "python-binding"
 except ImportError:
     LIBVIRT_AVAILABLE = False
-    # Mock libvirt for testing purposes
-    class MockLibvirt:
-        VIR_DOMAIN_RUNNING = 1
-        VIR_DOMAIN_SHUTOFF = 5
-        VIR_DOMAIN_PAUSED = 3
+    # Try using virsh command-line client
+    try:
+        from .virsh_client import VirshLibvirt
+        libvirt = VirshLibvirt()
+        LIBVIRT_AVAILABLE = True
+        LIBVIRT_TYPE = "virsh-client"
+    except Exception as e:
+        LIBVIRT_TYPE = "mock"
+        # Mock libvirt for testing purposes
+        class MockLibvirt:
+            VIR_DOMAIN_RUNNING = 1
+            VIR_DOMAIN_SHUTOFF = 5
+            VIR_DOMAIN_PAUSED = 3
         
         class virDomain:
             """Mock domain class"""
@@ -71,7 +80,10 @@ except ImportError:
         @staticmethod
         def open(uri=None):
             return MockLibvirt.virConnect()
-    
+        
+        libvirt = MockLibvirt()
+
+if LIBVIRT_TYPE == "mock":
     libvirt = MockLibvirt()
 
 from .base_provider import (
@@ -113,8 +125,8 @@ class KVMProvider(InfrastructureProvider):
         """
         super().__init__("kvm", config)
         
-        # Configuration with defaults
-        self.libvirt_uri = config.get("libvirt_uri", "qemu:///system")
+        # Configuration with defaults - use session for user-level virtualization
+        self.libvirt_uri = config.get("libvirt_uri", "qemu:///session")
         self.storage_pool = config.get("storage_pool", "default")
         self.network_prefix = config.get("network_prefix", "cyris")
         self.vm_template_dir = Path(config.get("vm_template_dir", "/var/lib/libvirt/templates"))
@@ -125,6 +137,7 @@ class KVMProvider(InfrastructureProvider):
         self.logger = logging.getLogger(__name__)
         
         self.logger.info(f"KVMProvider initialized with URI: {self.libvirt_uri}")
+        self.logger.info(f"Libvirt type: {LIBVIRT_TYPE}")
     
     def connect(self) -> None:
         """
@@ -256,7 +269,7 @@ class KVMProvider(InfrastructureProvider):
                 vm_name = f"{self.network_prefix}-{guest_id}-{str(uuid.uuid4())[:8]}"
                 
                 # In mock mode, simulate VM creation
-                if not LIBVIRT_AVAILABLE:
+                if LIBVIRT_TYPE == "mock":
                     self.logger.info(f"Mock mode: simulating VM creation for {vm_name}")
                     disk_path = f"/mock/path/{vm_name}.qcow2"
                 else:
@@ -547,35 +560,53 @@ class KVMProvider(InfrastructureProvider):
     
     def _create_vm_disk(self, vm_name: str, guest: Guest) -> str:
         """Create VM disk from base image"""
-        base_image = self.base_image_dir / f"{guest.os_type}.qcow2"
         
-        if not base_image.exists():
-            # Try common base image names
-            for possible_name in [f"{guest.os_type}.img", f"{guest.os_type}.raw", "base.qcow2"]:
-                possible_path = self.base_image_dir / possible_name
-                if possible_path.exists():
-                    base_image = possible_path
+        # Use project directory for VM disks
+        vm_disk_dir = Path(self.config.get('base_path', '/tmp/cyris-vms'))
+        vm_disk_dir.mkdir(exist_ok=True)
+        
+        # Get guest properties with backward compatibility
+        guest_id = getattr(guest, 'id', None) or getattr(guest, 'guest_id', 'unknown')
+        basevm_config_file = getattr(guest, 'basevm_config_file', None)
+        base_image_path = None
+        
+        if basevm_config_file:
+            config_dir = Path(basevm_config_file).parent
+            # Look for .qcow2 file in same directory as XML
+            for img_file in config_dir.glob('*.qcow2'):
+                if img_file.exists() and img_file.stat().st_size > 0:
+                    base_image_path = img_file
                     break
-            else:
-                raise ResourceCreationError(f"Base image not found for OS type: {guest.os_type}")
         
-        # Create disk in storage pool
-        disk_path = self.base_image_dir / f"{vm_name}.qcow2"
+        if not base_image_path:
+            # Fallback: create minimal base image
+            base_image_path = vm_disk_dir / "base.qcow2"
+            if not base_image_path.exists():
+                self.logger.info(f"Creating minimal base image: {base_image_path}")
+                subprocess.run([
+                    "qemu-img", "create", "-f", "qcow2", 
+                    str(base_image_path), "10G"
+                ], check=True)
         
-        # Copy base image to new disk
-        subprocess.run([
-            "qemu-img", "create", "-f", "qcow2", 
-            "-b", str(base_image), 
-            str(disk_path)
-        ], check=True)
+        # Create VM disk as copy-on-write overlay
+        vm_disk_path = vm_disk_dir / f"{vm_name}.qcow2"
         
-        # Resize if needed
-        if hasattr(guest, 'disk_size_gb') and guest.disk_size_gb:
+        if base_image_path.stat().st_size > 1024:  # If base image is substantial
+            # Create COW overlay
             subprocess.run([
-                "qemu-img", "resize", str(disk_path), f"{guest.disk_size_gb}G"
+                "qemu-img", "create", "-f", "qcow2", 
+                "-b", str(base_image_path), "-F", "qcow2",
+                str(vm_disk_path)
+            ], check=True)
+        else:
+            # Create new image
+            subprocess.run([
+                "qemu-img", "create", "-f", "qcow2", 
+                str(vm_disk_path), "10G"
             ], check=True)
         
-        return str(disk_path)
+        self.logger.info(f"Created VM disk: {vm_disk_path}")
+        return str(vm_disk_path)
     
     def _generate_vm_xml(
         self, 
@@ -584,10 +615,76 @@ class KVMProvider(InfrastructureProvider):
         disk_path: str, 
         host_mapping: Dict[str, str]
     ) -> str:
-        """Generate libvirt XML for VM"""
+        """Generate libvirt XML for VM based on template"""
         
-        memory_kb = (guest.memory_mb or 1024) * 1024
-        vcpus = guest.vcpus or 1
+        # Try to use the basevm.xml as template
+        guest_id = getattr(guest, 'id', None) or getattr(guest, 'guest_id', 'unknown')
+        basevm_config_file = getattr(guest, 'basevm_config_file', None)
+        
+        if basevm_config_file and Path(basevm_config_file).exists():
+            # Load and modify template XML
+            try:
+                import xml.etree.ElementTree as ET
+                tree = ET.parse(basevm_config_file)
+                root = tree.getroot()
+                
+                # Update domain name and UUID
+                name_elem = root.find('name')
+                if name_elem is not None:
+                    name_elem.text = vm_name
+                
+                # Generate new UUID
+                uuid_elem = root.find('uuid')
+                if uuid_elem is not None:
+                    uuid_elem.text = str(uuid.uuid4())
+                
+                # Update disk path
+                disk_elem = root.find('.//disk[@type="file"]/source')
+                if disk_elem is not None:
+                    disk_elem.set('file', disk_path)
+                
+                # Update memory and vCPUs if guest specifies them
+                memory_kb = (getattr(guest, 'memory_mb', None) or 1024) * 1024
+                memory_elem = root.find('memory')
+                if memory_elem is not None:
+                    memory_elem.text = str(memory_kb)
+                
+                current_memory_elem = root.find('currentMemory')
+                if current_memory_elem is not None:
+                    current_memory_elem.text = str(memory_kb)
+                
+                vcpus = getattr(guest, 'vcpus', None) or 2
+                vcpu_elem = root.find('vcpu')
+                if vcpu_elem is not None:
+                    vcpu_elem.text = str(vcpus)
+                
+                # Update network interface for session mode
+                interface_elem = root.find('.//interface[@type="bridge"]')
+                if interface_elem is not None and self.libvirt_uri == "qemu:///session":
+                    # Change to user networking for session mode to avoid permission issues
+                    interface_elem.set('type', 'user')
+                    # Remove bridge source element
+                    source_elem = interface_elem.find('source')
+                    if source_elem is not None:
+                        interface_elem.remove(source_elem)
+                
+                # Update MAC address to be unique
+                mac_elem = root.find('.//interface/mac')
+                if mac_elem is not None:
+                    # Generate random MAC with 52:54:00 prefix (QEMU/KVM range)
+                    import random
+                    mac_suffix = ':'.join(['%02x' % random.randint(0, 255) for _ in range(3)])
+                    mac_elem.set('address', f'52:54:00:{mac_suffix}')
+                
+                return ET.tostring(root, encoding='unicode')
+                
+            except Exception as e:
+                self.logger.warning(f"Failed to parse template XML {basevm_config_file}: {e}")
+                # Fall back to generating basic XML
+        
+        # Fallback: generate basic XML with user networking for session mode
+        memory_kb = (getattr(guest, 'memory_mb', None) or 1024) * 1024
+        vcpus = getattr(guest, 'vcpus', None) or 2
         
         xml = f"""
 <domain type='kvm'>
@@ -616,8 +713,7 @@ class KVMProvider(InfrastructureProvider):
       <source file='{disk_path}'/>
       <target dev='vda' bus='virtio'/>
     </disk>
-    <interface type='bridge'>
-      <source bridge='virbr0'/>
+    <interface type='user'>
       <model type='virtio'/>
     </interface>
     <serial type='pty'>
@@ -671,7 +767,7 @@ class KVMProvider(InfrastructureProvider):
     ) -> None:
         """Wait for VM to reach expected state"""
         # In mock mode, skip waiting
-        if not LIBVIRT_AVAILABLE:
+        if LIBVIRT_TYPE == "mock":
             self.logger.info(f"Mock mode: skipping VM state wait")
             return
             

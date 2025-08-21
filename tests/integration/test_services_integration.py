@@ -12,14 +12,17 @@ from unittest.mock import Mock, patch
 import time
 import threading
 
-from src.cyris.services.orchestrator import RangeOrchestrator, RangeStatus
-from src.cyris.services.monitoring import MonitoringService
-from src.cyris.services.cleanup_service import CleanupService, CleanupPolicy
-from src.cyris.config.settings import CyRISSettings
-from src.cyris.domain.entities.host import Host
-from src.cyris.domain.entities.guest import Guest
-from src.cyris.tools.ssh_manager import SSHManager, SSHCredentials
-from src.cyris.tools.user_manager import UserManager, UserRole
+import sys
+sys.path.insert(0, '/home/ubuntu/cyris/src')
+
+from cyris.services.orchestrator import RangeOrchestrator, RangeStatus
+from cyris.services.monitoring import MonitoringService
+from cyris.services.cleanup_service import CleanupService, CleanupPolicy
+from cyris.config.settings import CyRISSettings
+from cyris.domain.entities.host import Host
+from cyris.domain.entities.guest import Guest
+from cyris.tools.ssh_manager import SSHManager, SSHCredentials, SSHResult
+from cyris.tools.user_manager import UserManager, UserRole
 
 
 @pytest.fixture
@@ -33,10 +36,11 @@ def temp_dir():
 def cyris_settings(temp_dir):
     """Create test CyRIS settings"""
     return CyRISSettings(
-        cyber_range_dir=str(temp_dir / "cyber_range"),
-        gateway_addr="192.168.1.1",
-        gateway_account="cyris",
-        cyris_path=str(temp_dir)
+        cyber_range_dir=temp_dir / "cyber_range",
+        cyris_path=temp_dir,
+        gw_mode=False,
+        gw_account="test_user",
+        gw_mgmt_addr="192.168.1.1"
     )
 
 
@@ -44,38 +48,66 @@ class MockInfrastructureProvider:
     """Mock infrastructure provider for integration tests"""
     
     def __init__(self):
+        self.provider_name = "mock_integration"
         self.created_hosts = []
         self.created_guests = []
         self.destroyed_hosts = []
         self.destroyed_guests = []
         self.resource_statuses = {}
+        self._connected = True
+    
+    def connect(self):
+        self._connected = True
+        
+    def disconnect(self):
+        self._connected = False
+        
+    def is_connected(self):
+        return self._connected
     
     def create_hosts(self, hosts):
-        host_ids = [f"host-{host.id}" for host in hosts]
-        self.created_hosts.extend(host_ids)
-        for host_id in host_ids:
+        host_ids = []
+        for host in hosts:
+            # Handle both modern and legacy Host entities
+            if hasattr(host, 'id'):
+                host_id = str(host.id)
+            else:
+                host_id = host.host_id
+            host_ids.append(host_id)
+            self.created_hosts.append(host_id)
             self.resource_statuses[host_id] = "active"
         return host_ids
     
     def create_guests(self, guests, host_mapping):
-        guest_ids = [f"guest-{guest.id}" for guest in guests]
-        self.created_guests.extend(guest_ids)
-        for guest_id in guest_ids:
-            self.resource_statuses[guest_id] = "active"
+        guest_ids = []
+        for guest in guests:
+            # Handle both modern and legacy Guest entities
+            if hasattr(guest, 'id'):
+                vm_name = f"cyris-{guest.id}-integration"
+            else:
+                vm_name = f"cyris-{guest.guest_id}-integration"
+            guest_ids.append(vm_name)
+            self.created_guests.append(vm_name)
+            self.resource_statuses[vm_name] = "active"
         return guest_ids
     
     def destroy_hosts(self, host_ids):
         self.destroyed_hosts.extend(host_ids)
         for host_id in host_ids:
-            self.resource_statuses[host_id] = "terminated"
+            if host_id in self.resource_statuses:
+                self.resource_statuses[host_id] = "terminated"
     
     def destroy_guests(self, guest_ids):
         self.destroyed_guests.extend(guest_ids)
         for guest_id in guest_ids:
-            self.resource_statuses[guest_id] = "terminated"
+            if guest_id in self.resource_statuses:
+                self.resource_statuses[guest_id] = "terminated"
     
     def get_status(self, resource_ids):
         return {rid: self.resource_statuses.get(rid, "not_found") for rid in resource_ids}
+        
+    def get_resource_info(self, resource_id):
+        return None
 
 
 @pytest.fixture
@@ -89,9 +121,10 @@ def sample_hosts():
     """Create sample host configurations"""
     return [
         Host(
-            id="web-server",
+            host_id="web-server",
             mgmt_addr="192.168.1.10",
-            virbr_addr="10.0.0.1"
+            virbr_addr="10.0.0.1",
+            account="test_user"
         )
     ]
 
@@ -101,11 +134,15 @@ def sample_guests():
     """Create sample guest configurations"""
     return [
         Guest(
-            id="web-vm",
-            host_id="web-server",
-            os_type="ubuntu.20.04",
-            memory_mb=2048,
-            vcpus=2
+            guest_id="web-vm",
+            ip_addr="192.168.100.10",
+            password="test123",
+            basevm_host="web-server",
+            basevm_config_file="/tmp/test.xml",
+            basevm_os_type="ubuntu",
+            basevm_type="kvm",
+            basevm_name="web_base",
+            tasks=[]
         )
     ]
 
