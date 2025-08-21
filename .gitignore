@@ -9,3 +9,20 @@ instantiation/ruleset_modification/iptables
 # Other files
 ._*
 .DS_Store
+
+# Cyber range runtime files
+cyber_range/*.qcow2
+cyber_range/ranges_*.json
+cyber_range/base.qcow2
+
+# VM disk images
+images/*.qcow2
+images/*.img
+images/*.iso
+images/meta-data
+images/user-data
+
+# Test and temporary files
+.coverage
+test_*.py
+validation-report.txt
