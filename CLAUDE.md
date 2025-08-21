@@ -89,6 +89,36 @@ python simple_test.py
 
 # 测试覆盖率报告
 python -m pytest tests/unit/ --cov=src --cov-report=html
+
+# 运行集成测试
+python -m pytest tests/integration/ -v
+
+# 运行端到端测试  
+python -m pytest tests/e2e/ -v
+
+# 运行所有测试套件
+python -m pytest tests/ -v
+
+# 运行特定测试验证脚本
+python test_legacy_core.py                    # 传统核心功能验证
+python test_modern_services.py                # 现代服务验证  
+python test_service_integration.py            # 服务集成测试
+python test_complete_functionality.py         # 完整功能测试
+```
+
+### 代码质量和格式化
+```bash
+# 运行代码格式化 (仅针对现代化模块)
+python -m black src/
+
+# 运行类型检查 (仅针对现代化模块) 
+python -m mypy src/
+
+# 运行代码风格检查 (仅针对现代化模块)
+python -m flake8 src/
+
+# 运行预提交钩子
+pre-commit run --all-files
 ```
 
 ## Architecture Overview
@@ -197,3 +227,26 @@ clone_settings:     # 克隆实例配置
 - 此项目包含网络安全培训相关的攻击模拟和恶意软件创建功能，仅用于教育目的
 - 所有攻击模拟脚本仅在隔离的靶场环境中运行
 - 不要在生产环境中执行任何攻击相关功能
+
+### Important Implementation Notes
+
+**Current State Analysis**: 
+The project has undergone modernization but is not complete. Many functions lack full implementation and need to be completed to provide actual cyber range functionality.
+
+**Key Areas Requiring Implementation**:
+- Complete integration between modern services and legacy systems
+- Full network topology management implementation
+- End-to-end task execution system integration
+- Production-ready cyber range deployment functionality
+
+**When Contributing**:
+- Focus on completing the actual cyber range functionality, not just the architectural framework
+- Test with real KVM environments when possible
+- Ensure backward compatibility with existing YAML descriptions
+- Validate changes against existing examples in `examples/` directory
+
+### Troubleshooting Common Issues
+- "No route to host" errors: Destroy partially created ranges and recreate
+- KVM domain cleanup: Use `destroy_all_cr.sh CYRIS_PATH CYBER_RANGE_PATH` for complete cleanup
+- Network bridge issues: Check with `brctl show` and clean up manually if needed
+- Permission errors: Ensure user is in libvirt group and has KVM access
