@@ -8,10 +8,11 @@ monitoring services.
 
 import logging
 import time
+import json
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Protocol
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from enum import Enum
 
 from ..config.settings import CyRISSettings
@@ -65,6 +66,23 @@ class RangeMetadata:
         """Update range status and last modified time"""
         self.status = status
         self.last_modified = datetime.now()
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization"""
+        data = asdict(self)
+        data['status'] = self.status.value
+        data['created_at'] = self.created_at.isoformat()
+        data['last_modified'] = self.last_modified.isoformat()
+        return data
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'RangeMetadata':
+        """Create instance from dictionary"""
+        data = data.copy()
+        data['status'] = RangeStatus(data['status'])
+        data['created_at'] = datetime.fromisoformat(data['created_at'])
+        data['last_modified'] = datetime.fromisoformat(data['last_modified'])
+        return cls(**data)
 
 
 class InfrastructureProvider(Protocol):
@@ -135,13 +153,20 @@ class RangeOrchestrator:
             'ssh_retries': 3
         })
         
-        # In-memory range registry (in production, would use persistent storage)
+        # Persistent range registry
         self._ranges: Dict[str, RangeMetadata] = {}
         self._range_resources: Dict[str, Dict[str, List[str]]] = {}
         
         # Create cyber_range directory if it doesn't exist
         self.ranges_dir = Path(self.settings.cyber_range_dir)
         self.ranges_dir.mkdir(exist_ok=True)
+        
+        # Persistent storage files
+        self._metadata_file = self.ranges_dir / "ranges_metadata.json"
+        self._resources_file = self.ranges_dir / "ranges_resources.json"
+        
+        # Load existing data from disk
+        self._load_persistent_data()
         
         self.logger.info("RangeOrchestrator initialized with network topology and task execution")
     
@@ -279,6 +304,9 @@ class RangeOrchestrator:
             # Update status to active
             metadata.update_status(RangeStatus.ACTIVE)
             
+            # Save persistent data
+            self._save_persistent_data()
+            
             self.logger.info(f"Successfully created range {range_id} with {len(task_results)} tasks executed")
             return metadata
             
@@ -293,6 +321,9 @@ class RangeOrchestrator:
                 self._cleanup_range_resources(range_id)
             except Exception as cleanup_error:
                 self.logger.error(f"Cleanup failed for range {range_id}: {cleanup_error}")
+            
+            # Save state even on error
+            self._save_persistent_data()
             
             raise RuntimeError(f"Range creation failed: {e}") from e
     
@@ -370,6 +401,7 @@ class RangeOrchestrator:
             
             if new_status != metadata.status:
                 metadata.update_status(new_status)
+                self._save_persistent_data()
                 self.logger.info(f"Range {range_id} status updated to {new_status.value}")
             
             return new_status
@@ -377,6 +409,7 @@ class RangeOrchestrator:
         except Exception as e:
             self.logger.error(f"Failed to update status for range {range_id}: {e}")
             metadata.update_status(RangeStatus.ERROR)
+            self._save_persistent_data()
             return RangeStatus.ERROR
     
     def destroy_range(self, range_id: str) -> bool:
@@ -406,12 +439,17 @@ class RangeOrchestrator:
             # Update final status
             metadata.update_status(RangeStatus.DESTROYED)
             
+            # Save persistent data
+            self._save_persistent_data()
+            
             self.logger.info(f"Successfully destroyed range {range_id}")
             return True
             
         except Exception as e:
             self.logger.error(f"Failed to destroy range {range_id}: {e}")
             metadata.update_status(RangeStatus.ERROR)
+            # Save error state
+            self._save_persistent_data()
             return False
     
     def _cleanup_range_resources(self, range_id: str) -> None:
@@ -543,3 +581,46 @@ class RangeOrchestrator:
         except Exception as e:
             self.logger.error(f"Failed to create range from YAML {description_file}: {e}")
             raise
+    
+    def _load_persistent_data(self) -> None:
+        """Load persistent data from disk"""
+        try:
+            # Load range metadata
+            if self._metadata_file.exists():
+                with open(self._metadata_file, 'r') as f:
+                    metadata_data = json.load(f)
+                    for range_id, data in metadata_data.items():
+                        self._ranges[range_id] = RangeMetadata.from_dict(data)
+                self.logger.info(f"Loaded {len(self._ranges)} ranges from persistent storage")
+            
+            # Load range resources
+            if self._resources_file.exists():
+                with open(self._resources_file, 'r') as f:
+                    self._range_resources = json.load(f)
+                self.logger.info(f"Loaded resources for {len(self._range_resources)} ranges")
+                
+        except Exception as e:
+            self.logger.error(f"Failed to load persistent data: {e}")
+            # Continue with empty registry if loading fails
+            self._ranges = {}
+            self._range_resources = {}
+    
+    def _save_persistent_data(self) -> None:
+        """Save persistent data to disk"""
+        try:
+            # Save range metadata
+            metadata_data = {
+                range_id: metadata.to_dict()
+                for range_id, metadata in self._ranges.items()
+            }
+            with open(self._metadata_file, 'w') as f:
+                json.dump(metadata_data, f, indent=2)
+            
+            # Save range resources
+            with open(self._resources_file, 'w') as f:
+                json.dump(self._range_resources, f, indent=2)
+                
+            self.logger.debug("Persistent data saved successfully")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to save persistent data: {e}")
