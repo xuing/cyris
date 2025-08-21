@@ -26,13 +26,19 @@ logger = logging.getLogger(__name__)
               type=click.Path(exists=True, path_type=Path),
               help='配置文件路径')
 @click.option('--verbose', '-v', is_flag=True, help='详细输出')
+@click.option('--version', is_flag=True, help='显示版本信息')
 @click.pass_context
-def cli(ctx, config: Optional[Path], verbose: bool):
+def cli(ctx, config: Optional[Path], verbose: bool, version: bool):
     """
     CyRIS - 现代化网络安全培训环境部署工具
     
     使用现代化的命令行接口管理网络靶场的创建、部署和管理。
     """
+    # 处理版本选项
+    if version:
+        click.echo("CyRIS v1.4.0 - Cyber Range Instantiation System")
+        ctx.exit()
+    
     # 设置日志级别
     if verbose:
         logging.getLogger().setLevel(logging.DEBUG)
@@ -329,10 +335,10 @@ def legacy_run(ctx, args):
         sys.exit(1)
 
 
-def main():
+def main(args=None):
     """主入口点"""
     try:
-        cli()
+        cli(args)
     except KeyboardInterrupt:
         click.echo("\n操作被用户中断")
         sys.exit(1)

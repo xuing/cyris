@@ -144,15 +144,16 @@ class TestInstallTools:
 
     def test_install_tools_creation(self):
         """测试工具安装模块创建"""
-        tools = InstallTools("192.168.1.100", "/tmp/cyris/")
+        tools = InstallTools("192.168.1.100", "cyuser", "/tmp/cyris/")
         
         assert tools.addr == "192.168.1.100"
+        assert tools.account == "cyuser"
 
     def test_install_command(self):
         """测试安装命令生成"""
-        tools = InstallTools("192.168.1.100", "/tmp/cyris/")
+        tools = InstallTools("192.168.1.100", "cyuser", "/tmp/cyris/")
         
-        command = tools.command("vim", "kvm", "ubuntu")
+        command = tools.package_install_command("apt", "vim", "", "ubuntu", "kvm")
         
         assert command is not None
         assert hasattr(command, 'command')
@@ -164,16 +165,22 @@ class TestEmulateAttacks:
 
     def test_emulate_attacks_creation(self):
         """测试攻击模拟模块创建"""
-        attacks = EmulateAttacks("192.168.1.100", "/tmp/cyris/")
+        attacks = EmulateAttacks("ssh_attack", "192.168.1.100", "target_user", 5, "10", "/tmp/cyris/", "kvm")
         
-        assert attacks.addr == "192.168.1.100"
+        assert attacks.target_addr == "192.168.1.100"
+        assert attacks.attack_type == "ssh_attack"
+        assert attacks.target_account == "target_user"
+        assert attacks.number == 5
+        assert attacks.attack_time == "10"
+        assert attacks.basevm_type == "kvm"
 
     def test_attack_command_generation(self):
         """测试攻击命令生成"""
-        attacks = EmulateAttacks("192.168.1.100", "/tmp/cyris/")
+        attacks = EmulateAttacks("ssh_attack", "192.168.1.100", "target_user", 5, "10", "/tmp/cyris/", "kvm")
         
-        command = attacks.command("ssh_attack", "192.168.1.200", "kvm", "ubuntu")
+        command = attacks.command()
         
         assert command is not None
         assert hasattr(command, 'command')
         assert hasattr(command, 'description')
+        assert "ssh_attack" in command.description or "ssh attack" in command.description

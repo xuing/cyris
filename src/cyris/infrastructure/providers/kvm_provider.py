@@ -9,11 +9,27 @@ import logging
 import subprocess
 import xml.etree.ElementTree as ET
 from typing import Dict, List, Optional, Any
-import libvirt
 from pathlib import Path
 import json
 import time
 import uuid
+
+try:
+    import libvirt
+    LIBVIRT_AVAILABLE = True
+except ImportError:
+    LIBVIRT_AVAILABLE = False
+    # Mock libvirt for testing purposes
+    class MockLibvirt:
+        VIR_DOMAIN_RUNNING = 1
+        VIR_DOMAIN_SHUTOFF = 5
+        VIR_DOMAIN_PAUSED = 3
+        
+        @staticmethod
+        def open(uri=None):
+            return None
+    
+    libvirt = MockLibvirt()
 
 from .base_provider import (
     InfrastructureProvider, ResourceInfo, ResourceStatus,
