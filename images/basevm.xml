@@ -6,8 +6,8 @@ This is a template libvirt domain XML for creating cyber range VMs
 <domain type='kvm'>
   <name>basevm-template</name>
   <uuid>00000000-0000-0000-0000-000000000000</uuid>
-  <memory unit='KiB'>1048576</memory>
-  <currentMemory unit='KiB'>1048576</currentMemory>
+  <memory unit='KiB'>2097152</memory>
+  <currentMemory unit='KiB'>2097152</currentMemory>
   <vcpu placement='static'>2</vcpu>
   <os>
     <type arch='x86_64' machine='pc-i440fx-2.12'>hvm</type>
@@ -35,13 +35,14 @@ This is a template libvirt domain XML for creating cyber range VMs
     <!-- Disk configuration - will be updated during range creation -->
     <disk type='file' device='disk'>
       <driver name='qemu' type='qcow2'/>
-      <source file='/home/ubuntu/images/basevm.qcow2'/>
+      <source file='/home/ubuntu/cyris/images/basevm.qcow2'/>
       <target dev='vda' bus='virtio'/>
       <address type='pci' domain='0x0000' bus='0x00' slot='0x07' function='0x0'/>
     </disk>
-    <!-- CD-ROM drive -->
+    <!-- Cloud-init CD-ROM drive -->
     <disk type='file' device='cdrom'>
       <driver name='qemu' type='raw'/>
+      <source file='/home/ubuntu/cyris/images/cloud-init.iso'/>
       <target dev='hdc' bus='ide'/>
       <readonly/>
       <address type='drive' controller='0' bus='1' target='0' unit='0'/>
