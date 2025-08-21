@@ -89,8 +89,13 @@ def cli(ctx, config: Optional[Path], verbose: bool, version: bool):
 @click.argument('description_file', type=click.Path(exists=True, path_type=Path))
 @click.option('--range-id', type=int, help='Specify cyber range ID')
 @click.option('--dry-run', is_flag=True, help='Dry run mode, do not actually create')
+@click.option('--network-mode', 
+              type=click.Choice(['user', 'bridge'], case_sensitive=False),
+              default='user',
+              help='Network mode: user (isolated) or bridge (SSH accessible)')
+@click.option('--enable-ssh', is_flag=True, help='Enable SSH access (requires bridge networking)')
 @click.pass_context
-def create(ctx, description_file: Path, range_id: Optional[int], dry_run: bool):
+def create(ctx, description_file: Path, range_id: Optional[int], dry_run: bool, network_mode: str, enable_ssh: bool):
     """
     Create a new cyber range
     
@@ -112,7 +117,16 @@ def create(ctx, description_file: Path, range_id: Optional[int], dry_run: bool):
             from ..services.orchestrator import RangeOrchestrator
             from ..infrastructure.providers.kvm_provider import KVMProvider
             
-            kvm_settings = {'connection_uri': 'qemu:///system', 'base_path': str(config.cyber_range_dir)}
+            # Configure network settings
+            libvirt_uri = 'qemu:///system' if network_mode == 'bridge' else 'qemu:///session'
+            
+            kvm_settings = {
+                'connection_uri': libvirt_uri,
+                'libvirt_uri': libvirt_uri,
+                'base_path': str(config.cyber_range_dir),
+                'network_mode': network_mode,
+                'enable_ssh': enable_ssh
+            }
             provider = KVMProvider(kvm_settings)
             orchestrator = RangeOrchestrator(config, provider)
             
@@ -141,9 +155,15 @@ def create(ctx, description_file: Path, range_id: Optional[int], dry_run: bool):
         from ..infrastructure.providers.kvm_provider import KVMProvider
         
         # Create infrastructure provider (default to KVM)
+        # Configure network settings
+        libvirt_uri = 'qemu:///system' if network_mode == 'bridge' else 'qemu:///session'
+        
         kvm_settings = {
-            'connection_uri': 'qemu:///system',
-            'base_path': str(config.cyber_range_dir)
+            'connection_uri': libvirt_uri,
+            'libvirt_uri': libvirt_uri,
+            'base_path': str(config.cyber_range_dir),
+            'network_mode': network_mode,
+            'enable_ssh': enable_ssh
         }
         provider = KVMProvider(kvm_settings)
         
@@ -574,6 +594,87 @@ def _check_running_vms(provider):
         # Don't fail the whole command if VM check fails
         if click.get_current_context().obj.get('verbose', False):
             click.echo(f"Warning: Failed to check running VMs: {e}")
+
+
+@cli.command(name='ssh-info')
+@click.argument('range_id', type=str)
+@click.pass_context
+def ssh_info(ctx, range_id: str):
+    """
+    Get SSH connection information for a cyber range
+    
+    RANGE_ID: ID of the cyber range to get SSH info for
+    """
+    config: CyRISSettings = ctx.obj['config']
+    verbose = ctx.obj['verbose']
+    
+    try:
+        from ..services.orchestrator import RangeOrchestrator
+        from ..infrastructure.providers.kvm_provider import KVMProvider
+        
+        # Create provider and orchestrator
+        kvm_settings = {
+            'connection_uri': 'qemu:///system',
+            'libvirt_uri': 'qemu:///system',
+            'base_path': str(config.cyber_range_dir)
+        }
+        provider = KVMProvider(kvm_settings)
+        orchestrator = RangeOrchestrator(config, provider)
+        
+        # Get range information
+        range_metadata = orchestrator.get_range(range_id)
+        if not range_metadata:
+            click.echo(f"❌ Range {range_id} not found", err=True)
+            sys.exit(1)
+        
+        # Get range resources
+        resources = orchestrator.get_range_resources(range_id)
+        if not resources or not resources.get('guests'):
+            click.echo(f"❌ No VMs found for range {range_id}", err=True)
+            sys.exit(1)
+        
+        click.echo(f"SSH Connection Information for Range {range_id}:")
+        click.echo(f"Range Name: {range_metadata.name}")
+        click.echo(f"Status: {range_metadata.status.value}")
+        click.echo("=" * 60)
+        
+        # Get SSH info for each VM
+        guest_ids = resources.get('guests', [])
+        for vm_id in guest_ids:
+            ssh_info_data = provider.get_vm_ssh_info(vm_id)
+            if ssh_info_data:
+                click.echo(f"\n🖥️  VM: {vm_id}")
+                click.echo(f"   Connection Type: {ssh_info_data['connection_type']}")
+                
+                if ssh_info_data['connection_type'] == 'bridge':
+                    click.echo(f"   Network: {ssh_info_data.get('network', 'unknown')}")
+                    click.echo(f"   MAC Address: {ssh_info_data.get('mac_address', 'unknown')}")
+                    click.echo(f"   SSH Port: {ssh_info_data.get('ssh_port', 22)}")
+                    click.echo(f"   Notes: {ssh_info_data.get('notes', '')}")
+                    
+                    if 'suggested_commands' in ssh_info_data:
+                        click.echo("   📋 Suggested commands to find IP:")
+                        for cmd in ssh_info_data['suggested_commands']:
+                            click.echo(f"      {cmd}")
+                
+                elif ssh_info_data['connection_type'] == 'user_mode':
+                    click.echo(f"   Notes: {ssh_info_data.get('notes', '')}")
+                    click.echo(f"   Alternative: {ssh_info_data.get('alternative', '')}")
+            else:
+                click.echo(f"\n🖥️  VM: {vm_id}")
+                click.echo("   ❌ SSH information not available")
+        
+        click.echo("\n💡 Tips:")
+        click.echo("   • For bridge networking, VMs get DHCP IP addresses")
+        click.echo("   • Use 'nmap -sP 192.168.122.0/24' to scan for active IPs")
+        click.echo("   • VNC console is available on all VMs for direct access")
+        
+    except Exception as e:
+        click.echo(f"❌ Error getting SSH info: {e}", err=True)
+        if verbose:
+            import traceback
+            traceback.print_exc()
+        sys.exit(1)
 
 
 if __name__ == '__main__':
