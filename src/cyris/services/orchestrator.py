@@ -18,6 +18,10 @@ from enum import Enum
 from ..config.settings import CyRISSettings
 from ..infrastructure.network.topology_manager import NetworkTopologyManager
 from .task_executor import TaskExecutor, TaskResult
+from ..core.exceptions import (
+    ExceptionHandler, CyRISException, CyRISVirtualizationError, 
+    CyRISNetworkError, CyRISResourceError, handle_exception, safe_execute
+)
 
 # Import both modern and legacy entities for compatibility
 from ..domain.entities.host import Host as ModernHost
@@ -145,30 +149,41 @@ class RangeOrchestrator:
         self.provider = infrastructure_provider
         self.logger = logger or logging.getLogger(__name__)
         
-        # Initialize network topology and task execution managers
-        self.topology_manager = NetworkTopologyManager()
-        self.task_executor = TaskExecutor({
-            'base_path': settings.cyris_path,
-            'ssh_timeout': 30,
-            'ssh_retries': 3
-        })
+        # Initialize exception handler
+        self.exception_handler = ExceptionHandler(self.logger)
         
-        # Persistent range registry
-        self._ranges: Dict[str, RangeMetadata] = {}
-        self._range_resources: Dict[str, Dict[str, List[str]]] = {}
-        
-        # Create cyber_range directory if it doesn't exist
-        self.ranges_dir = Path(self.settings.cyber_range_dir)
-        self.ranges_dir.mkdir(exist_ok=True)
-        
-        # Persistent storage files
-        self._metadata_file = self.ranges_dir / "ranges_metadata.json"
-        self._resources_file = self.ranges_dir / "ranges_resources.json"
-        
-        # Load existing data from disk
-        self._load_persistent_data()
-        
-        self.logger.info("RangeOrchestrator initialized with network topology and task execution")
+        try:
+            # Initialize network topology and task execution managers
+            self.topology_manager = NetworkTopologyManager()
+            self.task_executor = TaskExecutor({
+                'base_path': settings.cyris_path,
+                'ssh_timeout': 30,
+                'ssh_retries': 3
+            })
+            
+            # Persistent range registry
+            self._ranges: Dict[str, RangeMetadata] = {}
+            self._range_resources: Dict[str, Dict[str, List[str]]] = {}
+            
+            # Create cyber_range directory if it doesn't exist
+            self.ranges_dir = Path(self.settings.cyber_range_dir)
+            self.ranges_dir.mkdir(exist_ok=True)
+            
+            # Persistent storage files
+            self._metadata_file = self.ranges_dir / "ranges_metadata.json"
+            self._resources_file = self.ranges_dir / "ranges_resources.json"
+            
+            # Load existing data from disk
+            self._load_persistent_data()
+            
+            self.logger.info("RangeOrchestrator initialized with unified exception handling")
+            
+        except Exception as e:
+            self.exception_handler.handle_exception(
+                e, 
+                context={"component": "orchestrator", "operation": "initialization"},
+                reraise=True
+            )
     
     def create_range(
         self,
@@ -201,7 +216,11 @@ class RangeOrchestrator:
             RuntimeError: If creation fails
         """
         if range_id in self._ranges:
-            raise ValueError(f"Range {range_id} already exists")
+            raise CyRISVirtualizationError(
+                f"Range {range_id} already exists",
+                operation="create_range",
+                range_id=range_id
+            )
         
         self.logger.info(f"Creating range {range_id}: {name}")
         
@@ -228,7 +247,25 @@ class RangeOrchestrator:
             
             # Create infrastructure resources
             self.logger.info(f"Creating {len(hosts)} hosts for range {range_id}")
-            host_ids = self.provider.create_hosts(hosts)
+            host_ids = safe_execute(
+                self.provider.create_hosts,
+                hosts,
+                context={
+                    "component": "orchestrator",
+                    "operation": "create_hosts", 
+                    "range_id": range_id
+                },
+                default_return=[],
+                logger=self.logger
+            )
+            
+            if not host_ids:
+                raise CyRISVirtualizationError(
+                    f"Failed to create hosts for range {range_id}",
+                    operation="create_hosts",
+                    range_id=range_id
+                )
+            
             self._range_resources[range_id]["hosts"] = host_ids
             
             # Create host mapping for guest creation
@@ -240,7 +277,25 @@ class RangeOrchestrator:
                     host_mapping[host_id] = host_ids[i]
             
             self.logger.info(f"Creating {len(guests)} guests for range {range_id}")
-            guest_ids = self.provider.create_guests(guests, host_mapping)
+            guest_ids = safe_execute(
+                self.provider.create_guests,
+                guests, host_mapping,
+                context={
+                    "component": "orchestrator",
+                    "operation": "create_guests", 
+                    "range_id": range_id
+                },
+                default_return=[],
+                logger=self.logger
+            )
+            
+            if not guest_ids:
+                raise CyRISVirtualizationError(
+                    f"Failed to create guests for range {range_id}",
+                    operation="create_guests",
+                    range_id=range_id
+                )
+            
             self._range_resources[range_id]["guests"] = guest_ids
             
             # Create network topology if specified
@@ -275,10 +330,21 @@ class RangeOrchestrator:
                 # Execute tasks if guest has them and IP is available
                 if guest_ip and hasattr(guest, 'tasks') and guest.tasks:
                     self.logger.info(f"Executing tasks for guest {guest_id} at {guest_ip}")
-                    try:
-                        results = self.task_executor.execute_guest_tasks(
-                            guest, guest_ip, guest.tasks
-                        )
+                    
+                    results = safe_execute(
+                        self.task_executor.execute_guest_tasks,
+                        guest, guest_ip, guest.tasks,
+                        context={
+                            "component": "orchestrator", 
+                            "operation": "execute_guest_tasks",
+                            "range_id": range_id,
+                            "guest_id": guest_id
+                        },
+                        default_return=[],
+                        logger=self.logger
+                    )
+                    
+                    if results:
                         task_results.extend(results)
                         
                         # Log task results
@@ -287,8 +353,6 @@ class RangeOrchestrator:
                                 self.logger.info(f"Task {result.task_id}: {result.message}")
                             else:
                                 self.logger.warning(f"Task {result.task_id} failed: {result.message}")
-                    except Exception as e:
-                        self.logger.error(f"Task execution failed for guest {guest_id}: {e}")
             
             # Store task results in metadata
             if task_results:
@@ -310,22 +374,40 @@ class RangeOrchestrator:
             self.logger.info(f"Successfully created range {range_id} with {len(task_results)} tasks executed")
             return metadata
             
+        except CyRISException:
+            # Re-raise CyRIS exceptions as-is
+            raise
         except Exception as e:
-            self.logger.error(f"Failed to create range {range_id}: {e}")
+            # Handle any other exceptions through unified handler
+            self.exception_handler.handle_exception(
+                e, 
+                context={
+                    "component": "orchestrator",
+                    "operation": "create_range",
+                    "range_id": range_id
+                }
+            )
             
             # Update status to error
             metadata.update_status(RangeStatus.ERROR)
             
             # Attempt cleanup of partial resources
-            try:
-                self._cleanup_range_resources(range_id)
-            except Exception as cleanup_error:
-                self.logger.error(f"Cleanup failed for range {range_id}: {cleanup_error}")
+            safe_execute(
+                self._cleanup_range_resources,
+                range_id,
+                context={"operation": "cleanup_after_failure", "range_id": range_id},
+                logger=self.logger
+            )
             
             # Save state even on error
             self._save_persistent_data()
             
-            raise RuntimeError(f"Range creation failed: {e}") from e
+            raise CyRISVirtualizationError(
+                f"Range creation failed: {e}",
+                operation="create_range",
+                range_id=range_id,
+                cause=e
+            )
     
     def get_range(self, range_id: str) -> Optional[RangeMetadata]:
         """Get range metadata by ID"""
