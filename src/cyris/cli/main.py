@@ -107,12 +107,69 @@ def create(ctx, description_file: Path, range_id: Optional[int], dry_run: bool):
     
     if dry_run:
         click.echo("Dry run mode - will not actually create cyber range")
-        # TODO: Implement dry run logic
+        try:
+            # Still create orchestrator and validate YAML in dry-run mode
+            from ..services.orchestrator import RangeOrchestrator
+            from ..infrastructure.providers.kvm_provider import KVMProvider
+            
+            kvm_settings = {'connection_uri': 'qemu:///system', 'base_path': str(config.cyber_range_dir)}
+            provider = KVMProvider(kvm_settings)
+            orchestrator = RangeOrchestrator(config, provider)
+            
+            result = orchestrator.create_range_from_yaml(
+                description_file=description_file,
+                range_id=range_id,
+                dry_run=True
+            )
+            
+            if result:
+                click.echo(f"✅ Validation successful. Would create range: {result}")
+            else:
+                click.echo("❌ Validation failed")
+                sys.exit(1)
+        except Exception as e:
+            click.echo(f"❌ Validation error: {e}", err=True)
+            if verbose:
+                import traceback
+                traceback.print_exc()
+            sys.exit(1)
         return
     
-    # TODO: Implement cyber range creation logic
-    click.echo("Cyber range creation feature is under development...")
-    click.echo("Currently please use legacy interface: python main/cyris.py")
+    # Implement actual cyber range creation using service layer
+    try:
+        from ..services.orchestrator import RangeOrchestrator
+        from ..infrastructure.providers.kvm_provider import KVMProvider
+        
+        # Create infrastructure provider (default to KVM)
+        kvm_settings = {
+            'connection_uri': 'qemu:///system',
+            'base_path': str(config.cyber_range_dir)
+        }
+        provider = KVMProvider(kvm_settings)
+        
+        # Create orchestrator
+        orchestrator = RangeOrchestrator(config, provider)
+        
+        # Create range
+        click.echo("Initializing cyber range creation...")
+        result = orchestrator.create_range_from_yaml(
+            description_file=description_file,
+            range_id=range_id,
+            dry_run=dry_run
+        )
+        
+        if result:
+            click.echo(f"✅ Cyber range created successfully: {result}")
+        else:
+            click.echo("❌ Cyber range creation failed")
+            sys.exit(1)
+            
+    except Exception as e:
+        click.echo(f"❌ Error creating cyber range: {e}", err=True)
+        if verbose:
+            import traceback
+            traceback.print_exc()
+        sys.exit(1)
 
 
 @cli.command()
@@ -123,58 +180,129 @@ def list(ctx, range_id: Optional[int], list_all: bool):
     """List cyber ranges"""
     config: CyRISSettings = ctx.obj['config']
     
-    if range_id:
-        click.echo(f"Showing details for cyber range {range_id}")
-    elif list_all:
-        click.echo("Listing all cyber ranges")
-    else:
-        click.echo("Listing active cyber ranges")
-    
-    # Check cyber range directory
-    ranges_dir = config.cyber_range_dir
-    if not ranges_dir.exists():
-        click.echo(f"靶场目录不存在: {ranges_dir}")
-        return
-    
-    # 列出现有靶场目录
-    range_dirs = [d for d in ranges_dir.iterdir() if d.is_dir()]
-    
-    if not range_dirs:
-        click.echo("未找到任何靶场")
-        return
-    
-    click.echo(f"在 {ranges_dir} 中找到 {len(range_dirs)} 个靶场:")
-    for range_dir in sorted(range_dirs):
-        click.echo(f"  - {range_dir.name}")
+    try:
+        from ..services.orchestrator import RangeOrchestrator
+        from ..infrastructure.providers.kvm_provider import KVMProvider
         
-        # 查找详细信息文件
-        detail_files = list(range_dir.glob("range_details-*.yml"))
-        if detail_files:
-            click.echo(f"    详细信息: {detail_files[0].name}")
+        # Create orchestrator to check ranges
+        kvm_settings = {'connection_uri': 'qemu:///system', 'base_path': str(config.cyber_range_dir)}
+        provider = KVMProvider(kvm_settings)
+        orchestrator = RangeOrchestrator(config, provider)
+        
+        if range_id:
+            # Show specific range details
+            click.echo(f"Cyber range {range_id} details:")
+            range_metadata = orchestrator.get_range(str(range_id))
+            if range_metadata:
+                click.echo(f"  Name: {range_metadata.name}")
+                click.echo(f"  Status: {range_metadata.status.value}")
+                click.echo(f"  Created: {range_metadata.created_at}")
+                click.echo(f"  Description: {range_metadata.description}")
+                if range_metadata.tags:
+                    click.echo(f"  Tags: {range_metadata.tags}")
+            else:
+                click.echo(f"  Range {range_id} not found in orchestrator")
+        else:
+            # List ranges
+            ranges = orchestrator.list_ranges()
+            
+            if not ranges:
+                click.echo("No cyber ranges found in orchestrator")
+                
+                # Fallback: Check filesystem for range directories  
+                ranges_dir = config.cyber_range_dir
+                if ranges_dir.exists():
+                    range_dirs = [d for d in ranges_dir.iterdir() if d.is_dir()]
+                    if range_dirs:
+                        click.echo(f"Found {len(range_dirs)} range directories on filesystem:")
+                        for range_dir in sorted(range_dirs):
+                            click.echo(f"  {range_dir.name} (filesystem only)")
+                else:
+                    click.echo(f"Cyber range directory does not exist: {ranges_dir}")
+                return
+            
+            # Display orchestrated ranges
+            click.echo(f"Cyber ranges ({'all' if list_all else 'active only'}):")
+            
+            displayed_count = 0
+            for range_meta in sorted(ranges, key=lambda r: r.created_at):
+                if not list_all and range_meta.status.value not in ['active', 'creating']:
+                    continue
+                    
+                displayed_count += 1
+                status_indicator = "🟢" if range_meta.status.value == "active" else "🟡" if range_meta.status.value == "creating" else "🔴"
+                
+                click.echo(f"  {status_indicator} {range_meta.range_id}: {range_meta.name}")
+                click.echo(f"     Status: {range_meta.status.value}")
+                click.echo(f"     Created: {range_meta.created_at.strftime('%Y-%m-%d %H:%M')}")
+                if range_meta.description:
+                    click.echo(f"     Description: {range_meta.description}")
+            
+            if displayed_count == 0:
+                click.echo("  No ranges match the filter criteria")
+                
+    except Exception as e:
+        click.echo(f"Error listing cyber ranges: {e}", err=True)
+        sys.exit(1)
 
 
 @cli.command()
 @click.argument('range_id', type=int)
-@click.option('--force', '-f', is_flag=True, help='强制删除，不询问确认')
+@click.option('--force', '-f', is_flag=True, help='Force deletion without confirmation')
 @click.pass_context
 def destroy(ctx, range_id: int, force: bool):
     """
-    销毁指定的网络靶场
+    Destroy the specified cyber range
     
-    RANGE_ID: 要销毁的靶场ID
+    RANGE_ID: ID of the cyber range to destroy
     """
     config: CyRISSettings = ctx.obj['config']
+    verbose = ctx.obj['verbose']
     
     if not force:
-        if not click.confirm(f'确定要销毁靶场 {range_id} 吗？'):
-            click.echo('操作已取消')
+        if not click.confirm(f'Are you sure you want to destroy cyber range {range_id}?'):
+            click.echo('Operation cancelled')
             return
     
-    click.echo(f"销毁靶场: {range_id}")
+    click.echo(f"Destroying cyber range: {range_id}")
     
-    # TODO: 实现销毁逻辑
-    click.echo("靶场销毁功能正在开发中...")
-    click.echo(f"当前请使用: main/range_cleanup.sh {range_id} CONFIG")
+    try:
+        from ..services.orchestrator import RangeOrchestrator
+        from ..infrastructure.providers.kvm_provider import KVMProvider
+        
+        # Create orchestrator
+        kvm_settings = {'connection_uri': 'qemu:///system', 'base_path': str(config.cyber_range_dir)}
+        provider = KVMProvider(kvm_settings)
+        orchestrator = RangeOrchestrator(config, provider)
+        
+        # Check if range exists
+        range_metadata = orchestrator.get_range(str(range_id))
+        if not range_metadata:
+            click.echo(f"❌ Cyber range {range_id} not found")
+            
+            # Check filesystem for legacy ranges
+            range_dir = config.cyber_range_dir / str(range_id)
+            if range_dir.exists():
+                click.echo(f"⚠️  Found range directory on filesystem: {range_dir}")
+                click.echo(f"   Use legacy cleanup: main/range_cleanup.sh {range_id} CONFIG")
+            
+            sys.exit(1)
+        
+        # Destroy the range
+        success = orchestrator.destroy_range(str(range_id))
+        
+        if success:
+            click.echo(f"✅ Cyber range {range_id} destroyed successfully")
+        else:
+            click.echo(f"❌ Failed to destroy cyber range {range_id}")
+            sys.exit(1)
+            
+    except Exception as e:
+        click.echo(f"❌ Error destroying cyber range: {e}", err=True)
+        if verbose:
+            import traceback
+            traceback.print_exc()
+        sys.exit(1)
 
 
 @cli.command()
@@ -182,120 +310,186 @@ def destroy(ctx, range_id: int, force: bool):
 @click.pass_context
 def status(ctx, range_id: int):
     """
-    显示靶场状态
+    Display cyber range status
     
-    RANGE_ID: 靶场ID
+    RANGE_ID: Cyber range ID
     """
     config: CyRISSettings = ctx.obj['config']
+    verbose = ctx.obj['verbose']
     
-    click.echo(f"靶场 {range_id} 状态:")
+    click.echo(f"Cyber range {range_id} status:")
     
-    # Check cyber range directory是否存在
-    range_dir = config.cyber_range_dir / str(range_id)
-    
-    if not range_dir.exists():
-        click.echo(f"  状态: 不存在")
-        return
-    
-    click.echo(f"  状态: 存在")
-    click.echo(f"  目录: {range_dir}")
-    
-    # 查找相关文件
-    detail_files = list(range_dir.glob("range_details-*.yml"))
-    notification_files = list(range_dir.glob("range_notification-*.txt"))
-    
-    if detail_files:
-        click.echo(f"  详细信息文件: {detail_files[0].name}")
-    
-    if notification_files:
-        click.echo(f"  通知文件: {notification_files[0].name}")
+    try:
+        from ..services.orchestrator import RangeOrchestrator
+        from ..infrastructure.providers.kvm_provider import KVMProvider
+        
+        # Create orchestrator
+        kvm_settings = {'connection_uri': 'qemu:///system', 'base_path': str(config.cyber_range_dir)}
+        provider = KVMProvider(kvm_settings)
+        orchestrator = RangeOrchestrator(config, provider)
+        
+        # Check orchestrator first
+        range_metadata = orchestrator.get_range(str(range_id))
+        
+        if range_metadata:
+            # Show orchestrator information
+            status_icon = "🟢" if range_metadata.status.value == "active" else "🟡" if range_metadata.status.value == "creating" else "🔴"
+            click.echo(f"  {status_icon} Status: {range_metadata.status.value}")
+            click.echo(f"  Name: {range_metadata.name}")
+            click.echo(f"  Description: {range_metadata.description}")
+            click.echo(f"  Created: {range_metadata.created_at.strftime('%Y-%m-%d %H:%M:%S')}")
+            click.echo(f"  Last Modified: {range_metadata.last_modified.strftime('%Y-%m-%d %H:%M:%S')}")
+            
+            if range_metadata.owner:
+                click.echo(f"  Owner: {range_metadata.owner}")
+            
+            if range_metadata.tags:
+                click.echo(f"  Tags: {range_metadata.tags}")
+            
+            # Show resource information
+            resources = orchestrator.get_range_resources(str(range_id))
+            if resources:
+                click.echo(f"  Resources:")
+                if resources.get('hosts'):
+                    click.echo(f"    Hosts: {len(resources['hosts'])}")
+                if resources.get('guests'):
+                    click.echo(f"    Guests: {len(resources['guests'])}")
+        
+        else:
+            click.echo(f"  ❌ Range not found in orchestrator")
+        
+        # Check filesystem regardless
+        range_dir = config.cyber_range_dir / str(range_id)
+        
+        if range_dir.exists():
+            click.echo(f"  📁 Directory: {range_dir}")
+            
+            # Find related files
+            detail_files = list(range_dir.glob("range_details-*.yml"))
+            notification_files = list(range_dir.glob("range_notification-*.txt"))
+            
+            if detail_files:
+                click.echo(f"  📄 Detail files: {len(detail_files)}")
+                if verbose:
+                    for detail_file in detail_files:
+                        click.echo(f"     {detail_file.name}")
+            
+            if notification_files:
+                click.echo(f"  📢 Notification files: {len(notification_files)}")
+                if verbose:
+                    for notification_file in notification_files:
+                        click.echo(f"     {notification_file.name}")
+            
+            # Show directory contents if verbose
+            if verbose:
+                try:
+                    contents = list(range_dir.iterdir())
+                    click.echo(f"  Directory contents ({len(contents)} items):")
+                    for item in sorted(contents):
+                        item_type = "📁" if item.is_dir() else "📄"
+                        click.echo(f"    {item_type} {item.name}")
+                except Exception as e:
+                    click.echo(f"    Error reading directory: {e}")
+        else:
+            if not range_metadata:
+                click.echo(f"  ❌ Range {range_id} not found (no orchestrator record, no filesystem directory)")
+                sys.exit(1)
+            else:
+                click.echo(f"  ⚠️  Range exists in orchestrator but no filesystem directory found")
+                
+    except Exception as e:
+        click.echo(f"❌ Error checking range status: {e}", err=True)
+        if verbose:
+            import traceback
+            traceback.print_exc()
+        sys.exit(1)
 
 
 @cli.command()
 @click.pass_context
 def config_show(ctx):
-    """显示当前配置"""
+    """Show current configuration"""
     config: CyRISSettings = ctx.obj['config']
     
-    click.echo("当前配置:")
-    click.echo(f"  CyRIS路径: {config.cyris_path}")
-    click.echo(f"  靶场目录: {config.cyber_range_dir}")
-    click.echo(f"  网关模式: {'启用' if config.gw_mode else '禁用'}")
+    click.echo("Current configuration:")
+    click.echo(f"  CyRIS path: {config.cyris_path}")
+    click.echo(f"  Cyber range directory: {config.cyber_range_dir}")
+    click.echo(f"  Gateway mode: {'enabled' if config.gw_mode else 'disabled'}")
     
     if config.gw_account:
-        click.echo(f"  网关账户: {config.gw_account}")
+        click.echo(f"  Gateway account: {config.gw_account}")
     if config.gw_mgmt_addr:
-        click.echo(f"  网关管理地址: {config.gw_mgmt_addr}")
+        click.echo(f"  Gateway management address: {config.gw_mgmt_addr}")
     if config.user_email:
-        click.echo(f"  用户邮箱: {config.user_email}")
+        click.echo(f"  User email: {config.user_email}")
 
 
 @cli.command()
 @click.option('--output', '-o', type=click.Path(path_type=Path), 
-              default='config.yml', help='输出配置文件路径')
+              default='config.yml', help='Output configuration file path')
 @click.pass_context
 def config_init(ctx, output: Path):
-    """初始化默认配置文件"""
+    """Initialize default configuration file"""
     if output.exists():
-        if not click.confirm(f'配置文件 {output} 已存在，是否覆盖？'):
-            click.echo('操作已取消')
+        if not click.confirm(f'Configuration file {output} already exists. Overwrite?'):
+            click.echo('Operation cancelled')
             return
     
-    # 创建默认配置
+    # Create default configuration
     from ..config.parser import create_default_config
     
     try:
         settings = create_default_config(output)
-        click.echo(f"✅ 默认配置文件已创建: {output}")
-        click.echo("请编辑配置文件以适应您的环境")
+        click.echo(f"✅ Default configuration file created: {output}")
+        click.echo("Please edit the configuration file to suit your environment")
     except Exception as e:
-        click.echo(f"❌ 创建配置文件失败: {e}", err=True)
+        click.echo(f"❌ Failed to create configuration file: {e}", err=True)
 
 
 @cli.command()
 @click.pass_context
 def validate(ctx):
-    """验证环境配置和依赖"""
-    click.echo("验证CyRIS环境...")
+    """Validate environment configuration and dependencies"""
+    click.echo("Validating CyRIS environment...")
     
     config: CyRISSettings = ctx.obj['config']
     errors = 0
     
-    # 检查路径
+    # Check paths
     if not config.cyris_path.exists():
-        click.echo(f"❌ CyRIS路径不存在: {config.cyris_path}")
+        click.echo(f"❌ CyRIS path does not exist: {config.cyris_path}")
         errors += 1
     else:
-        click.echo(f"✅ CyRIS路径: {config.cyris_path}")
+        click.echo(f"✅ CyRIS path: {config.cyris_path}")
     
     if not config.cyber_range_dir.exists():
-        click.echo(f"❌ 靶场目录不存在: {config.cyber_range_dir}")
+        click.echo(f"❌ Cyber range directory does not exist: {config.cyber_range_dir}")
         errors += 1
     else:
-        click.echo(f"✅ 靶场目录: {config.cyber_range_dir}")
+        click.echo(f"✅ Cyber range directory: {config.cyber_range_dir}")
     
-    # 检查传统脚本
+    # Check legacy scripts
     legacy_script = config.cyris_path / 'main' / 'cyris.py'
     if legacy_script.exists():
-        click.echo(f"✅ 传统脚本可用: {legacy_script}")
+        click.echo(f"✅ Legacy script available: {legacy_script}")
     else:
-        click.echo(f"⚠️  传统脚本不可用: {legacy_script}")
+        click.echo(f"⚠️  Legacy script not available: {legacy_script}")
     
-    # 检查示例文件
+    # Check example files
     examples_dir = config.cyris_path / 'examples'
     if examples_dir.exists():
         try:
             example_files = list(examples_dir.glob('*.yml'))
-            click.echo(f"✅ 示例文件: {len(example_files)} 个")
+            click.echo(f"✅ Example files: {len(example_files)} found")
         except Exception as e:
-            click.echo(f"⚠️  检查示例文件时出错: {e}")
+            click.echo(f"⚠️  Error checking example files: {e}")
     else:
-        click.echo(f"⚠️  示例目录不存在: {examples_dir}")
+        click.echo(f"⚠️  Examples directory does not exist: {examples_dir}")
     
     if errors == 0:
-        click.echo("🎉 环境验证通过!")
+        click.echo("🎉 Environment validation passed!")
     else:
-        click.echo(f"❌ 发现 {errors} 个问题")
+        click.echo(f"❌ Found {errors} issues")
         sys.exit(1)
 
 
@@ -304,9 +498,9 @@ def validate(ctx):
 @click.pass_context
 def legacy_run(ctx, args):
     """
-    运行传统CyRIS命令
+    Run legacy CyRIS commands
     
-    这是一个兼容性命令，会调用原始的main/cyris.py脚本
+    This is a compatibility command that calls the original main/cyris.py script
     """
     import subprocess
     
@@ -314,36 +508,36 @@ def legacy_run(ctx, args):
     legacy_script = config.cyris_path / 'main' / 'cyris.py'
     
     if not legacy_script.exists():
-        click.echo(f"❌ 传统脚本不存在: {legacy_script}", err=True)
+        click.echo(f"❌ Legacy script does not exist: {legacy_script}", err=True)
         sys.exit(1)
     
-    # 构建命令
+    # Build command
     cmd = ['python3', str(legacy_script)] + list(args)
     
     if ctx.obj['verbose']:
-        click.echo(f"执行命令: {' '.join(cmd)}")
+        click.echo(f"Executing command: {' '.join(cmd)}")
     
     try:
-        # 运行传统脚本
+        # Run legacy script
         result = subprocess.run(cmd, cwd=config.cyris_path)
         sys.exit(result.returncode)
     except KeyboardInterrupt:
-        click.echo("\n操作被用户中断")
+        click.echo("\nOperation interrupted by user")
         sys.exit(1)
     except Exception as e:
-        click.echo(f"❌ 执行失败: {e}", err=True)
+        click.echo(f"❌ Execution failed: {e}", err=True)
         sys.exit(1)
 
 
 def main(args=None):
-    """主入口点"""
+    """Main entry point"""
     try:
         cli(args)
     except KeyboardInterrupt:
-        click.echo("\n操作被用户中断")
+        click.echo("\nOperation interrupted by user")
         sys.exit(1)
     except Exception as e:
-        click.echo(f"❌ 未预期的错误: {e}", err=True)
+        click.echo(f"❌ Unexpected error: {e}", err=True)
         sys.exit(1)
 
 
