@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-CyRIS 现代化命令行接口
-支持新的现代化命令，同时保持向后兼容
+CyRIS Modern Command Line Interface
+Supports modern commands while maintaining backward compatibility
 """
 import sys
 import click
@@ -13,7 +13,7 @@ from ..config.parser import parse_modern_config, ConfigurationError
 from ..config.settings import CyRISSettings
 
 
-# 设置日志
+# Setup logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -24,41 +24,41 @@ logger = logging.getLogger(__name__)
 @click.group()
 @click.option('--config', '-c', 
               type=click.Path(exists=True, path_type=Path),
-              help='配置文件路径')
-@click.option('--verbose', '-v', is_flag=True, help='详细输出')
-@click.option('--version', is_flag=True, help='显示版本信息')
+              help='Path to configuration file')
+@click.option('--verbose', '-v', is_flag=True, help='Verbose output')
+@click.option('--version', is_flag=True, help='Show version information')
 @click.pass_context
 def cli(ctx, config: Optional[Path], verbose: bool, version: bool):
     """
-    CyRIS - 现代化网络安全培训环境部署工具
+    CyRIS - Modern Cyber Security Training Environment Deployment Tool
     
-    使用现代化的命令行接口管理网络靶场的创建、部署和管理。
+    Use modern command line interface to manage cyber range creation, deployment and management.
     """
-    # 处理版本选项
+    # Handle version option
     if version:
         click.echo("CyRIS v1.4.0 - Cyber Range Instantiation System")
         ctx.exit()
     
-    # 设置日志级别
+    # Set logging level
     if verbose:
         logging.getLogger().setLevel(logging.DEBUG)
     
-    # 初始化上下文
+    # Initialize context
     ctx.ensure_object(dict)
     ctx.obj['verbose'] = verbose
     
-    # 加载配置
+    # Load configuration
     if config:
         try:
             settings = parse_modern_config(config)
             ctx.obj['config'] = settings
             if verbose:
-                click.echo(f"已加载配置文件: {config}")
+                click.echo(f"Configuration loaded: {config}")
         except ConfigurationError as e:
-            click.echo(f"配置文件错误: {e}", err=True)
+            click.echo(f"Configuration error: {e}", err=True)
             sys.exit(1)
     else:
-        # 尝试从默认位置加载配置
+        # Try loading configuration from default locations
         default_configs = [
             Path.cwd() / 'config.yml',
             Path.cwd() / 'config.yaml', 
@@ -71,66 +71,66 @@ def cli(ctx, config: Optional[Path], verbose: bool, version: bool):
                 try:
                     settings = parse_modern_config(config_path)
                     if verbose:
-                        click.echo(f"自动加载配置: {config_path}")
+                        click.echo(f"Auto-loaded configuration: {config_path}")
                     break
                 except ConfigurationError:
                     continue
         
         if settings is None:
-            # 使用默认配置
+            # Use default configuration
             settings = CyRISSettings()
             if verbose:
-                click.echo("使用默认配置")
+                click.echo("Using default configuration")
         
         ctx.obj['config'] = settings
 
 
 @cli.command()
 @click.argument('description_file', type=click.Path(exists=True, path_type=Path))
-@click.option('--range-id', type=int, help='指定靶场ID')
-@click.option('--dry-run', is_flag=True, help='预演模式，不实际创建')
+@click.option('--range-id', type=int, help='Specify cyber range ID')
+@click.option('--dry-run', is_flag=True, help='Dry run mode, do not actually create')
 @click.pass_context
 def create(ctx, description_file: Path, range_id: Optional[int], dry_run: bool):
     """
-    创建新的网络靶场
+    Create a new cyber range
     
-    DESCRIPTION_FILE: YAML格式的靶场描述文件
+    DESCRIPTION_FILE: YAML format cyber range description file
     """
     config: CyRISSettings = ctx.obj['config']
     verbose = ctx.obj['verbose']
     
-    click.echo(f"创建网络靶场: {description_file}")
+    click.echo(f"Creating cyber range: {description_file}")
     
     if verbose:
-        click.echo(f"配置: {config}")
-        click.echo(f"靶场ID: {range_id or '自动分配'}")
+        click.echo(f"Configuration: {config}")
+        click.echo(f"Range ID: {range_id or 'auto-assigned'}")
     
     if dry_run:
-        click.echo("预演模式 - 不会实际创建靶场")
-        # TODO: 实现预演逻辑
+        click.echo("Dry run mode - will not actually create cyber range")
+        # TODO: Implement dry run logic
         return
     
-    # TODO: 实现靶场创建逻辑
-    click.echo("靶场创建功能正在开发中...")
-    click.echo("当前请使用传统接口: python main/cyris.py")
+    # TODO: Implement cyber range creation logic
+    click.echo("Cyber range creation feature is under development...")
+    click.echo("Currently please use legacy interface: python main/cyris.py")
 
 
 @cli.command()
-@click.option('--range-id', type=int, help='靶场ID')
-@click.option('--all', 'list_all', is_flag=True, help='显示所有靶场')
+@click.option('--range-id', type=int, help='Cyber range ID')
+@click.option('--all', 'list_all', is_flag=True, help='Show all cyber ranges')
 @click.pass_context
 def list(ctx, range_id: Optional[int], list_all: bool):
-    """列出网络靶场"""
+    """List cyber ranges"""
     config: CyRISSettings = ctx.obj['config']
     
     if range_id:
-        click.echo(f"显示靶场 {range_id} 的详细信息")
+        click.echo(f"Showing details for cyber range {range_id}")
     elif list_all:
-        click.echo("列出所有靶场")
+        click.echo("Listing all cyber ranges")
     else:
-        click.echo("列出活跃的靶场")
+        click.echo("Listing active cyber ranges")
     
-    # 检查靶场目录
+    # Check cyber range directory
     ranges_dir = config.cyber_range_dir
     if not ranges_dir.exists():
         click.echo(f"靶场目录不存在: {ranges_dir}")
@@ -190,7 +190,7 @@ def status(ctx, range_id: int):
     
     click.echo(f"靶场 {range_id} 状态:")
     
-    # 检查靶场目录是否存在
+    # Check cyber range directory是否存在
     range_dir = config.cyber_range_dir / str(range_id)
     
     if not range_dir.exists():
