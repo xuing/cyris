@@ -283,17 +283,30 @@ class RangeOrchestrator:
                     host_mapping[host_id] = host_ids[i]
             
             self.logger.info(f"Creating {len(guests)} guests for range {range_id}")
-            guest_ids = safe_execute(
-                self.provider.create_guests,
-                guests, host_mapping,
-                context={
-                    "component": "orchestrator",
-                    "operation": "create_guests", 
-                    "range_id": range_id
-                },
-                default_return=[],
-                logger=self.logger
-            )
+            
+            # Set current range context in provider for file organization
+            old_range_context = getattr(self.provider, '_current_range_id', None)
+            self.provider._current_range_id = range_id
+            
+            try:
+                guest_ids = safe_execute(
+                    self.provider.create_guests,
+                    guests, host_mapping,
+                    context={
+                        "component": "orchestrator",
+                        "operation": "create_guests", 
+                        "range_id": range_id
+                    },
+                    default_return=[],
+                    logger=self.logger
+                )
+            finally:
+                # Restore previous range context
+                if old_range_context is not None:
+                    self.provider._current_range_id = old_range_context
+                else:
+                    if hasattr(self.provider, '_current_range_id'):
+                        delattr(self.provider, '_current_range_id')
             
             if not guest_ids:
                 raise CyRISVirtualizationError(
@@ -538,6 +551,138 @@ class RangeOrchestrator:
             metadata.update_status(RangeStatus.ERROR)
             # Save error state
             self._save_persistent_data()
+            return False
+    
+    def remove_range(self, range_id: str, force: bool = False) -> bool:
+        """
+        Completely remove a cyber range from the system (metadata and all records).
+        
+        This operation permanently deletes all traces of a range from the orchestrator.
+        By default, only allows removal of destroyed ranges for safety.
+        
+        Args:
+            range_id: Range identifier
+            force: If True, allows removal of non-destroyed ranges (dangerous!)
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        metadata = self._ranges.get(range_id)
+        if not metadata:
+            self.logger.warning(f"Range {range_id} not found")
+            return False
+        
+        # Safety check: only allow removal of destroyed ranges unless forced
+        if not force and metadata.status != RangeStatus.DESTROYED:
+            self.logger.error(f"Range {range_id} is not destroyed (status: {metadata.status.value})")
+            self.logger.error("Use --force to remove non-destroyed ranges, or destroy first")
+            return False
+        
+        self.logger.info(f"Removing range {range_id}: {metadata.name} (status: {metadata.status.value})")
+        
+        try:
+            # If range is not destroyed, clean up resources first
+            if metadata.status != RangeStatus.DESTROYED:
+                self.logger.warning(f"Force removing active range {range_id}, cleaning up resources first")
+                self._cleanup_range_resources(range_id)
+            
+            # Remove from memory
+            if range_id in self._ranges:
+                del self._ranges[range_id]
+            
+            if range_id in self._range_resources:
+                del self._range_resources[range_id]
+            
+            # Clean up all range-related files and directories
+            import shutil
+            import glob
+            
+            # Remove range directory
+            range_dir = self.ranges_dir / range_id
+            if range_dir.exists():
+                self.logger.info(f"Removing range directory: {range_dir}")
+                shutil.rmtree(range_dir)
+            
+            # Remove disk image files - check both old and new locations
+            removed_disks = []
+            
+            # New location: range-specific disks directory
+            range_disks_dir = self.ranges_dir / range_id / "disks"
+            if range_disks_dir.exists():
+                self.logger.info(f"Removing range-specific disk directory: {range_disks_dir}")
+                disk_files = list(range_disks_dir.glob("*.qcow2"))
+                for disk_file in disk_files:
+                    try:
+                        disk_file.unlink()
+                        removed_disks.append(disk_file.name)
+                        self.logger.info(f"Removed disk file: {disk_file.name}")
+                    except Exception as e:
+                        self.logger.warning(f"Failed to remove disk file {disk_file.name}: {e}")
+                
+                # Remove the disks directory if empty
+                try:
+                    if not any(range_disks_dir.iterdir()):
+                        range_disks_dir.rmdir()
+                except:
+                    pass
+            
+            # Legacy location: check root cyber_range directory for old disk files
+            cyber_range_dir = self.ranges_dir.parent if self.ranges_dir.name == range_id else self.ranges_dir
+            
+            # Get range resources to identify which disk files actually belong to this range
+            range_resources = self._range_resources.get(range_id, {})
+            range_disks = range_resources.get('disks', [])
+            
+            # Remove tracked disk files from legacy location
+            for disk_name in range_disks:
+                legacy_disk_path = cyber_range_dir / disk_name
+                if legacy_disk_path.exists():
+                    try:
+                        legacy_disk_path.unlink()
+                        removed_disks.append(disk_name)
+                        self.logger.info(f"Removed legacy disk file: {disk_name}")
+                    except Exception as e:
+                        self.logger.warning(f"Failed to remove legacy disk file {disk_name}: {e}")
+            
+            # Also check for any remaining disk files with range ID pattern (fallback)
+            disk_pattern = f"*{range_id}*.qcow2"
+            pattern_files = glob.glob(str(cyber_range_dir / disk_pattern))
+            for disk_file in pattern_files:
+                disk_path = Path(disk_file)
+                try:
+                    disk_path.unlink()
+                    removed_disks.append(disk_path.name)
+                    self.logger.info(f"Removed pattern-matched disk file: {disk_path.name}")
+                except Exception as e:
+                    self.logger.warning(f"Failed to remove pattern-matched disk file {disk_path.name}: {e}")
+            
+            if removed_disks:
+                self.logger.info(f"Removed {len(removed_disks)} disk files total: {', '.join(removed_disks)}")
+            
+            # Remove network configurations if any
+            # This could be extended to clean up libvirt networks, bridges, etc.
+            range_networks = range_resources.get('networks', [])
+            if range_networks:
+                self.logger.info(f"Range had {len(range_networks)} networks, manual cleanup may be needed")
+            
+            # Clean up any range-specific log files
+            log_pattern = f"*{range_id}*.log"
+            log_files = glob.glob(str(cyber_range_dir / log_pattern))
+            for log_file in log_files:
+                try:
+                    Path(log_file).unlink()
+                    self.logger.info(f"Removed log file: {Path(log_file).name}")
+                except Exception as e:
+                    self.logger.warning(f"Failed to remove log file {Path(log_file).name}: {e}")
+            
+            # Save updated persistent data
+            self._save_persistent_data()
+            
+            self.logger.info(f"Successfully removed range {range_id}")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Failed to remove range {range_id}: {e}")
             return False
     
     def _cleanup_range_resources(self, range_id: str) -> None:
