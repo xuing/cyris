@@ -30,8 +30,9 @@ def main():
     
     # 检测是否使用现代化命令
     modern_commands = {
-        'create', 'list', 'destroy', 'status', 'validate',
-        'config-show', 'config-init', '--help', '-h', '--version'
+        'create', 'list', 'destroy', 'rm', 'status', 'validate',
+        'config-show', 'config-init', 'ssh-info', 'legacy',
+        '--help', '-h', '--version'
     }
     
     first_arg = args[0]

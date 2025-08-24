@@ -223,7 +223,7 @@ def list(ctx, range_id: Optional[int], list_all: bool):
         if range_id:
             # Show specific range details
             click.echo(f"Cyber range {range_id} details:")
-            range_metadata = orchestrator.get_range(str(range_id))
+            range_metadata = orchestrator.get_range(range_id)
             if range_metadata:
                 click.echo(f"  Name: {range_metadata.name}")
                 click.echo(f"  Status: {range_metadata.status.value}")
@@ -281,14 +281,29 @@ def list(ctx, range_id: Optional[int], list_all: bool):
 
 
 @cli.command()
-@click.argument('range_id', type=int)
+@click.argument('range_id')  # Accept both string and numeric range IDs
 @click.option('--force', '-f', is_flag=True, help='Force deletion without confirmation')
+@click.option('--rm', is_flag=True, help='Remove all records after destroying (like docker run --rm)')
 @click.pass_context
-def destroy(ctx, range_id: int, force: bool):
+def destroy(ctx, range_id: str, force: bool, rm: bool):
     """
-    Destroy the specified cyber range
+    Destroy the specified cyber range (stops VMs, cleans up resources)
     
     RANGE_ID: ID of the cyber range to destroy
+    
+    By default, this stops all VMs and cleans up resources but keeps metadata
+    for audit/history purposes. The range status becomes "destroyed".
+    
+    Options:
+      --force  Skip confirmation prompt
+      --rm     Also remove all records after destroying (like docker run --rm)
+    
+    Examples:
+      cyris destroy 123           # Destroy range 123, keep records
+      cyris destroy 123 --rm      # Destroy and remove all traces
+      cyris destroy 123 --force   # Destroy without confirmation
+    
+    See also: cyris rm - to remove destroyed ranges later
     """
     config: CyRISSettings = get_config(ctx)
     verbose = ctx.obj['verbose']
@@ -310,12 +325,12 @@ def destroy(ctx, range_id: int, force: bool):
         orchestrator = RangeOrchestrator(config, provider)
         
         # Check if range exists
-        range_metadata = orchestrator.get_range(str(range_id))
+        range_metadata = orchestrator.get_range(range_id)
         if not range_metadata:
             click.echo(f"❌ Cyber range {range_id} not found")
             
             # Check filesystem for legacy ranges
-            range_dir = config.cyber_range_dir / str(range_id)
+            range_dir = config.cyber_range_dir / range_id
             if range_dir.exists():
                 click.echo(f"⚠️  Found range directory on filesystem: {range_dir}")
                 click.echo(f"   Use legacy cleanup: main/range_cleanup.sh {range_id} CONFIG")
@@ -323,10 +338,20 @@ def destroy(ctx, range_id: int, force: bool):
             sys.exit(1)
         
         # Destroy the range
-        success = orchestrator.destroy_range(str(range_id))
+        success = orchestrator.destroy_range(range_id)
         
         if success:
             click.echo(f"✅ Cyber range {range_id} destroyed successfully")
+            
+            # If --rm flag is set, also remove all records
+            if rm:
+                click.echo(f"🗑️  Removing all records for cyber range {range_id}...")
+                remove_success = orchestrator.remove_range(range_id, force=force)
+                if remove_success:
+                    click.echo(f"✅ All records for cyber range {range_id} removed completely")
+                else:
+                    click.echo(f"⚠️  Failed to remove records for cyber range {range_id}")
+                    click.echo(f"   You can manually run: cyris rm {range_id}")
         else:
             click.echo(f"❌ Failed to destroy cyber range {range_id}")
             sys.exit(1)
@@ -340,9 +365,98 @@ def destroy(ctx, range_id: int, force: bool):
 
 
 @cli.command()
-@click.argument('range_id', type=int)
+@click.argument('range_id')  # Accept both string and numeric range IDs
+@click.option('--force', '-f', is_flag=True, help='Force removal even if range is not destroyed')
 @click.pass_context
-def status(ctx, range_id: int):
+def rm(ctx, range_id: str, force: bool):
+    """
+    Remove a cyber range completely from the system (including all files and records)
+    
+    RANGE_ID: ID of the cyber range to remove
+    
+    By default, only destroyed ranges can be removed for safety.
+    Use --force to remove active ranges (will destroy them first).
+    
+    This is equivalent to Docker's "rm" command - completely removes all traces:
+    - Metadata and tracking records
+    - Disk image files (*.qcow2)
+    - Range directories and logs
+    - Associated configuration files
+    
+    Examples:
+      cyris rm 123              # Remove destroyed range 123
+      cyris rm 456 --force      # Force remove active range 456
+      cyris destroy 789 --rm    # Destroy and remove in one step
+    """
+    config: CyRISSettings = get_config(ctx)
+    verbose = ctx.obj['verbose']
+    
+    # Safety confirmation
+    range_desc = f"cyber range {range_id}"
+    if force:
+        range_desc += " (FORCE - will destroy if active)"
+    
+    if not click.confirm(f'Are you sure you want to completely remove {range_desc}?\nThis will delete all files, images, and records permanently.'):
+        click.echo('Operation cancelled')
+        return
+    
+    click.echo(f"Removing cyber range: {range_id}")
+    
+    try:
+        from ..services.orchestrator import RangeOrchestrator
+        from ..infrastructure.providers.kvm_provider import KVMProvider
+        
+        # Create orchestrator
+        kvm_settings = {'connection_uri': 'qemu:///system', 'base_path': str(config.cyber_range_dir)}
+        provider = KVMProvider(kvm_settings)
+        orchestrator = RangeOrchestrator(config, provider)
+        
+        # Check if range exists
+        range_metadata = orchestrator.get_range(range_id)
+        if not range_metadata:
+            click.echo(f"❌ Cyber range {range_id} not found")
+            
+            # Check filesystem for legacy ranges
+            range_dir = config.cyber_range_dir / range_id
+            if range_dir.exists():
+                click.echo(f"⚠️  Found range directory on filesystem: {range_dir}")
+                if click.confirm("Remove filesystem directory anyway?"):
+                    import shutil
+                    shutil.rmtree(range_dir)
+                    click.echo(f"✅ Removed directory {range_dir}")
+            
+            sys.exit(1)
+        
+        # Show range info before removal
+        click.echo(f"Range: {range_metadata.name}")
+        click.echo(f"Status: {range_metadata.status.value}")
+        click.echo(f"Created: {range_metadata.created_at}")
+        
+        # Remove the range (with force flag)
+        success = orchestrator.remove_range(range_id, force=force)
+        
+        if success:
+            click.echo(f"✅ Cyber range {range_id} removed completely")
+            click.echo("   All files, images, and records have been deleted")
+        else:
+            click.echo(f"❌ Failed to remove cyber range {range_id}")
+            if not force and range_metadata.status.value != 'destroyed':
+                click.echo(f"   Range status is '{range_metadata.status.value}' - use --force to remove active ranges")
+                click.echo(f"   Or destroy first: cyris destroy {range_id}")
+            sys.exit(1)
+            
+    except Exception as e:
+        click.echo(f"❌ Error removing cyber range: {e}", err=True)
+        if verbose:
+            import traceback
+            traceback.print_exc()
+        sys.exit(1)
+
+
+@cli.command()
+@click.argument('range_id')  # Accept both string and numeric range IDs
+@click.pass_context
+def status(ctx, range_id: str):
     """
     Display cyber range status
     
@@ -363,7 +477,7 @@ def status(ctx, range_id: int):
         orchestrator = RangeOrchestrator(config, provider)
         
         # Check orchestrator first
-        range_metadata = orchestrator.get_range(str(range_id))
+        range_metadata = orchestrator.get_range(range_id)
         
         if range_metadata:
             # Show orchestrator information
@@ -381,7 +495,7 @@ def status(ctx, range_id: int):
                 click.echo(f"  Tags: {range_metadata.tags}")
             
             # Show resource information
-            resources = orchestrator.get_range_resources(str(range_id))
+            resources = orchestrator.get_range_resources(range_id)
             if resources:
                 click.echo(f"  Resources:")
                 if resources.get('hosts'):
@@ -393,7 +507,7 @@ def status(ctx, range_id: int):
             click.echo(f"  ❌ Range not found in orchestrator")
         
         # Check filesystem regardless
-        range_dir = config.cyber_range_dir / str(range_id)
+        range_dir = config.cyber_range_dir / range_id
         
         if range_dir.exists():
             click.echo(f"  📁 Directory: {range_dir}")
