@@ -12,7 +12,7 @@
     basevm_type: kvm
 
 - clone_settings:
-  - range_id: 123
+  - range_id: basic
     hosts:
     - host_id: host_1
       instance_number: 1
