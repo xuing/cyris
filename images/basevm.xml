@@ -40,13 +40,13 @@ This is a template libvirt domain XML for creating cyber range VMs
       <address type='pci' domain='0x0000' bus='0x00' slot='0x07' function='0x0'/>
     </disk>
     <!-- Cloud-init CD-ROM drive -->
-    <disk type='file' device='cdrom'>
+    <!-- <disk type='file' device='cdrom'>
       <driver name='qemu' type='raw'/>
       <source file='/home/ubuntu/cyris/images/cloud-init.iso'/>
       <target dev='hdc' bus='ide'/>
       <readonly/>
       <address type='drive' controller='0' bus='1' target='0' unit='0'/>
-    </disk>
+    </disk> -->
     <!-- Network interface - will be updated during range creation -->
     <interface type='bridge'>
       <mac address='52:54:00:12:34:56'/>

@@ -54,6 +54,7 @@ class CyRISErrorCode(Enum):
     NETWORK_TIMEOUT_ERROR = 1501
     DNS_RESOLUTION_ERROR = 1502
     PORT_BINDING_ERROR = 1503
+    TUNNEL_ERROR = 1504
 
 
 @dataclass
@@ -191,6 +192,30 @@ class CyRISTaskError(CyRISException):
             message=message,
             error_code=CyRISErrorCode.TASK_EXECUTION_ERROR,
             component="task_executor",
+            **kwargs
+        )
+
+
+class TunnelError(CyRISException):
+    """SSH tunnel management errors"""
+    
+    def __init__(self, message: str, **kwargs):
+        super().__init__(
+            message=message,
+            error_code=CyRISErrorCode.TUNNEL_ERROR,
+            component="tunnel_manager",
+            **kwargs
+        )
+
+
+class GatewayError(CyRISException):
+    """Gateway service errors"""
+    
+    def __init__(self, message: str, **kwargs):
+        super().__init__(
+            message=message,
+            error_code=CyRISErrorCode.NETWORK_ERROR,
+            component="gateway_service",
             **kwargs
         )
 

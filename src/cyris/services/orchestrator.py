@@ -17,10 +17,12 @@ from enum import Enum
 
 from ..config.settings import CyRISSettings
 from ..infrastructure.network.topology_manager import NetworkTopologyManager
+from ..infrastructure.network.tunnel_manager import TunnelManager
 from .task_executor import TaskExecutor, TaskResult
+from .gateway_service import GatewayService, EntryPointInfo
 from ..core.exceptions import (
     ExceptionHandler, CyRISException, CyRISVirtualizationError, 
-    CyRISNetworkError, CyRISResourceError, handle_exception, safe_execute
+    CyRISNetworkError, CyRISResourceError, GatewayError, handle_exception, safe_execute
 )
 
 # Import both modern and legacy entities for compatibility
@@ -160,6 +162,10 @@ class RangeOrchestrator:
                 'ssh_timeout': 30,
                 'ssh_retries': 3
             })
+            
+            # Initialize gateway services (tunnel manager and gateway service)
+            self.tunnel_manager = TunnelManager(settings)
+            self.gateway_service = GatewayService(settings, self.tunnel_manager)
             
             # Persistent range registry
             self._ranges: Dict[str, RangeMetadata] = {}
@@ -706,3 +712,183 @@ class RangeOrchestrator:
             
         except Exception as e:
             self.logger.error(f"Failed to save persistent data: {e}")
+    
+    def _create_entry_point(
+        self, 
+        entry_point: EntryPointInfo, 
+        local_user: str, 
+        host_address: str
+    ) -> Dict[str, Any]:
+        """
+        创建入口点（内部方法）
+        
+        Args:
+            entry_point: 入口点信息
+            local_user: 本地用户
+            host_address: 主机地址
+            
+        Returns:
+            Dict: 访问信息
+        """
+        return self.gateway_service.create_entry_point(entry_point, local_user, host_address)
+    
+    def get_access_notification(self, range_id: int) -> str:
+        """
+        获取访问通知
+        
+        Args:
+            range_id: 靶场ID
+            
+        Returns:
+            str: 访问通知内容
+        """
+        return self.gateway_service.generate_access_notification(range_id)
+    
+    def get_system_status(self) -> Dict[str, Any]:
+        """
+        获取系统状态（包含网关信息）
+        
+        Returns:
+            Dict: 系统状态信息
+        """
+        base_status = {
+            'total_ranges': len(self._ranges),
+            'active_ranges': len([r for r in self._ranges.values() if r.status == RangeStatus.ACTIVE]),
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        # 添加网关服务状态
+        try:
+            gateway_status = self.gateway_service.get_service_status()
+            base_status['gateway_service'] = gateway_status
+        except Exception as e:
+            self.logger.error(f"Failed to get gateway service status: {e}")
+            base_status['gateway_service'] = {'error': str(e)}
+        
+        return base_status
+    
+    def create_cyber_range(self, yaml_config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        创建网络靶场（集成网关功能）
+        
+        Args:
+            yaml_config: YAML配置
+            
+        Returns:
+            Dict: 创建结果
+        """
+        try:
+            # 解析配置获取range_id
+            clone_settings = yaml_config.get('clone_settings', [{}])[0]
+            range_id = clone_settings.get('range_id')
+            
+            if not range_id:
+                raise ValueError("Missing range_id in configuration")
+            
+            self.logger.info(f"Creating cyber range {range_id}")
+            
+            # 创建基础靶场（简化实现）
+            # 在实际实现中，这里会调用具体的靶场创建逻辑
+            
+            # 解析入口点并创建网关隧道
+            entry_points = []
+            hosts_config = clone_settings.get('hosts', [])
+            
+            for host_config in hosts_config:
+                host_id = host_config.get('host_id')
+                guests_config = host_config.get('guests', [])
+                
+                for instance_id in range(1, host_config.get('instance_number', 0) + 1):
+                    for guest_config in guests_config:
+                        if guest_config.get('entry_point'):
+                            # 创建入口点
+                            port = self.gateway_service.get_available_port()
+                            password = self.gateway_service.generate_random_credentials()
+                            
+                            entry_point = EntryPointInfo(
+                                range_id=range_id,
+                                instance_id=instance_id,
+                                guest_id=guest_config.get('guest_id'),
+                                port=port,
+                                target_host=f"192.168.{range_id}.{100 + instance_id}",
+                                target_port=22,
+                                account="trainee",
+                                password=password
+                            )
+                            
+                            # 通过网关服务创建入口点
+                            access_info = self._create_entry_point(entry_point, "ubuntu", "10.0.1.100")
+                            entry_points.append(access_info)
+            
+            # 创建范围元数据
+            metadata = RangeMetadata(
+                range_id=str(range_id),
+                name=f"Range {range_id}",
+                description=f"Cyber range instance {range_id}",
+                status=RangeStatus.ACTIVE,
+                created_at=datetime.now()
+            )
+            
+            self._ranges[str(range_id)] = metadata
+            self._save_persistent_data()
+            
+            result = {
+                'success': True,
+                'range_id': range_id,
+                'entry_points': entry_points,
+                'message': f"Cyber range {range_id} created successfully"
+            }
+            
+            self.logger.info(f"Cyber range {range_id} created with {len(entry_points)} entry points")
+            return result
+            
+        except Exception as e:
+            self.logger.error(f"Failed to create cyber range: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'range_id': range_id if 'range_id' in locals() else None
+            }
+    
+    def destroy_cyber_range(self, range_id: int) -> Dict[str, Any]:
+        """
+        销毁网络靶场（包含网关清理）
+        
+        Args:
+            range_id: 靶场ID
+            
+        Returns:
+            Dict: 销毁结果
+        """
+        try:
+            self.logger.info(f"Destroying cyber range {range_id}")
+            
+            # 清理网关资源
+            self.gateway_service.cleanup_range(range_id)
+            
+            # 清理靶场元数据
+            range_id_str = str(range_id)
+            if range_id_str in self._ranges:
+                del self._ranges[range_id_str]
+            
+            if range_id_str in self._range_resources:
+                del self._range_resources[range_id_str]
+            
+            self._save_persistent_data()
+            
+            result = {
+                'success': True,
+                'range_id': range_id,
+                'message': f"Cyber range {range_id} destroyed successfully"
+            }
+            
+            self.logger.info(f"Cyber range {range_id} destroyed successfully")
+            return result
+            
+        except Exception as e:
+            self.logger.error(f"Failed to destroy cyber range {range_id}: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'range_id': range_id
+            }
