@@ -319,13 +319,13 @@ def destroy(ctx, range_id: str, force: bool, rm: bool):
         from ..services.orchestrator import RangeOrchestrator
         from ..infrastructure.providers.kvm_provider import KVMProvider
         
-        # Create orchestrator
-        kvm_settings = {'connection_uri': 'qemu:///system', 'base_path': str(config.cyber_range_dir)}
-        provider = KVMProvider(kvm_settings)
-        orchestrator = RangeOrchestrator(config, provider)
+        # First, create a basic orchestrator to check range metadata
+        basic_kvm_settings = {'connection_uri': 'qemu:///session', 'base_path': str(config.cyber_range_dir)}
+        basic_provider = KVMProvider(basic_kvm_settings)
+        basic_orchestrator = RangeOrchestrator(config, basic_provider)
         
-        # Check if range exists
-        range_metadata = orchestrator.get_range(range_id)
+        # Check if range exists and get its original connection info
+        range_metadata = basic_orchestrator.get_range(range_id)
         if not range_metadata:
             click.echo(f"❌ Cyber range {range_id} not found")
             
@@ -336,6 +336,21 @@ def destroy(ctx, range_id: str, force: bool, rm: bool):
                 click.echo(f"   Use legacy cleanup: main/range_cleanup.sh {range_id} CONFIG")
             
             sys.exit(1)
+        
+        # Determine the correct libvirt connection for this range
+        libvirt_uri = 'qemu:///system'  # Default
+        if range_metadata.provider_config and 'libvirt_uri' in range_metadata.provider_config:
+            libvirt_uri = range_metadata.provider_config['libvirt_uri']
+            if verbose:
+                click.echo(f"Using detected libvirt URI: {libvirt_uri}")
+        else:
+            if verbose:
+                click.echo(f"No provider config found, using default: {libvirt_uri}")
+        
+        # Create orchestrator with the correct connection
+        kvm_settings = {'connection_uri': libvirt_uri, 'base_path': str(config.cyber_range_dir)}
+        provider = KVMProvider(kvm_settings)
+        orchestrator = RangeOrchestrator(config, provider)
         
         # Destroy the range
         success = orchestrator.destroy_range(range_id)
@@ -799,6 +814,85 @@ def ssh_info(ctx, range_id: str):
         
     except Exception as e:
         click.echo(f"❌ Error getting SSH info: {e}", err=True)
+        if verbose:
+            import traceback
+            traceback.print_exc()
+        sys.exit(1)
+
+
+@cli.command(name='setup-permissions')
+@click.option('--dry-run', is_flag=True, help='Show what would be done without executing')
+@click.pass_context
+def setup_permissions(ctx, dry_run: bool):
+    """
+    Set up libvirt permissions for CyRIS environment
+    
+    This command configures file and directory permissions to allow libvirt
+    system mode (qemu:///system) to access CyRIS-created virtual machine disks.
+    
+    This is automatically done when creating VMs, but this command can be used to:
+    - Fix permission issues manually
+    - Set up permissions before first use
+    - Check system compatibility
+    
+    Examples:
+      cyris setup-permissions           # Set up permissions
+      cyris setup-permissions --dry-run # Show what would be done
+    """
+    config: CyRISSettings = get_config(ctx)
+    verbose = ctx.obj.get('verbose', False)
+    
+    click.echo("Setting up libvirt permissions for CyRIS environment...")
+    
+    try:
+        from ..infrastructure.permissions import PermissionManager
+        
+        manager = PermissionManager(dry_run=dry_run)
+        
+        if dry_run:
+            click.echo("DRY RUN MODE - No changes will be made")
+        
+        # Check system compatibility first
+        compat_info = manager.check_libvirt_compatibility()
+        
+        click.echo(f"🔍 Detected libvirt user: {compat_info['libvirt_user'] or 'Not found'}")
+        click.echo(f"🔍 ACL support: {'✅' if compat_info['acl_supported'] else '❌'}")
+        click.echo(f"🔍 Current user groups: {', '.join(compat_info['current_user_groups'])}")
+        
+        if compat_info['recommendations']:
+            click.echo("\n💡 Recommendations:")
+            for rec in compat_info['recommendations']:
+                click.echo(f"   • {rec}")
+        
+        if not compat_info['libvirt_user']:
+            click.echo("❌ No libvirt user found. Please install libvirt-daemon-system.")
+            sys.exit(1)
+        
+        if not compat_info['acl_supported']:
+            click.echo("❌ ACL commands not found. Please install the 'acl' package.")
+            sys.exit(1)
+        
+        click.echo("\n🔧 Setting up permissions...")
+        
+        # Set up permissions for CyRIS environment
+        success = manager.setup_cyris_environment(config.cyris_path)
+        
+        if success:
+            click.echo("✅ Successfully configured libvirt permissions")
+            click.echo("\n💡 You can now use bridge networking with:")
+            click.echo("   cyris create --network-mode bridge --enable-ssh examples/basic.yml")
+        else:
+            click.echo("⚠️  Some permission configurations failed")
+            click.echo("   Check the verbose output for details")
+            if not verbose:
+                click.echo("   Run with --verbose for more information")
+            sys.exit(1)
+            
+    except ImportError as e:
+        click.echo(f"❌ Failed to import permission manager: {e}", err=True)
+        sys.exit(1)
+    except Exception as e:
+        click.echo(f"❌ Error setting up permissions: {e}", err=True)
         if verbose:
             import traceback
             traceback.print_exc()

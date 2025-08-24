@@ -31,7 +31,7 @@ def main():
     # Detect if using modern commands
     modern_commands = {
         'create', 'list', 'destroy', 'rm', 'status', 'validate',
-        'config-show', 'config-init', 'ssh-info', 'legacy',
+        'config-show', 'config-init', 'ssh-info', 'setup-permissions', 'legacy',
         '--help', '-h', '--version'
     }
     
