@@ -787,8 +787,8 @@ class RangeOrchestrator:
             
             self.logger.info(f"Creating cyber range {range_id}")
             
-            # 创建基础靶场（简化实现）
-            # 在实际实现中，这里会调用具体的靶场创建逻辑
+            # 创建基础靶场 - 调用传统CyRIS系统
+            range_resources = self._create_actual_cyber_range(yaml_config, range_id)
             
             # 解析入口点并创建网关隧道
             entry_points = []
@@ -830,6 +830,10 @@ class RangeOrchestrator:
             )
             
             self._ranges[str(range_id)] = metadata
+            
+            # 记录靶场资源
+            self._range_resources[str(range_id)] = range_resources
+            
             self._save_persistent_data()
             
             result = {
@@ -866,6 +870,10 @@ class RangeOrchestrator:
             # 清理网关资源
             self.gateway_service.cleanup_range(range_id)
             
+            # 清理实际的靶场资源
+            range_resources = self._range_resources.get(str(range_id), {})
+            self._cleanup_actual_resources(range_id, range_resources)
+            
             # 清理靶场元数据
             range_id_str = str(range_id)
             if range_id_str in self._ranges:
@@ -892,3 +900,201 @@ class RangeOrchestrator:
                 'error': str(e),
                 'range_id': range_id
             }
+    
+    def _create_actual_cyber_range(self, yaml_config: Dict[str, Any], range_id: int) -> Dict[str, List[str]]:
+        """
+        调用传统CyRIS系统创建实际的靶场
+        
+        Args:
+            yaml_config: YAML配置
+            range_id: 靶场ID
+            
+        Returns:
+            Dict: 创建的资源列表 {'vms': [...], 'disks': [...], 'networks': [...]}
+        """
+        import subprocess
+        import tempfile
+        import yaml
+        import time
+        
+        resources = {
+            'vms': [],
+            'disks': [],
+            'networks': []
+        }
+        
+        try:
+            # 创建临时YAML文件
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.yml', delete=False) as tmp_file:
+                yaml.dump(yaml_config, tmp_file, default_flow_style=False)
+                temp_yaml_path = tmp_file.name
+            
+            # 调用传统CyRIS主程序
+            legacy_command = [
+                'python3', 
+                str(self.settings.cyris_path / 'main' / 'cyris.py'),
+                temp_yaml_path,
+                str(self.settings.cyris_path / 'CONFIG')
+            ]
+            
+            self.logger.info(f"Executing legacy CyRIS: {' '.join(legacy_command)}")
+            
+            # 执行传统命令
+            result = subprocess.run(
+                legacy_command,
+                cwd=str(self.settings.cyris_path),
+                capture_output=True,
+                text=True,
+                timeout=300  # 5分钟超时
+            )
+            
+            if result.returncode == 0:
+                self.logger.info(f"Legacy CyRIS completed successfully for range {range_id}")
+                
+                # 等待一段时间让虚拟机完全启动
+                time.sleep(5)
+                
+                # 发现创建的资源
+                resources = self._discover_created_resources(range_id)
+                
+            else:
+                error_msg = f"Legacy CyRIS failed: {result.stderr}"
+                self.logger.error(error_msg)
+                raise RuntimeError(error_msg)
+            
+            # 清理临时文件
+            import os
+            try:
+                os.unlink(temp_yaml_path)
+            except:
+                pass
+                
+        except Exception as e:
+            self.logger.error(f"Failed to create cyber range {range_id}: {e}")
+            # 如果创建失败，尝试清理部分创建的资源
+            self._cleanup_partial_resources(range_id, resources)
+            raise
+        
+        return resources
+    
+    def _discover_created_resources(self, range_id: int) -> Dict[str, List[str]]:
+        """
+        发现刚创建的靶场资源
+        
+        Args:
+            range_id: 靶场ID
+            
+        Returns:
+            Dict: 发现的资源
+        """
+        resources = {
+            'vms': [],
+            'disks': [],
+            'networks': []
+        }
+        
+        try:
+            # 发现虚拟机
+            from cyris.infrastructure.providers.virsh_client import VirshLibvirt
+            virsh_client = VirshLibvirt()
+            
+            all_vms = virsh_client.list_all_domains()
+            for vm in all_vms:
+                if vm['name'].startswith('cyris-'):
+                    resources['vms'].append(vm['name'])
+                    self.logger.debug(f"Discovered VM: {vm['name']}")
+            
+            # 发现磁盘文件
+            cyber_range_dir = Path(self.settings.cyber_range_dir)
+            for disk_file in cyber_range_dir.glob("*.qcow2"):
+                if disk_file.name.startswith('cyris-'):
+                    resources['disks'].append(disk_file.name)
+                    self.logger.debug(f"Discovered disk: {disk_file.name}")
+            
+            # 记录发现的资源数量
+            self.logger.info(f"Discovered {len(resources['vms'])} VMs, {len(resources['disks'])} disks for range {range_id}")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to discover resources for range {range_id}: {e}")
+        
+        return resources
+    
+    def _cleanup_partial_resources(self, range_id: int, resources: Dict[str, List[str]]):
+        """
+        清理部分创建的资源
+        
+        Args:
+            range_id: 靶场ID
+            resources: 要清理的资源
+        """
+        self.logger.info(f"Cleaning up partial resources for range {range_id}")
+        
+        try:
+            from cyris.infrastructure.providers.virsh_client import VirshLibvirt
+            virsh_client = VirshLibvirt()
+            
+            # 清理虚拟机
+            for vm_name in resources.get('vms', []):
+                try:
+                    virsh_client.destroy_domain(vm_name)
+                    virsh_client.undefine_domain(vm_name)
+                    self.logger.debug(f"Cleaned up VM: {vm_name}")
+                except Exception as e:
+                    self.logger.warning(f"Failed to cleanup VM {vm_name}: {e}")
+            
+            # 清理磁盘文件
+            for disk_name in resources.get('disks', []):
+                try:
+                    disk_path = Path(self.settings.cyber_range_dir) / disk_name
+                    if disk_path.exists():
+                        disk_path.unlink()
+                        self.logger.debug(f"Cleaned up disk: {disk_name}")
+                except Exception as e:
+                    self.logger.warning(f"Failed to cleanup disk {disk_name}: {e}")
+                    
+        except Exception as e:
+            self.logger.error(f"Error during resource cleanup: {e}")
+    
+    def _cleanup_actual_resources(self, range_id: int, resources: Dict[str, List[str]]):
+        """
+        清理实际的靶场资源
+        
+        Args:
+            range_id: 靶场ID
+            resources: 要清理的资源
+        """
+        self.logger.info(f"Cleaning up actual resources for range {range_id}")
+        
+        try:
+            # 首先尝试使用传统清理脚本
+            try:
+                import subprocess
+                cleanup_command = [
+                    'bash',
+                    str(self.settings.cyris_path / 'main' / 'range_cleanup.sh'),
+                    str(range_id),
+                    str(self.settings.cyris_path / 'CONFIG')
+                ]
+                
+                result = subprocess.run(
+                    cleanup_command,
+                    cwd=str(self.settings.cyris_path),
+                    capture_output=True,
+                    text=True,
+                    timeout=60
+                )
+                
+                if result.returncode == 0:
+                    self.logger.info(f"Legacy cleanup completed for range {range_id}")
+                else:
+                    self.logger.warning(f"Legacy cleanup failed, fallback to manual cleanup: {result.stderr}")
+                    # 继续手动清理
+                    
+            except Exception as e:
+                self.logger.warning(f"Legacy cleanup not available, using manual cleanup: {e}")
+            
+            # 手动清理资源
+            self._cleanup_partial_resources(range_id, resources)
+            
+        except Exception as e:
+            self.logger.error(f"Error during actual resource cleanup: {e}")
