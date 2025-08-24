@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class EntryPointInfo:
-    """入口点信息"""
+    """Entry point information"""
     range_id: int
     instance_id: int
     guest_id: str
@@ -87,15 +87,15 @@ class GatewayService:
         host_address: str
     ) -> Dict[str, Any]:
         """
-        创建入口点
+        Create entry point
         
         Args:
-            entry_point: 入口点信息
-            local_user: 本地用户账户
-            host_address: 主机地址
+            entry_point: Entry point information
+            local_user: Local user账户
+            host_address: Host address
             
         Returns:
-            Dict: 访问信息
+            Dict: Access information
             
         Raises:
             GatewayError: 创建失败
@@ -123,10 +123,10 @@ class GatewayService:
             # 记录入口点
             self.entry_points.append(entry_point)
             
-            # 生成访问信息
+            # 生成Access information
             access_info = self._generate_access_info(entry_point, host_address)
             
-            # 缓存访问信息
+            # 缓存Access information
             cache_key = f"{entry_point.range_id}_{entry_point.instance_id}"
             self.access_info_cache[cache_key] = access_info
             
@@ -143,14 +143,14 @@ class GatewayService:
     
     def _generate_access_info(self, entry_point: EntryPointInfo, host_address: str) -> Dict[str, Any]:
         """
-        生成访问信息
+        生成Access information
         
         Args:
-            entry_point: 入口点信息
-            host_address: 主机地址
+            entry_point: Entry point information
+            host_address: Host address
             
         Returns:
-            Dict: 访问信息
+            Dict: Access information
         """
         if self.settings.gw_mode:
             # 网关模式：通过网关访问
@@ -175,7 +175,7 @@ class GatewayService:
         销毁入口点
         
         Args:
-            range_id: 靶场ID
+            range_id: Range ID
             instance_id: 实例ID
             
         Raises:
@@ -216,7 +216,7 @@ class GatewayService:
         获取指定靶场的入口点列表
         
         Args:
-            range_id: 靶场ID
+            range_id: Range ID
             
         Returns:
             List[EntryPointInfo]: 入口点列表
@@ -228,10 +228,10 @@ class GatewayService:
         生成访问通知
         
         Args:
-            range_id: 靶场ID
+            range_id: Range ID
             
         Returns:
-            str: 访问通知内容
+            str: Access notification content
         """
         entry_points = self.get_entry_points_for_range(range_id)
         
@@ -325,7 +325,7 @@ class GatewayService:
         清理指定靶场的所有入口点
         
         Args:
-            range_id: 靶场ID
+            range_id: Range ID
         """
         entry_points = self.get_entry_points_for_range(range_id)
         

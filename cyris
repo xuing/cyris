@@ -1,34 +1,34 @@
 #!/usr/bin/env python3
 """
-CyRIS 统一入口脚本
-根据参数自动选择使用现代化CLI还是传统接口
+CyRIS Unified Entry Script
+Automatically choose modern CLI or legacy interface based on arguments
 """
 import sys
 import os
 from pathlib import Path
 
 def main():
-    """主函数"""
+    """Main function"""
     args = sys.argv[1:]
     
-    # 如果没有参数，显示帮助
+    # If no arguments provided, show help
     if not args:
-        print("CyRIS - 网络安全培训环境部署工具")
+        print("CyRIS - Modern Cyber Security Training Environment Deployment Tool")
         print()
-        print("现代化命令:")
-        print("  cyris --help                    # 显示现代化CLI帮助")
-        print("  cyris create <yaml_file>        # 创建靶场")
-        print("  cyris list                      # 列出靶场")
-        print("  cyris destroy <id>              # 销毁靶场")
-        print("  cyris status <id>               # 查看状态")
-        print("  cyris validate                  # 验证环境")
+        print("Modern commands:")
+        print("  cyris --help                    # Show modern CLI help")
+        print("  cyris create <yaml_file>        # Create cyber range")
+        print("  cyris list                      # List cyber ranges")
+        print("  cyris destroy <id>              # Destroy cyber range")
+        print("  cyris status <id>               # Show range status")
+        print("  cyris validate                  # Validate environment")
         print()
-        print("传统兼容性:")
-        print("  cyris legacy <yaml_file> CONFIG # 运行传统命令")
-        print("  python main/cyris.py ...        # 直接使用传统接口")
+        print("Legacy compatibility:")
+        print("  cyris legacy <yaml_file> CONFIG # Run legacy command")
+        print("  python main/cyris.py ...        # Use legacy interface directly")
         return
     
-    # 检测是否使用现代化命令
+    # Detect if using modern commands
     modern_commands = {
         'create', 'list', 'destroy', 'rm', 'status', 'validate',
         'config-show', 'config-init', 'ssh-info', 'legacy',
@@ -37,7 +37,7 @@ def main():
     
     first_arg = args[0]
     
-    # 如果第一个参数是现代化命令，使用现代CLI
+    # If first argument is a modern command, use modern CLI
     if first_arg in modern_commands:
         try:
             script_dir = Path(__file__).parent.resolve()
@@ -45,23 +45,23 @@ def main():
             sys.path.insert(0, str(src_dir))
             
             from cyris.cli.main import main as cli_main
-            sys.argv = ['cyris'] + args  # 重设argv
+            sys.argv = ['cyris'] + args  # Reset argv
             cli_main()
         except ImportError:
-            print("❌ 现代化CLI不可用，请确保环境已正确设置")
-            print("   运行: source .venv/bin/activate")
+            print("❌ Modern CLI unavailable, please ensure environment is properly set up")
+            print("   Run: source .venv/bin/activate")
             sys.exit(1)
     
-    # 否则检测传统格式: cyris <yaml_file> CONFIG
+    # Otherwise detect legacy format: cyris <yaml_file> CONFIG
     elif len(args) >= 2 and args[1] in ['CONFIG', 'config'] or args[1].endswith('.ini'):
-        # 传统格式，调用传统脚本
+        # Legacy format, call legacy script
         import subprocess
         
         script_dir = Path(__file__).parent.resolve()
         legacy_script = script_dir / 'main' / 'cyris.py'
         
         if not legacy_script.exists():
-            print(f"❌ 传统脚本不存在: {legacy_script}")
+            print(f"❌ Legacy script not found: {legacy_script}")
             sys.exit(1)
         
         cmd = ['python3', str(legacy_script)] + args
@@ -69,19 +69,19 @@ def main():
             result = subprocess.run(cmd, cwd=script_dir)
             sys.exit(result.returncode)
         except KeyboardInterrupt:
-            print("\n操作被用户中断")
+            print("\nOperation interrupted by user")
             sys.exit(1)
     
     else:
-        # 未识别的格式，提供帮助
-        print("❌ 未识别的命令格式")
+        # Unrecognized format, provide help
+        print("❌ Unrecognized command format")
         print()
-        print("现代化用法:")
+        print("Modern usage:")
         print("  cyris create examples/basic.yml")
         print("  cyris list")
         print("  cyris --help")
         print()
-        print("传统用法:")
+        print("Legacy usage:")
         print("  cyris examples/basic.yml CONFIG")
         print("  python main/cyris.py examples/basic.yml CONFIG")
         sys.exit(1)

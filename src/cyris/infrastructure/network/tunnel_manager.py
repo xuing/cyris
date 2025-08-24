@@ -1,6 +1,6 @@
 """
-SSH隧道管理器 - 实现gw_mode功能的核心组件
-支持直接模式和网关模式的SSH隧道创建和管理
+SSH Tunnel Manager - Core component implementing gw_mode functionality
+Supports creating and managing SSH tunnels in both direct and gateway modes
 """
 import logging
 import subprocess
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class TunnelConfiguration:
-    """SSH隧道配置"""
+    """SSH tunnel configuration"""
     range_id: int
     port: int
     target_host: str
@@ -29,7 +29,7 @@ class TunnelConfiguration:
     gw_host: Optional[str] = None
     
     def __post_init__(self):
-        """配置后验证"""
+        """Post-configuration validation"""
         if self.gw_mode and (not self.gw_account or not self.gw_host):
             raise ValueError(
                 "Gateway mode requires gw_account and gw_host to be specified"
@@ -38,22 +38,22 @@ class TunnelConfiguration:
 
 @dataclass
 class TunnelInfo:
-    """隧道信息"""
+    """Tunnel information"""
     tunnel_id: str
     config: TunnelConfiguration
     created_at: datetime
-    process_names: List[str]  # 隧道进程名称列表
+    process_names: List[str]  # List of tunnel process names
 
 
 class TunnelManager:
-    """SSH隧道管理器"""
+    """SSH tunnel manager"""
     
     def __init__(self, settings: CyRISSettings):
         """
-        初始化隧道管理器
+        Initialize tunnel manager
         
         Args:
-            settings: CyRIS配置
+            settings: CyRIS configuration
         """
         self.settings = settings
         self.active_tunnels: Dict[str, TunnelInfo] = {}
@@ -61,29 +61,29 @@ class TunnelManager:
     
     def create_tunnel(self, config: TunnelConfiguration) -> str:
         """
-        创建SSH隧道
+        Create SSH tunnel
         
         Args:
-            config: 隧道配置
+            config: Tunnel configuration
             
         Returns:
-            str: 隧道ID
+            str: Tunnel ID
             
         Raises:
-            TunnelError: 隧道创建失败
+            TunnelError: Tunnel creation failed
         """
         tunnel_id = f"tunnel_{config.range_id}_{config.port}_{uuid.uuid4().hex[:8]}"
         process_names = []
         
         try:
             if config.gw_mode:
-                # 网关模式：创建两级隧道
+                # Gateway mode: create two-level tunnel
                 process_names = self._create_gateway_tunnel(config)
             else:
-                # 直接模式：创建直接隧道
+                # Direct mode: create direct tunnel
                 process_names = self._create_direct_tunnel(config)
             
-            # 记录隧道信息
+            # Record tunnel information
             tunnel_info = TunnelInfo(
                 tunnel_id=tunnel_id,
                 config=config,
@@ -97,20 +97,20 @@ class TunnelManager:
             
         except Exception as e:
             logger.error(f"Failed to create tunnel: {e}")
-            # 清理可能部分创建的隧道
+            # Clean up potentially partially created tunnel
             for process_name in process_names:
                 self._kill_process_by_name(process_name)
             raise TunnelError(f"Failed to create tunnel: {e}")
     
     def _create_direct_tunnel(self, config: TunnelConfiguration) -> List[str]:
         """
-        创建直接模式隧道
+        Create direct mode tunnel
         
         Args:
-            config: 隧道配置
+            config: Tunnel configuration
             
         Returns:
-            List[str]: 创建的进程名称列表
+            List[str]: List of created process names
         """
         process_name = f"ct{config.range_id}_{config.port}"
         
@@ -133,19 +133,19 @@ class TunnelManager:
     
     def _create_gateway_tunnel(self, config: TunnelConfiguration) -> List[str]:
         """
-        创建网关模式隧道
+        Create gateway mode tunnel
         
         Args:
-            config: 隧道配置
+            config: Tunnel configuration
             
         Returns:
-            List[str]: 创建的进程名称列表
+            List[str]: List of created process names
         """
         process_names = []
         gateway_process = f"ct{config.range_id}_{config.port}_gw"
         local_process = f"ct{config.range_id}_{config.port}"
         
-        # 1. 在网关服务器上创建隧道
+        # 1. Create tunnel on gateway server
         gateway_command = [
             'ssh',
             '-o', 'UserKnownHostsFile=/dev/null',
@@ -167,7 +167,7 @@ class TunnelManager:
         
         process_names.append(gateway_process)
         
-        # 2. 在本地主机上创建隧道
+        # 2. Create tunnel on local host
         local_command = [
             'bash', '-c',
             f"exec -a {local_process} ssh -o UserKnownHostsFile=/dev/null "
@@ -179,7 +179,7 @@ class TunnelManager:
         result = subprocess.run(local_command, capture_output=True, text=True)
         
         if result.returncode != 0:
-            # 清理网关隧道
+            # Clean up gateway tunnel
             self._kill_process_on_gateway(gateway_process, config.gw_account, config.gw_host)
             raise TunnelError(
                 f"Failed to create local tunnel: {result.stderr}"
@@ -190,13 +190,13 @@ class TunnelManager:
     
     def destroy_tunnel(self, tunnel_id: str) -> None:
         """
-        销毁SSH隧道
+        Destroy SSH tunnel
         
         Args:
-            tunnel_id: 隧道ID
+            tunnel_id: Tunnel ID
             
         Raises:
-            TunnelError: 隧道不存在或销毁失败
+            TunnelError: Tunnel not found or destruction failed
         """
         if tunnel_id not in self.active_tunnels:
             raise TunnelError(f"Tunnel not found: {tunnel_id}")
@@ -209,7 +209,7 @@ class TunnelManager:
             else:
                 self._destroy_direct_tunnel(tunnel_info)
             
-            # 从活跃隧道列表中移除
+            # Remove from active tunnel list
             del self.active_tunnels[tunnel_id]
             logger.info(f"Tunnel destroyed successfully: {tunnel_id}")
             
@@ -219,39 +219,39 @@ class TunnelManager:
     
     def _destroy_direct_tunnel(self, tunnel_info: TunnelInfo) -> None:
         """
-        销毁直接模式隧道
+        Destroy direct mode tunnel
         
         Args:
-            tunnel_info: 隧道信息
+            tunnel_info: Tunnel information
         """
         for process_name in tunnel_info.process_names:
             self._kill_process_by_name(process_name)
     
     def _destroy_gateway_tunnel(self, tunnel_info: TunnelInfo) -> None:
         """
-        销毁网关模式隧道
+        Destroy gateway mode tunnel
         
         Args:
-            tunnel_info: 隧道信息
+            tunnel_info: Tunnel information
         """
         config = tunnel_info.config
         
         for process_name in tunnel_info.process_names:
             if process_name.endswith('_gw'):
-                # 销毁网关上的隧道
+                # Destroy tunnel on gateway
                 self._kill_process_on_gateway(
                     process_name, config.gw_account, config.gw_host
                 )
             else:
-                # 销毁本地隧道
+                # Destroy local tunnel
                 self._kill_process_by_name(process_name)
     
     def _kill_process_by_name(self, process_name: str) -> None:
         """
-        根据进程名杀死进程
+        Kill process by process name
         
         Args:
-            process_name: 进程名
+            process_name: Process name
         """
         command = ['pkill', '-f', process_name]
         logger.debug(f"Killing local process: {process_name}")
@@ -259,12 +259,12 @@ class TunnelManager:
     
     def _kill_process_on_gateway(self, process_name: str, gw_account: str, gw_host: str) -> None:
         """
-        在网关服务器上杀死进程
+        Kill process on gateway server
         
         Args:
-            process_name: 进程名
-            gw_account: 网关账户
-            gw_host: 网关主机
+            process_name: Process name
+            gw_account: Gateway account
+            gw_host: Gateway host
         """
         command = [
             'ssh',
@@ -279,10 +279,10 @@ class TunnelManager:
     
     def list_active_tunnels(self) -> List[Dict[str, Any]]:
         """
-        列出所有活跃隧道
+        List all active tunnels
         
         Returns:
-            List[Dict]: 隧道信息列表
+            List[Dict]: List of tunnel information
         """
         tunnels = []
         
@@ -303,18 +303,18 @@ class TunnelManager:
     
     def get_tunnel_info(self, tunnel_id: str) -> Optional[TunnelInfo]:
         """
-        获取隧道信息
+        Get tunnel information
         
         Args:
-            tunnel_id: 隧道ID
+            tunnel_id: Tunnel ID
             
         Returns:
-            TunnelInfo: 隧道信息，如果不存在返回None
+            TunnelInfo: Tunnel information, returns None if not found
         """
         return self.active_tunnels.get(tunnel_id)
     
     def cleanup_all_tunnels(self) -> None:
-        """清理所有隧道"""
+        """Clean up all tunnels"""
         tunnel_ids = list(self.active_tunnels.keys())
         
         for tunnel_id in tunnel_ids:

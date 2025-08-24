@@ -1,6 +1,6 @@
 """
 Cyber Range Discovery Service
-发现和同步未被管理的靶场资源
+Discover and synchronize unmanaged cyber range resources
 """
 import logging
 import re
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class OrphanedResource:
-    """孤立资源信息"""
+    """Orphaned resource information"""
     resource_type: str  # 'vm', 'disk', 'directory'
     name: str
     path: Optional[str] = None
@@ -32,29 +32,29 @@ class OrphanedResource:
 
 
 class RangeDiscoveryService:
-    """靶场发现服务"""
+    """Cyber range discovery service"""
     
     def __init__(self, settings: CyRISSettings, orchestrator: RangeOrchestrator):
         """
-        初始化发现服务
+        Initialize discovery service
         
         Args:
-            settings: CyRIS配置
-            orchestrator: 编排服务实例
+            settings: CyRIS configuration
+            orchestrator: Orchestrator service instance
         """
         self.settings = settings
         self.orchestrator = orchestrator
         self.virsh_client = VirshLibvirt()
         
-        # 虚拟机命名模式
+        # VM naming patterns
         self.vm_patterns = {
-            # 新格式: cyris-<type>-<shortid>
+            # New format: cyris-<type>-<shortid>
             'new_format': re.compile(r'^cyris-([a-z]+)-([a-f0-9]{8})$'),
-            # 旧格式: cyris-<uuid>-<suffix> 
+            # Old format: cyris-<uuid>-<suffix> 
             'old_format': re.compile(r'^cyris-([a-f0-9-]{36})-([a-f0-9]{8})$'),
         }
         
-        # 磁盘文件命名模式
+        # Disk file naming patterns
         self.disk_patterns = {
             'new_format': re.compile(r'^cyris-([a-z]+)-([a-f0-9]{8})\.qcow2$'),
             'old_format': re.compile(r'^cyris-([a-f0-9-]{36})-([a-f0-9]{8})\.qcow2$'),
@@ -105,7 +105,7 @@ class RangeDiscoveryService:
         return discovery_result
     
     def _discover_virtual_machines(self) -> List[OrphanedResource]:
-        """发现虚拟机"""
+        """Discover virtual machines"""
         vms = []
         
         try:
@@ -133,7 +133,7 @@ class RangeDiscoveryService:
         return vms
     
     def _discover_disk_files(self) -> List[OrphanedResource]:
-        """发现磁盘文件"""
+        """Discover disk files"""
         disks = []
         
         try:
@@ -169,7 +169,7 @@ class RangeDiscoveryService:
         try:
             cyber_range_dir = Path(self.settings.cyber_range_dir)
             
-            # 查找数字命名的目录（靶场ID）
+            # 查找数字命名的目录（Range ID）
             for item in cyber_range_dir.iterdir():
                 if item.is_dir() and item.name.isdigit():
                     resource = OrphanedResource(
@@ -296,7 +296,7 @@ class RangeDiscoveryService:
         恢复缺失的靶场到管理系统
         
         Args:
-            range_ids: 要恢复的靶场ID列表，None表示恢复所有发现的
+            range_ids: 要恢复的Range ID列表，None表示恢复所有发现的
             dry_run: 是否只是模拟运行
             
         Returns:
@@ -329,7 +329,7 @@ class RangeDiscoveryService:
             
             try:
                 if not dry_run:
-                    # 创建范围元数据
+                    # Create range metadata
                     metadata = RangeMetadata(
                         range_id=range_id,
                         name=f"Range {range_id}",
@@ -410,7 +410,7 @@ class RangeDiscoveryService:
         清理孤立资源
         
         Args:
-            resource_types: 要清理的资源类型 ['vms', 'disks', 'directories']
+            resource_types: Resources to clean up类型 ['vms', 'disks', 'directories']
             dry_run: 是否只是模拟运行
             
         Returns:

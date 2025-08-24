@@ -865,36 +865,36 @@ class RangeOrchestrator:
         host_address: str
     ) -> Dict[str, Any]:
         """
-        创建入口点（内部方法）
+        Create entry point (internal method)
         
         Args:
-            entry_point: 入口点信息
-            local_user: 本地用户
-            host_address: 主机地址
+            entry_point: Entry point information
+            local_user: Local user
+            host_address: Host address
             
         Returns:
-            Dict: 访问信息
+            Dict: Access information
         """
         return self.gateway_service.create_entry_point(entry_point, local_user, host_address)
     
     def get_access_notification(self, range_id: int) -> str:
         """
-        获取访问通知
+        Get access notification
         
         Args:
-            range_id: 靶场ID
+            range_id: Range ID
             
         Returns:
-            str: 访问通知内容
+            str: Access notification content
         """
         return self.gateway_service.generate_access_notification(range_id)
     
     def get_system_status(self) -> Dict[str, Any]:
         """
-        获取系统状态（包含网关信息）
+        Get system status (including gateway information)
         
         Returns:
-            Dict: 系统状态信息
+            Dict: System status information
         """
         base_status = {
             'total_ranges': len(self._ranges),
@@ -902,7 +902,7 @@ class RangeOrchestrator:
             'timestamp': datetime.now().isoformat()
         }
         
-        # 添加网关服务状态
+        # Add gateway service status
         try:
             gateway_status = self.gateway_service.get_service_status()
             base_status['gateway_service'] = gateway_status
@@ -914,16 +914,16 @@ class RangeOrchestrator:
     
     def create_cyber_range(self, yaml_config: Dict[str, Any]) -> Dict[str, Any]:
         """
-        创建网络靶场（集成网关功能）
+        Create cyber range (integrated gateway functionality)
         
         Args:
-            yaml_config: YAML配置
+            yaml_config: YAML configuration
             
         Returns:
-            Dict: 创建结果
+            Dict: Creation result
         """
         try:
-            # 解析配置获取range_id
+            # Parse configuration to get range_id
             clone_settings = yaml_config.get('clone_settings', [{}])[0]
             range_id = clone_settings.get('range_id')
             
@@ -932,10 +932,10 @@ class RangeOrchestrator:
             
             self.logger.info(f"Creating cyber range {range_id}")
             
-            # 创建基础靶场 - 调用传统CyRIS系统
+            # Create basic range - Call legacy CyRIS system
             range_resources = self._create_actual_cyber_range(yaml_config, range_id)
             
-            # 解析入口点并创建网关隧道
+            # Parse entry points and create gateway tunnels
             entry_points = []
             hosts_config = clone_settings.get('hosts', [])
             
@@ -946,7 +946,7 @@ class RangeOrchestrator:
                 for instance_id in range(1, host_config.get('instance_number', 0) + 1):
                     for guest_config in guests_config:
                         if guest_config.get('entry_point'):
-                            # 创建入口点
+                            # Create entry point
                             port = self.gateway_service.get_available_port()
                             password = self.gateway_service.generate_random_credentials()
                             
@@ -961,11 +961,11 @@ class RangeOrchestrator:
                                 password=password
                             )
                             
-                            # 通过网关服务创建入口点
+                            # 通过网关服务Create entry point
                             access_info = self._create_entry_point(entry_point, "ubuntu", "10.0.1.100")
                             entry_points.append(access_info)
             
-            # 创建范围元数据
+            # Create range metadata
             metadata = RangeMetadata(
                 range_id=str(range_id),
                 name=f"Range {range_id}",
@@ -976,7 +976,7 @@ class RangeOrchestrator:
             
             self._ranges[str(range_id)] = metadata
             
-            # 记录靶场资源
+            # Record range resources
             self._range_resources[str(range_id)] = range_resources
             
             self._save_persistent_data()
@@ -1001,25 +1001,25 @@ class RangeOrchestrator:
     
     def destroy_cyber_range(self, range_id: int) -> Dict[str, Any]:
         """
-        销毁网络靶场（包含网关清理）
+        Destroy cyber range (including gateway cleanup)
         
         Args:
-            range_id: 靶场ID
+            range_id: Range ID
             
         Returns:
-            Dict: 销毁结果
+            Dict: Destruction result
         """
         try:
             self.logger.info(f"Destroying cyber range {range_id}")
             
-            # 清理网关资源
+            # Clean up gateway resources
             self.gateway_service.cleanup_range(range_id)
             
-            # 清理实际的靶场资源
+            # Clean up actual range resources
             range_resources = self._range_resources.get(str(range_id), {})
             self._cleanup_actual_resources(range_id, range_resources)
             
-            # 清理靶场元数据
+            # Clean up range metadata
             range_id_str = str(range_id)
             if range_id_str in self._ranges:
                 del self._ranges[range_id_str]
@@ -1048,14 +1048,14 @@ class RangeOrchestrator:
     
     def _create_actual_cyber_range(self, yaml_config: Dict[str, Any], range_id: int) -> Dict[str, List[str]]:
         """
-        调用传统CyRIS系统创建实际的靶场
+        Call legacy CyRIS system创建实际的靶场
         
         Args:
-            yaml_config: YAML配置
-            range_id: 靶场ID
+            yaml_config: YAML configuration
+            range_id: Range ID
             
         Returns:
-            Dict: 创建的资源列表 {'vms': [...], 'disks': [...], 'networks': [...]}
+            Dict: List of created resources {'vms': [...], 'disks': [...], 'networks': [...]}
         """
         import subprocess
         import tempfile
@@ -1069,12 +1069,12 @@ class RangeOrchestrator:
         }
         
         try:
-            # 创建临时YAML文件
+            # Create temporary YAML file
             with tempfile.NamedTemporaryFile(mode='w', suffix='.yml', delete=False) as tmp_file:
                 yaml.dump(yaml_config, tmp_file, default_flow_style=False)
                 temp_yaml_path = tmp_file.name
             
-            # 调用传统CyRIS主程序
+            # Call legacy CyRIS main program
             legacy_command = [
                 'python3', 
                 str(self.settings.cyris_path / 'main' / 'cyris.py'),
@@ -1084,22 +1084,22 @@ class RangeOrchestrator:
             
             self.logger.info(f"Executing legacy CyRIS: {' '.join(legacy_command)}")
             
-            # 执行传统命令
+            # Execute legacy command
             result = subprocess.run(
                 legacy_command,
                 cwd=str(self.settings.cyris_path),
                 capture_output=True,
                 text=True,
-                timeout=300  # 5分钟超时
+                timeout=300  # 5 minute timeout
             )
             
             if result.returncode == 0:
                 self.logger.info(f"Legacy CyRIS completed successfully for range {range_id}")
                 
-                # 等待一段时间让虚拟机完全启动
+                # Wait for VMs to fully start
                 time.sleep(5)
                 
-                # 发现创建的资源
+                # Discover created resources
                 resources = self._discover_created_resources(range_id)
                 
             else:
@@ -1107,7 +1107,7 @@ class RangeOrchestrator:
                 self.logger.error(error_msg)
                 raise RuntimeError(error_msg)
             
-            # 清理临时文件
+            # Clean up temporary files
             import os
             try:
                 os.unlink(temp_yaml_path)
@@ -1116,7 +1116,7 @@ class RangeOrchestrator:
                 
         except Exception as e:
             self.logger.error(f"Failed to create cyber range {range_id}: {e}")
-            # 如果创建失败，尝试清理部分创建的资源
+            # If creation fails, try to clean up partially created resources
             self._cleanup_partial_resources(range_id, resources)
             raise
         
@@ -1124,13 +1124,13 @@ class RangeOrchestrator:
     
     def _discover_created_resources(self, range_id: int) -> Dict[str, List[str]]:
         """
-        发现刚创建的靶场资源
+        Discover newly created range resources
         
         Args:
-            range_id: 靶场ID
+            range_id: Range ID
             
         Returns:
-            Dict: 发现的资源
+            Dict: Discovered resources
         """
         resources = {
             'vms': [],
@@ -1139,7 +1139,7 @@ class RangeOrchestrator:
         }
         
         try:
-            # 发现虚拟机
+            # Discover virtual machines
             from cyris.infrastructure.providers.virsh_client import VirshLibvirt
             virsh_client = VirshLibvirt()
             
@@ -1149,14 +1149,14 @@ class RangeOrchestrator:
                     resources['vms'].append(vm['name'])
                     self.logger.debug(f"Discovered VM: {vm['name']}")
             
-            # 发现磁盘文件
+            # Discover disk files
             cyber_range_dir = Path(self.settings.cyber_range_dir)
             for disk_file in cyber_range_dir.glob("*.qcow2"):
                 if disk_file.name.startswith('cyris-'):
                     resources['disks'].append(disk_file.name)
                     self.logger.debug(f"Discovered disk: {disk_file.name}")
             
-            # 记录发现的资源数量
+            # 记录Discovered resources数量
             self.logger.info(f"Discovered {len(resources['vms'])} VMs, {len(resources['disks'])} disks for range {range_id}")
             
         except Exception as e:
@@ -1166,11 +1166,11 @@ class RangeOrchestrator:
     
     def _cleanup_partial_resources(self, range_id: int, resources: Dict[str, List[str]]):
         """
-        清理部分创建的资源
+        Clean up partially created resources
         
         Args:
-            range_id: 靶场ID
-            resources: 要清理的资源
+            range_id: Range ID
+            resources: Resources to clean up
         """
         self.logger.info(f"Cleaning up partial resources for range {range_id}")
         
@@ -1178,7 +1178,7 @@ class RangeOrchestrator:
             from cyris.infrastructure.providers.virsh_client import VirshLibvirt
             virsh_client = VirshLibvirt()
             
-            # 清理虚拟机
+            # Clean up virtual machines
             for vm_name in resources.get('vms', []):
                 try:
                     virsh_client.destroy_domain(vm_name)
@@ -1187,7 +1187,7 @@ class RangeOrchestrator:
                 except Exception as e:
                     self.logger.warning(f"Failed to cleanup VM {vm_name}: {e}")
             
-            # 清理磁盘文件
+            # Clean up disk files
             for disk_name in resources.get('disks', []):
                 try:
                     disk_path = Path(self.settings.cyber_range_dir) / disk_name
@@ -1202,16 +1202,16 @@ class RangeOrchestrator:
     
     def _cleanup_actual_resources(self, range_id: int, resources: Dict[str, List[str]]):
         """
-        清理实际的靶场资源
+        Clean up actual range resources
         
         Args:
-            range_id: 靶场ID
-            resources: 要清理的资源
+            range_id: Range ID
+            resources: Resources to clean up
         """
         self.logger.info(f"Cleaning up actual resources for range {range_id}")
         
         try:
-            # 首先尝试使用传统清理脚本
+            # First try to use legacy cleanup script
             try:
                 import subprocess
                 cleanup_command = [
@@ -1233,12 +1233,12 @@ class RangeOrchestrator:
                     self.logger.info(f"Legacy cleanup completed for range {range_id}")
                 else:
                     self.logger.warning(f"Legacy cleanup failed, fallback to manual cleanup: {result.stderr}")
-                    # 继续手动清理
+                    # Continue with manual cleanup
                     
             except Exception as e:
                 self.logger.warning(f"Legacy cleanup not available, using manual cleanup: {e}")
             
-            # 手动清理资源
+            # Manually clean up resources
             self._cleanup_partial_resources(range_id, resources)
             
         except Exception as e:
