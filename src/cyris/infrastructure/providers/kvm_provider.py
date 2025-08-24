@@ -566,9 +566,21 @@ class KVMProvider(InfrastructureProvider):
     def _create_vm_disk(self, vm_name: str, guest: Guest) -> str:
         """Create VM disk from base image"""
         
-        # Use project directory for VM disks
-        vm_disk_dir = Path(self.config.get('base_path', '/tmp/cyris-vms'))
-        vm_disk_dir.mkdir(exist_ok=True)
+        # Organize disks by range for better management
+        base_path = Path(self.config.get('base_path', '/tmp/cyris-vms'))
+        
+        # Check if we have range context information
+        current_range_id = getattr(self, '_current_range_id', None)
+        if current_range_id:
+            # Create range-specific directory for disk files
+            vm_disk_dir = base_path / current_range_id / "disks"
+            vm_disk_dir.mkdir(parents=True, exist_ok=True)
+            self.logger.info(f"Creating disk in range directory: {vm_disk_dir}")
+        else:
+            # Fallback to base directory if no range context
+            vm_disk_dir = base_path
+            vm_disk_dir.mkdir(exist_ok=True)
+            self.logger.warning("No range context available, using base directory for disk")
         
         # Get guest properties with backward compatibility
         guest_id = getattr(guest, 'id', None) or getattr(guest, 'guest_id', 'unknown')
