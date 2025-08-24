@@ -646,6 +646,325 @@ class TestRangeOrchestratorAdvanced:
         assert stats["newest_range"] is not None
 
 
+class TestRangeOrchestratorRemove:
+    """Test range removal functionality (rm command)"""
+    
+    @pytest.fixture
+    def temp_config(self):
+        # Create temporary directories
+        temp_dir = Path(tempfile.mkdtemp())
+        cyber_range_dir = temp_dir / "ranges"
+        cyber_range_dir.mkdir()
+        
+        config = CyRISSettings(
+            cyris_path=temp_dir,
+            cyber_range_dir=cyber_range_dir,
+            gw_mode=False
+        )
+        
+        yield config
+        
+        # Cleanup
+        import shutil
+        shutil.rmtree(temp_dir, ignore_errors=True)
+    
+    @pytest.fixture
+    def orchestrator_with_fs(self, temp_config):
+        provider = MockProvider()
+        return RangeOrchestrator(temp_config, provider)
+    
+    def test_remove_destroyed_range_success(self, orchestrator_with_fs):
+        """Test successful removal of destroyed range"""
+        # Create test entities
+        host = Host(
+            host_id="test_host",
+            virbr_addr="192.168.122.1",
+            mgmt_addr="10.0.0.1", 
+            account="test_user"
+        )
+        
+        guest = Guest(
+            guest_id="test_guest",
+            ip_addr="192.168.100.10",
+            password="test123",
+            basevm_host="test_host",
+            basevm_config_file="/tmp/test.xml", 
+            basevm_os_type="ubuntu",
+            basevm_type="kvm",
+            basevm_name="test_base",
+            tasks=[]
+        )
+        
+        # Create range
+        range_id = "test_remove_001"
+        metadata = orchestrator_with_fs.create_range(range_id, "Test Remove", "Description", [host], [guest])
+        
+        # Verify range was created
+        assert orchestrator_with_fs.get_range(range_id) is not None
+        assert range_id in orchestrator_with_fs._ranges
+        assert range_id in orchestrator_with_fs._range_resources
+        
+        # Verify range directory was created
+        range_dir = orchestrator_with_fs.ranges_dir / range_id
+        assert range_dir.exists()
+        
+        # Destroy the range first
+        success = orchestrator_with_fs.destroy_range(range_id)
+        assert success
+        
+        # Verify it's destroyed but still exists
+        destroyed_metadata = orchestrator_with_fs.get_range(range_id)
+        assert destroyed_metadata is not None
+        assert destroyed_metadata.status == RangeStatus.DESTROYED
+        
+        # Now remove the range completely
+        success = orchestrator_with_fs.remove_range(range_id)
+        assert success
+        
+        # Verify complete removal
+        assert orchestrator_with_fs.get_range(range_id) is None
+        assert range_id not in orchestrator_with_fs._ranges
+        assert range_id not in orchestrator_with_fs._range_resources
+        
+        # Verify range directory was removed
+        assert not range_dir.exists()
+    
+    def test_remove_non_destroyed_range_fails(self, orchestrator_with_fs):
+        """Test that removing non-destroyed range fails without force"""
+        # Create test entities
+        host = Host(
+            host_id="test_host",
+            virbr_addr="192.168.122.1",
+            mgmt_addr="10.0.0.1", 
+            account="test_user"
+        )
+        
+        guest = Guest(
+            guest_id="test_guest",
+            ip_addr="192.168.100.10",
+            password="test123",
+            basevm_host="test_host",
+            basevm_config_file="/tmp/test.xml", 
+            basevm_os_type="ubuntu",
+            basevm_type="kvm",
+            basevm_name="test_base",
+            tasks=[]
+        )
+        
+        # Create range (but don't destroy)
+        range_id = "test_remove_002"
+        orchestrator_with_fs.create_range(range_id, "Test Remove", "Description", [host], [guest])
+        
+        # Try to remove without destroying - should fail
+        success = orchestrator_with_fs.remove_range(range_id)
+        assert not success
+        
+        # Range should still exist
+        assert orchestrator_with_fs.get_range(range_id) is not None
+        assert range_id in orchestrator_with_fs._ranges
+    
+    def test_remove_non_destroyed_range_with_force(self, orchestrator_with_fs):
+        """Test that removing non-destroyed range succeeds with force=True"""
+        # Create test entities
+        host = Host(
+            host_id="test_host",
+            virbr_addr="192.168.122.1",
+            mgmt_addr="10.0.0.1", 
+            account="test_user"
+        )
+        
+        guest = Guest(
+            guest_id="test_guest",
+            ip_addr="192.168.100.10",
+            password="test123",
+            basevm_host="test_host",
+            basevm_config_file="/tmp/test.xml", 
+            basevm_os_type="ubuntu",
+            basevm_type="kvm",
+            basevm_name="test_base",
+            tasks=[]
+        )
+        
+        # Create range (but don't destroy)
+        range_id = "test_remove_003"
+        orchestrator_with_fs.create_range(range_id, "Test Remove", "Description", [host], [guest])
+        
+        # Verify it's active
+        metadata = orchestrator_with_fs.get_range(range_id)
+        assert metadata.status == RangeStatus.ACTIVE
+        
+        # Remove with force - should succeed
+        success = orchestrator_with_fs.remove_range(range_id, force=True)
+        assert success
+        
+        # Range should be completely removed
+        assert orchestrator_with_fs.get_range(range_id) is None
+        assert range_id not in orchestrator_with_fs._ranges
+    
+    def test_remove_nonexistent_range(self, orchestrator_with_fs):
+        """Test removing a range that doesn't exist"""
+        success = orchestrator_with_fs.remove_range("nonexistent")
+        assert not success
+    
+    def test_remove_range_with_disk_files(self, orchestrator_with_fs):
+        """Test removing range with disk files in range directory"""
+        # Create test entities
+        host = Host(
+            host_id="test_host",
+            virbr_addr="192.168.122.1",
+            mgmt_addr="10.0.0.1", 
+            account="test_user"
+        )
+        
+        guest = Guest(
+            guest_id="test_guest",
+            ip_addr="192.168.100.10",
+            password="test123",
+            basevm_host="test_host",
+            basevm_config_file="/tmp/test.xml", 
+            basevm_os_type="ubuntu",
+            basevm_type="kvm",
+            basevm_name="test_base",
+            tasks=[]
+        )
+        
+        # Create range
+        range_id = "test_remove_004"
+        orchestrator_with_fs.create_range(range_id, "Test Remove", "Description", [host], [guest])
+        
+        # Create mock disk files in range directory
+        range_dir = orchestrator_with_fs.ranges_dir / range_id
+        disks_dir = range_dir / "disks"
+        disks_dir.mkdir(exist_ok=True)
+        
+        # Create mock disk files
+        disk1 = disks_dir / "cyris-test-guest.qcow2"
+        disk2 = disks_dir / "cyris-test-guest2.qcow2"
+        disk1.write_text("mock disk content")
+        disk2.write_text("mock disk content")
+        
+        # Verify files exist
+        assert disk1.exists()
+        assert disk2.exists()
+        
+        # Destroy and remove range
+        orchestrator_with_fs.destroy_range(range_id)
+        success = orchestrator_with_fs.remove_range(range_id)
+        assert success
+        
+        # Verify all files and directories were removed
+        assert not range_dir.exists()
+        assert not disks_dir.exists()
+        assert not disk1.exists()
+        assert not disk2.exists()
+    
+    def test_remove_range_with_legacy_disk_files(self, orchestrator_with_fs):
+        """Test removing range with legacy disk files in root directory"""
+        # Create test entities
+        host = Host(
+            host_id="test_host",
+            virbr_addr="192.168.122.1",
+            mgmt_addr="10.0.0.1", 
+            account="test_user"
+        )
+        
+        guest = Guest(
+            guest_id="test_guest",
+            ip_addr="192.168.100.10",
+            password="test123",
+            basevm_host="test_host",
+            basevm_config_file="/tmp/test.xml", 
+            basevm_os_type="ubuntu",
+            basevm_type="kvm",
+            basevm_name="test_base",
+            tasks=[]
+        )
+        
+        # Create range
+        range_id = "test_remove_005"
+        orchestrator_with_fs.create_range(range_id, "Test Remove", "Description", [host], [guest])
+        
+        # Create mock legacy disk files in root cyber_range directory
+        root_dir = orchestrator_with_fs.ranges_dir
+        legacy_disk1 = root_dir / f"cyris-{range_id}-guest1.qcow2"
+        legacy_disk2 = root_dir / f"cyris-{range_id}-guest2.qcow2"
+        legacy_disk1.write_text("legacy disk content")
+        legacy_disk2.write_text("legacy disk content")
+        
+        # Record the disk files in range resources (simulate tracking)
+        orchestrator_with_fs._range_resources[range_id]["disks"] = [
+            legacy_disk1.name, legacy_disk2.name
+        ]
+        
+        # Verify files exist
+        assert legacy_disk1.exists()
+        assert legacy_disk2.exists()
+        
+        # Destroy and remove range
+        orchestrator_with_fs.destroy_range(range_id)
+        success = orchestrator_with_fs.remove_range(range_id)
+        assert success
+        
+        # Verify legacy disk files were removed
+        assert not legacy_disk1.exists()
+        assert not legacy_disk2.exists()
+    
+    def test_remove_range_persistent_data_update(self, orchestrator_with_fs):
+        """Test that persistent data files are updated after removal"""
+        # Create test entities
+        host = Host(
+            host_id="test_host",
+            virbr_addr="192.168.122.1",
+            mgmt_addr="10.0.0.1", 
+            account="test_user"
+        )
+        
+        guest = Guest(
+            guest_id="test_guest",
+            ip_addr="192.168.100.10",
+            password="test123",
+            basevm_host="test_host",
+            basevm_config_file="/tmp/test.xml", 
+            basevm_os_type="ubuntu",
+            basevm_type="kvm",
+            basevm_name="test_base",
+            tasks=[]
+        )
+        
+        # Create two ranges
+        range_id1 = "test_remove_006"
+        range_id2 = "test_remove_007"
+        orchestrator_with_fs.create_range(range_id1, "Test Remove 1", "Description", [host], [guest])
+        orchestrator_with_fs.create_range(range_id2, "Test Remove 2", "Description", [host], [guest])
+        
+        # Verify both exist in persistent data
+        assert range_id1 in orchestrator_with_fs._ranges
+        assert range_id2 in orchestrator_with_fs._ranges
+        assert len(orchestrator_with_fs._ranges) == 2
+        
+        # Destroy and remove first range
+        orchestrator_with_fs.destroy_range(range_id1)
+        success = orchestrator_with_fs.remove_range(range_id1)
+        assert success
+        
+        # Verify only second range remains
+        assert range_id1 not in orchestrator_with_fs._ranges
+        assert range_id2 in orchestrator_with_fs._ranges
+        assert len(orchestrator_with_fs._ranges) == 1
+        
+        # Verify persistent data files exist and contain correct data
+        metadata_file = orchestrator_with_fs._metadata_file
+        resources_file = orchestrator_with_fs._resources_file
+        assert metadata_file.exists()
+        assert resources_file.exists()
+        
+        # Reload orchestrator to verify persistence
+        new_orchestrator = RangeOrchestrator(orchestrator_with_fs.settings, MockProvider())
+        assert range_id1 not in new_orchestrator._ranges
+        assert range_id2 in new_orchestrator._ranges
+        assert len(new_orchestrator._ranges) == 1
+
+
 class TestRangeOrchestratorWithRealKVMProvider:
     """Test orchestrator with real KVM provider (integration-style tests)"""
     
