@@ -67,6 +67,7 @@ class RangeMetadata:
     tags: Dict[str, str] = field(default_factory=dict)
     config_path: Optional[str] = None
     logs_path: Optional[str] = None
+    provider_config: Optional[Dict[str, Any]] = None  # Store provider configuration
     
     def update_status(self, status: RangeStatus) -> None:
         """Update range status and last modified time"""
@@ -237,7 +238,8 @@ class RangeOrchestrator:
             description=description,
             created_at=datetime.now(),
             owner=owner,
-            tags=tags or {}
+            tags=tags or {},
+            provider_config={"libvirt_uri": self.provider.libvirt_uri}  # Store libvirt connection info
         )
         
         try:

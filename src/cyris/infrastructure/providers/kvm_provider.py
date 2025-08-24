@@ -14,6 +14,9 @@ import json
 import time
 import uuid
 
+# Import permission manager for automatic libvirt access setup
+from ..permissions import PermissionManager
+
 try:
     import libvirt
     LIBVIRT_AVAILABLE = True
@@ -126,7 +129,7 @@ class KVMProvider(InfrastructureProvider):
         super().__init__("kvm", config)
         
         # Configuration with defaults - use session for user-level virtualization
-        self.libvirt_uri = config.get("libvirt_uri", "qemu:///session")
+        self.libvirt_uri = config.get("libvirt_uri", config.get("connection_uri", "qemu:///session"))
         self.storage_pool = config.get("storage_pool", "default")
         self.network_prefix = config.get("network_prefix", "cyris")
         self.vm_template_dir = Path(config.get("vm_template_dir", "/var/lib/libvirt/templates"))
@@ -140,6 +143,9 @@ class KVMProvider(InfrastructureProvider):
         # Connection state
         self._connection: Optional[libvirt.virConnect] = None
         self.logger = logging.getLogger(__name__)
+        
+        # Initialize permission manager for automatic libvirt access
+        self.permission_manager = PermissionManager()
         
         self.logger.info(f"KVMProvider initialized with URI: {self.libvirt_uri}")
         self.logger.info(f"Libvirt type: {LIBVIRT_TYPE}")
@@ -380,17 +386,27 @@ class KVMProvider(InfrastructureProvider):
                 # Get the domain
                 try:
                     domain = self._connection.lookupByName(guest_id)
-                except libvirt.libvirtError:
-                    self.logger.warning(f"VM {guest_id} not found, may already be destroyed")
+                    self.logger.debug(f"Found VM {guest_id}, state: {domain.state()[0]}")
+                except libvirt.libvirtError as e:
+                    self.logger.warning(f"VM {guest_id} not found, may already be destroyed: {e}")
                     self._unregister_resource(guest_id)
                     continue
                 
                 # Force stop if running
                 if domain.isActive():
+                    self.logger.info(f"VM {guest_id} is active, forcing stop")
                     domain.destroy()  # Force stop
+                else:
+                    self.logger.info(f"VM {guest_id} is already stopped")
                 
-                # Wait for VM to stop
-                self._wait_for_vm_state(domain, libvirt.VIR_DOMAIN_SHUTOFF, timeout=30)
+                # Wait for VM to stop with longer timeout
+                try:
+                    self._wait_for_vm_state(domain, libvirt.VIR_DOMAIN_SHUTOFF, timeout=60)
+                    self.logger.debug(f"VM {guest_id} reached shutoff state")
+                except Exception as e:
+                    self.logger.warning(f"VM {guest_id} failed to reach shutoff state: {e}")
+                    # Continue with undefining anyway
+                    pass
                 
                 # Get disk paths before undefining
                 guest_resource = self._resources.get(guest_id)
@@ -576,6 +592,10 @@ class KVMProvider(InfrastructureProvider):
             vm_disk_dir = base_path / current_range_id / "disks"
             vm_disk_dir.mkdir(parents=True, exist_ok=True)
             self.logger.info(f"Creating disk in range directory: {vm_disk_dir}")
+            
+            # Set up libvirt access for the directory structure
+            if self.libvirt_uri == "qemu:///system":
+                self.permission_manager.setup_libvirt_access(vm_disk_dir)
         else:
             # Fallback to base directory if no range context
             vm_disk_dir = base_path
@@ -623,6 +643,19 @@ class KVMProvider(InfrastructureProvider):
             ], check=True)
         
         self.logger.info(f"Created VM disk: {vm_disk_path}")
+        
+        # Automatically set up libvirt access permissions for the disk file
+        vm_disk_path_obj = Path(vm_disk_path)
+        if self.libvirt_uri == "qemu:///system":
+            # Only set permissions for system mode (bridge networking)
+            self.logger.debug("Setting up libvirt permissions for system mode")
+            success = self.permission_manager.setup_libvirt_access(vm_disk_path_obj)
+            if not success:
+                self.logger.warning(f"Failed to set up automatic permissions for {vm_disk_path}")
+                self.logger.warning("VM may fail to start due to permission issues")
+            else:
+                self.logger.debug(f"Successfully set up libvirt access for {vm_disk_path}")
+        
         return str(vm_disk_path)
     
     def _generate_vm_xml(
