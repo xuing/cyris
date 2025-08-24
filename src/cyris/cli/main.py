@@ -14,9 +14,11 @@ from ..config.settings import CyRISSettings
 
 
 # Setup logging
+import sys
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    stream=sys.stderr
 )
 logger = logging.getLogger(__name__)
 
@@ -29,6 +31,8 @@ def get_config(ctx) -> 'CyRISSettings':
         ctx.obj['config'] = CyRISSettings()
     
     return ctx.obj['config']
+
+
 
 
 @click.group()
@@ -148,12 +152,12 @@ def create(ctx, description_file: Path, range_id: Optional[int], dry_run: bool, 
             )
             
             if result:
-                click.echo(f"✅ Validation successful. Would create range: {result}")
+                click.echo(f"[OK] Validation successful. Would create range: {result}")
             else:
-                click.echo("❌ Validation failed")
+                click.echo("[ERROR] Validation failed")
                 sys.exit(1)
         except Exception as e:
-            click.echo(f"❌ Validation error: {e}", err=True)
+            click.echo(f"[ERROR] Validation error: {e}", err=True)
             if verbose:
                 import traceback
                 traceback.print_exc()
@@ -190,13 +194,13 @@ def create(ctx, description_file: Path, range_id: Optional[int], dry_run: bool, 
         )
         
         if result:
-            click.echo(f"✅ Cyber range created successfully: {result}")
+            click.echo(f"[OK] Cyber range created successfully: {result}")
         else:
-            click.echo("❌ Cyber range creation failed")
+            click.echo("[ERROR] Cyber range creation failed")
             sys.exit(1)
             
     except Exception as e:
-        click.echo(f"❌ Error creating cyber range: {e}", err=True)
+        click.echo(f"[ERROR] Error creating cyber range: {e}", err=True)
         if verbose:
             import traceback
             traceback.print_exc()
@@ -206,12 +210,16 @@ def create(ctx, description_file: Path, range_id: Optional[int], dry_run: bool, 
 @cli.command()
 @click.option('--range-id', type=int, help='Cyber range ID')
 @click.option('--all', 'list_all', is_flag=True, help='Show all cyber ranges')
+@click.option('--verbose', '-v', is_flag=True, help='Show detailed information including VM IPs')
 @click.pass_context
-def list(ctx, range_id: Optional[int], list_all: bool):
+def list(ctx, range_id: Optional[int], list_all: bool, verbose: bool):
     """List cyber ranges"""
     config: CyRISSettings = get_config(ctx)
     
     try:
+        # Flush stdout to ensure proper ordering with stderr logging
+        sys.stdout.flush()
+        
         from ..services.orchestrator import RangeOrchestrator
         from ..infrastructure.providers.kvm_provider import KVMProvider
         
@@ -264,16 +272,76 @@ def list(ctx, range_id: Optional[int], list_all: bool):
                     continue
                     
                 displayed_count += 1
-                status_indicator = "🟢" if range_meta.status.value == "active" else "🟡" if range_meta.status.value == "creating" else "🔴"
+                
+                # Use text indicators instead of emoji
+                if range_meta.status.value == "active":
+                    status_indicator = "[ACTIVE]"
+                elif range_meta.status.value == "creating":
+                    status_indicator = "[CREATING]"
+                else:
+                    status_indicator = "[ERROR]"
                 
                 click.echo(f"  {status_indicator} {range_meta.range_id}: {range_meta.name}")
                 click.echo(f"     Status: {range_meta.status.value}")
                 click.echo(f"     Created: {range_meta.created_at.strftime('%Y-%m-%d %H:%M')}")
                 if range_meta.description:
                     click.echo(f"     Description: {range_meta.description}")
+                
+                # Show VM status information if verbose and range is active
+                if verbose and range_meta.status.value in ['active', 'creating']:
+                    resources = orchestrator.get_range_resources(range_meta.range_id)
+                    if resources and resources.get('guests'):
+                        # Get libvirt URI from range metadata
+                        libvirt_uri = "qemu:///system"
+                        if range_meta.provider_config:
+                            libvirt_uri = range_meta.provider_config.get('libvirt_uri', libvirt_uri)
+                        
+                        try:
+                            from ..tools.vm_ip_manager import VMIPManager
+                            ip_manager = VMIPManager(libvirt_uri=libvirt_uri)
+                            
+                            vm_statuses = []
+                            has_issues = False
+                            
+                            for guest in resources['guests']:
+                                try:
+                                    health_info = ip_manager.get_vm_health_info(guest)
+                                    
+                                    # Use text status indicators
+                                    status_icon = "[OK]" if health_info.is_healthy else "[ERR]"
+                                    compact_status = health_info.get_compact_status()
+                                    
+                                    vm_status = f"{status_icon} {guest}: {compact_status}"
+                                    vm_statuses.append(vm_status)
+                                    
+                                    # Track if there are any issues
+                                    if health_info.error_details or not health_info.is_healthy:
+                                        has_issues = True
+                                        
+                                except Exception:
+                                    vm_statuses.append(f"[FAIL] {guest}: check failed")
+                                    has_issues = True
+                            
+                            if vm_statuses:
+                                click.echo(f"     VMs: {' | '.join(vm_statuses)}")
+                                
+                                # If there are issues, show a hint
+                                if has_issues:
+                                    click.echo(f"     HINT: Issues detected - use 'cyris status {range_meta.range_id} --verbose' for details")
+                            
+                            ip_manager.close()
+                            
+                        except ImportError:
+                            click.echo(f"     WARNING:  VM status checking not available")
+                        except Exception:
+                            pass  # Silently skip health check errors in list mode
             
             if displayed_count == 0:
                 click.echo("  No ranges match the filter criteria")
+        
+        # Ensure all output is flushed before any remaining logs
+        sys.stdout.flush()
+        sys.stderr.flush()
                 
     except Exception as e:
         click.echo(f"Error listing cyber ranges: {e}", err=True)
@@ -327,12 +395,12 @@ def destroy(ctx, range_id: str, force: bool, rm: bool):
         # Check if range exists and get its original connection info
         range_metadata = basic_orchestrator.get_range(range_id)
         if not range_metadata:
-            click.echo(f"❌ Cyber range {range_id} not found")
+            click.echo(f"[ERROR] Cyber range {range_id} not found")
             
             # Check filesystem for legacy ranges
             range_dir = config.cyber_range_dir / range_id
             if range_dir.exists():
-                click.echo(f"⚠️  Found range directory on filesystem: {range_dir}")
+                click.echo(f"WARNING:  Found range directory on filesystem: {range_dir}")
                 click.echo(f"   Use legacy cleanup: main/range_cleanup.sh {range_id} CONFIG")
             
             sys.exit(1)
@@ -356,23 +424,23 @@ def destroy(ctx, range_id: str, force: bool, rm: bool):
         success = orchestrator.destroy_range(range_id)
         
         if success:
-            click.echo(f"✅ Cyber range {range_id} destroyed successfully")
+            click.echo(f"[OK] Cyber range {range_id} destroyed successfully")
             
             # If --rm flag is set, also remove all records
             if rm:
                 click.echo(f"🗑️  Removing all records for cyber range {range_id}...")
                 remove_success = orchestrator.remove_range(range_id, force=force)
                 if remove_success:
-                    click.echo(f"✅ All records for cyber range {range_id} removed completely")
+                    click.echo(f"[OK] All records for cyber range {range_id} removed completely")
                 else:
-                    click.echo(f"⚠️  Failed to remove records for cyber range {range_id}")
+                    click.echo(f"WARNING:  Failed to remove records for cyber range {range_id}")
                     click.echo(f"   You can manually run: cyris rm {range_id}")
         else:
-            click.echo(f"❌ Failed to destroy cyber range {range_id}")
+            click.echo(f"[ERROR] Failed to destroy cyber range {range_id}")
             sys.exit(1)
             
     except Exception as e:
-        click.echo(f"❌ Error destroying cyber range: {e}", err=True)
+        click.echo(f"[ERROR] Error destroying cyber range: {e}", err=True)
         if verbose:
             import traceback
             traceback.print_exc()
@@ -429,16 +497,16 @@ def rm(ctx, range_id: str, force: bool):
         # Check if range exists
         range_metadata = orchestrator.get_range(range_id)
         if not range_metadata:
-            click.echo(f"❌ Cyber range {range_id} not found")
+            click.echo(f"[ERROR] Cyber range {range_id} not found")
             
             # Check filesystem for legacy ranges
             range_dir = config.cyber_range_dir / range_id
             if range_dir.exists():
-                click.echo(f"⚠️  Found range directory on filesystem: {range_dir}")
+                click.echo(f"WARNING:  Found range directory on filesystem: {range_dir}")
                 if click.confirm("Remove filesystem directory anyway?"):
                     import shutil
                     shutil.rmtree(range_dir)
-                    click.echo(f"✅ Removed directory {range_dir}")
+                    click.echo(f"[OK] Removed directory {range_dir}")
             
             sys.exit(1)
         
@@ -451,17 +519,17 @@ def rm(ctx, range_id: str, force: bool):
         success = orchestrator.remove_range(range_id, force=force)
         
         if success:
-            click.echo(f"✅ Cyber range {range_id} removed completely")
+            click.echo(f"[OK] Cyber range {range_id} removed completely")
             click.echo("   All files, images, and records have been deleted")
         else:
-            click.echo(f"❌ Failed to remove cyber range {range_id}")
+            click.echo(f"[ERROR] Failed to remove cyber range {range_id}")
             if not force and range_metadata.status.value != 'destroyed':
                 click.echo(f"   Range status is '{range_metadata.status.value}' - use --force to remove active ranges")
                 click.echo(f"   Or destroy first: cyris destroy {range_id}")
             sys.exit(1)
             
     except Exception as e:
-        click.echo(f"❌ Error removing cyber range: {e}", err=True)
+        click.echo(f"[ERROR] Error removing cyber range: {e}", err=True)
         if verbose:
             import traceback
             traceback.print_exc()
@@ -470,15 +538,15 @@ def rm(ctx, range_id: str, force: bool):
 
 @cli.command()
 @click.argument('range_id')  # Accept both string and numeric range IDs
+@click.option('--verbose', '-v', is_flag=True, help='Show detailed information including VM IPs')
 @click.pass_context
-def status(ctx, range_id: str):
+def status(ctx, range_id: str, verbose: bool):
     """
     Display cyber range status
     
     RANGE_ID: Cyber range ID
     """
     config: CyRISSettings = get_config(ctx)
-    verbose = ctx.obj['verbose']
     
     click.echo(f"Cyber range {range_id} status:")
     
@@ -496,7 +564,7 @@ def status(ctx, range_id: str):
         
         if range_metadata:
             # Show orchestrator information
-            status_icon = "🟢" if range_metadata.status.value == "active" else "🟡" if range_metadata.status.value == "creating" else "🔴"
+            status_icon = "[ACTIVE]" if range_metadata.status.value == "active" else "[CREATING]" if range_metadata.status.value == "creating" else "[ERROR]"
             click.echo(f"  {status_icon} Status: {range_metadata.status.value}")
             click.echo(f"  Name: {range_metadata.name}")
             click.echo(f"  Description: {range_metadata.description}")
@@ -517,53 +585,103 @@ def status(ctx, range_id: str):
                     click.echo(f"    Hosts: {len(resources['hosts'])}")
                 if resources.get('guests'):
                     click.echo(f"    Guests: {len(resources['guests'])}")
+                    
+                    # Show VM health information
+                    if resources.get('guests') and verbose:
+                        click.echo(f"  INFO: Virtual Machine Health Status:")
+                        
+                        # Get libvirt URI from range metadata
+                        libvirt_uri = "qemu:///system"
+                        if range_metadata.provider_config:
+                            libvirt_uri = range_metadata.provider_config.get('libvirt_uri', libvirt_uri)
+                        
+                        try:
+                            from ..tools.vm_ip_manager import VMIPManager
+                            ip_manager = VMIPManager(libvirt_uri=libvirt_uri)
+                            
+                            for guest in resources['guests']:
+                                try:
+                                    health_info = ip_manager.get_vm_health_info(guest)
+                                    
+                                    # Simple status based on health
+                                    status_icon = '[OK]' if health_info.is_healthy else '[ERROR]'
+                                    
+                                    click.echo(f"    {status_icon} {guest}")
+                                    click.echo(f"       libvirt: {health_info.libvirt_status} | healthy: {health_info.is_healthy}")
+                                    
+                                    if health_info.ip_addresses:
+                                        click.echo(f"       IP: IP: {', '.join(health_info.ip_addresses)}")
+                                        if health_info.network_reachable:
+                                            click.echo(f"       NET: Network: reachable")
+                                        else:
+                                            click.echo(f"       NET: Network: not reachable")
+                                    else:
+                                        click.echo(f"       IP: IP: not assigned")
+                                    
+                                    if health_info.uptime:
+                                        click.echo(f"       TIME:  Uptime: {health_info.uptime}")
+                                    
+                                    if health_info.disk_path:
+                                        click.echo(f"       DISK: Disk: {health_info.disk_path}")
+                                    
+                                    # Show all error details directly
+                                    if health_info.error_details:
+                                        click.echo(f"       INFO: Error Details:")
+                                        for i, error in enumerate(health_info.error_details, 1):
+                                            # For very long errors, wrap them nicely
+                                            if len(error) > 80:
+                                                click.echo(f"         {i}. {error[:77]}...")
+                                                click.echo(f"            {error[77:]}")
+                                            else:
+                                                click.echo(f"         {i}. {error}")
+                                    
+                                    click.echo()  # Empty line between VMs
+                                    
+                                except Exception as e:
+                                    click.echo(f"    [ERROR] {guest}: Health check failed - {e}")
+                            
+                            ip_manager.close()
+                            
+                        except ImportError:
+                            click.echo(f"    WARNING:  VM health checking not available")
+                        except Exception as e:
+                            click.echo(f"    [ERROR] Health check error: {e}")
+                    
+                    elif resources.get('guests'):
+                        click.echo(f"    💡 Use --verbose to see detailed VM health status")
         
         else:
-            click.echo(f"  ❌ Range not found in orchestrator")
+            click.echo(f"  [ERROR] Range not found in orchestrator")
         
         # Check filesystem regardless
         range_dir = config.cyber_range_dir / range_id
         
         if range_dir.exists():
-            click.echo(f"  📁 Directory: {range_dir}")
-            
-            # Find related files
-            import os
-            all_files = os.listdir(range_dir)
-            detail_files = [f for f in all_files if f.startswith("range_details-") and f.endswith(".yml")]
-            notification_files = [f for f in all_files if f.startswith("range_notification-") and f.endswith(".txt")]
-            
-            if detail_files:
-                click.echo(f"  📄 Detail files: {len(detail_files)}")
-                if verbose:
-                    for detail_file in detail_files:
-                        click.echo(f"     {detail_file.name}")
-            
-            if notification_files:
-                click.echo(f"  📢 Notification files: {len(notification_files)}")
-                if verbose:
-                    for notification_file in notification_files:
-                        click.echo(f"     {notification_file.name}")
+            click.echo(f"  DIR: Directory: {range_dir}")
             
             # Show directory contents if verbose
             if verbose:
                 try:
-                    contents = list(range_dir.iterdir())
+                    contents = []
+                    for item in range_dir.iterdir():
+                        contents.append(item)
+                    
                     click.echo(f"  Directory contents ({len(contents)} items):")
                     for item in sorted(contents):
-                        item_type = "📁" if item.is_dir() else "📄"
+                        item_type = "DIR:" if item.is_dir() else "FILE:"
                         click.echo(f"    {item_type} {item.name}")
+                        
                 except Exception as e:
-                    click.echo(f"    Error reading directory: {e}")
+                    click.echo(f"    Could not list directory contents: {e}")
         else:
             if not range_metadata:
-                click.echo(f"  ❌ Range {range_id} not found (no orchestrator record, no filesystem directory)")
+                click.echo(f"  [ERROR] Range {range_id} not found (no orchestrator record, no filesystem directory)")
                 sys.exit(1)
             else:
-                click.echo(f"  ⚠️  Range exists in orchestrator but no filesystem directory found")
+                click.echo(f"  WARNING:  Range exists in orchestrator but no filesystem directory found")
                 
     except Exception as e:
-        click.echo(f"❌ Error checking range status: {e}", err=True)
+        click.echo(f"[ERROR] Error checking range status: {e}", err=True)
         if verbose:
             import traceback
             traceback.print_exc()
@@ -605,10 +723,10 @@ def config_init(ctx, output: Path):
     
     try:
         settings = create_default_config(output)
-        click.echo(f"✅ Default configuration file created: {output}")
+        click.echo(f"[OK] Default configuration file created: {output}")
         click.echo("Please edit the configuration file to suit your environment")
     except Exception as e:
-        click.echo(f"❌ Failed to create configuration file: {e}", err=True)
+        click.echo(f"[ERROR] Failed to create configuration file: {e}", err=True)
 
 
 @cli.command()
@@ -622,23 +740,23 @@ def validate(ctx):
     
     # Check paths
     if not config.cyris_path.exists():
-        click.echo(f"❌ CyRIS path does not exist: {config.cyris_path}")
+        click.echo(f"[ERROR] CyRIS path does not exist: {config.cyris_path}")
         errors += 1
     else:
-        click.echo(f"✅ CyRIS path: {config.cyris_path}")
+        click.echo(f"[OK] CyRIS path: {config.cyris_path}")
     
     if not config.cyber_range_dir.exists():
-        click.echo(f"❌ Cyber range directory does not exist: {config.cyber_range_dir}")
+        click.echo(f"[ERROR] Cyber range directory does not exist: {config.cyber_range_dir}")
         errors += 1
     else:
-        click.echo(f"✅ Cyber range directory: {config.cyber_range_dir}")
+        click.echo(f"[OK] Cyber range directory: {config.cyber_range_dir}")
     
     # Check legacy scripts
     legacy_script = config.cyris_path / 'main' / 'cyris.py'
     if legacy_script.exists():
-        click.echo(f"✅ Legacy script available: {legacy_script}")
+        click.echo(f"[OK] Legacy script available: {legacy_script}")
     else:
-        click.echo(f"⚠️  Legacy script not available: {legacy_script}")
+        click.echo(f"WARNING:  Legacy script not available: {legacy_script}")
     
     # Check example files
     examples_dir = config.cyris_path / 'examples'
@@ -646,16 +764,16 @@ def validate(ctx):
         try:
             import os
             example_files = [f for f in os.listdir(examples_dir) if f.endswith('.yml')]
-            click.echo(f"✅ Example files: {len(example_files)} found")
+            click.echo(f"[OK] Example files: {len(example_files)} found")
         except Exception as e:
-            click.echo(f"⚠️  Error checking example files: {e}")
+            click.echo(f"WARNING:  Error checking example files: {e}")
     else:
-        click.echo(f"⚠️  Examples directory does not exist: {examples_dir}")
+        click.echo(f"WARNING:  Examples directory does not exist: {examples_dir}")
     
     if errors == 0:
         click.echo("🎉 Environment validation passed!")
     else:
-        click.echo(f"❌ Found {errors} issues")
+        click.echo(f"[ERROR] Found {errors} issues")
         sys.exit(1)
 
 
@@ -674,7 +792,7 @@ def legacy_run(ctx, args):
     legacy_script = config.cyris_path / 'main' / 'cyris.py'
     
     if not legacy_script.exists():
-        click.echo(f"❌ Legacy script does not exist: {legacy_script}", err=True)
+        click.echo(f"[ERROR] Legacy script does not exist: {legacy_script}", err=True)
         sys.exit(1)
     
     # Build command
@@ -691,7 +809,7 @@ def legacy_run(ctx, args):
         click.echo("\nOperation interrupted by user")
         sys.exit(1)
     except Exception as e:
-        click.echo(f"❌ Execution failed: {e}", err=True)
+        click.echo(f"[ERROR] Execution failed: {e}", err=True)
         sys.exit(1)
 
 
@@ -703,7 +821,7 @@ def main(args=None):
         click.echo("\nOperation interrupted by user")
         sys.exit(1)
     except Exception as e:
-        click.echo(f"❌ Unexpected error: {e}", err=True)
+        click.echo(f"[ERROR] Unexpected error: {e}", err=True)
         sys.exit(1)
 
 
@@ -723,7 +841,7 @@ def _check_running_vms(provider):
             if cyris_vms:
                 click.echo(f"\nRunning KVM VMs (potentially orphaned):")
                 for vm in cyris_vms:
-                    click.echo(f"  🔴 {vm} (running but not in orchestrator)")
+                    click.echo(f"  [ERROR] {vm} (running but not in orchestrator)")
                 click.echo(f"  Found {len(cyris_vms)} CyRIS VMs running in KVM")
                 click.echo("  These VMs may be from previous sessions or failed cleanups.")
                 click.echo("  Use 'virsh --connect qemu:///session destroy <vm-name>' to stop them")
@@ -767,13 +885,13 @@ def ssh_info(ctx, range_id: str):
         # Get range information
         range_metadata = orchestrator.get_range(range_id)
         if not range_metadata:
-            click.echo(f"❌ Range {range_id} not found", err=True)
+            click.echo(f"[ERROR] Range {range_id} not found", err=True)
             sys.exit(1)
         
         # Get range resources
         resources = orchestrator.get_range_resources(range_id)
         if not resources or not resources.get('guests'):
-            click.echo(f"❌ No VMs found for range {range_id}", err=True)
+            click.echo(f"[ERROR] No VMs found for range {range_id}", err=True)
             sys.exit(1)
         
         click.echo(f"SSH Connection Information for Range {range_id}:")
@@ -781,31 +899,106 @@ def ssh_info(ctx, range_id: str):
         click.echo(f"Status: {range_metadata.status.value}")
         click.echo("=" * 60)
         
+        # Get libvirt URI from range metadata for IP discovery
+        libvirt_uri = "qemu:///system"
+        if range_metadata.provider_config:
+            libvirt_uri = range_metadata.provider_config.get('libvirt_uri', libvirt_uri)
+        
+        # Initialize IP manager for discovering VM IPs
+        ip_manager = None
+        try:
+            from ..tools.vm_ip_manager import VMIPManager
+            ip_manager = VMIPManager(libvirt_uri=libvirt_uri)
+        except ImportError:
+            pass
+        
         # Get SSH info for each VM
         guest_ids = resources.get('guests', [])
         for vm_id in guest_ids:
+            click.echo(f"\nVM:  VM: {vm_id}")
+            
+            # Get comprehensive health information
+            vm_ip_addresses = []
+            if ip_manager:
+                try:
+                    health_info = ip_manager.get_vm_health_info(vm_id)
+                    
+                    # Simple status based on health
+                    status_icon = '[OK]' if health_info.is_healthy else '[ERROR]'
+                    
+                    click.echo(f"   {status_icon} Status: {health_info.libvirt_status} → {'healthy' if health_info.is_healthy else 'unhealthy'}")
+                    
+                    if health_info.ip_addresses:
+                        vm_ip_addresses = health_info.ip_addresses
+                        click.echo(f"   IP: IP Addresses: {', '.join(vm_ip_addresses)}")
+                        
+                        if health_info.network_reachable:
+                            click.echo(f"   NET: Network: Reachable [OK]")
+                        else:
+                            click.echo(f"   NET: Network: Not reachable WARNING:")
+                        
+                        # Show direct SSH commands only if healthy
+                        if health_info.is_healthy:
+                            click.echo(f"   SSH: SSH Commands:")
+                            for ip in vm_ip_addresses:
+                                click.echo(f"      ssh user@{ip}")
+                                click.echo(f"      ssh root@{ip}  # if root access is configured")
+                        else:
+                            click.echo(f"   WARNING:  SSH may not be available due to VM issues")
+                    else:
+                        click.echo(f"   IP: IP Address: Not assigned")
+                    
+                    # Show uptime if available
+                    if health_info.uptime:
+                        click.echo(f"   TIME:  Uptime: {health_info.uptime}")
+                    
+                    # Show disk path if available
+                    if health_info.disk_path:
+                        click.echo(f"   DISK: Disk: {health_info.disk_path}")
+                    
+                    # Show all error details directly
+                    if health_info.error_details:
+                        click.echo(f"   INFO: Error Details:")
+                        for i, error in enumerate(health_info.error_details, 1):
+                            # For very long errors, wrap them nicely
+                            if len(error) > 70:
+                                click.echo(f"      {i}. {error[:67]}...")
+                                click.echo(f"         {error[67:]}")
+                            else:
+                                click.echo(f"      {i}. {error}")
+                            
+                except Exception as e:
+                    click.echo(f"   [ERROR] Health check failed: {e}")
+            
+            # Get traditional SSH info from provider
             ssh_info_data = provider.get_vm_ssh_info(vm_id)
             if ssh_info_data:
-                click.echo(f"\n🖥️  VM: {vm_id}")
-                click.echo(f"   Connection Type: {ssh_info_data['connection_type']}")
+                click.echo(f"   🔗 Connection Type: {ssh_info_data['connection_type']}")
                 
                 if ssh_info_data['connection_type'] == 'bridge':
-                    click.echo(f"   Network: {ssh_info_data.get('network', 'unknown')}")
-                    click.echo(f"   MAC Address: {ssh_info_data.get('mac_address', 'unknown')}")
-                    click.echo(f"   SSH Port: {ssh_info_data.get('ssh_port', 22)}")
-                    click.echo(f"   Notes: {ssh_info_data.get('notes', '')}")
+                    click.echo(f"   NET: Network: {ssh_info_data.get('network', 'unknown')}")
+                    click.echo(f"   🔗 MAC Address: {ssh_info_data.get('mac_address', 'unknown')}")
+                    click.echo(f"   🚪 SSH Port: {ssh_info_data.get('ssh_port', 22)}")
+                    if ssh_info_data.get('notes'):
+                        click.echo(f"   📝 Notes: {ssh_info_data['notes']}")
                     
-                    if 'suggested_commands' in ssh_info_data:
-                        click.echo("   📋 Suggested commands to find IP:")
+                    # Only show manual discovery commands if IP wasn't found automatically
+                    if not vm_ip_addresses and 'suggested_commands' in ssh_info_data:
+                        click.echo("   📋 Manual IP discovery commands:")
                         for cmd in ssh_info_data['suggested_commands']:
                             click.echo(f"      {cmd}")
                 
                 elif ssh_info_data['connection_type'] == 'user_mode':
-                    click.echo(f"   Notes: {ssh_info_data.get('notes', '')}")
-                    click.echo(f"   Alternative: {ssh_info_data.get('alternative', '')}")
+                    if ssh_info_data.get('notes'):
+                        click.echo(f"   📝 Notes: {ssh_info_data['notes']}")
+                    if ssh_info_data.get('alternative'):
+                        click.echo(f"   🔄 Alternative: {ssh_info_data['alternative']}")
             else:
-                click.echo(f"\n🖥️  VM: {vm_id}")
-                click.echo("   ❌ SSH information not available")
+                if not vm_ip_addresses:
+                    click.echo("   [ERROR] SSH information not available")
+        
+        if ip_manager:
+            ip_manager.close()
         
         click.echo("\n💡 Tips:")
         click.echo("   • For bridge networking, VMs get DHCP IP addresses")
@@ -813,7 +1006,7 @@ def ssh_info(ctx, range_id: str):
         click.echo("   • VNC console is available on all VMs for direct access")
         
     except Exception as e:
-        click.echo(f"❌ Error getting SSH info: {e}", err=True)
+        click.echo(f"[ERROR] Error getting SSH info: {e}", err=True)
         if verbose:
             import traceback
             traceback.print_exc()
@@ -855,9 +1048,9 @@ def setup_permissions(ctx, dry_run: bool):
         # Check system compatibility first
         compat_info = manager.check_libvirt_compatibility()
         
-        click.echo(f"🔍 Detected libvirt user: {compat_info['libvirt_user'] or 'Not found'}")
-        click.echo(f"🔍 ACL support: {'✅' if compat_info['acl_supported'] else '❌'}")
-        click.echo(f"🔍 Current user groups: {', '.join(compat_info['current_user_groups'])}")
+        click.echo(f"INFO: Detected libvirt user: {compat_info['libvirt_user'] or 'Not found'}")
+        click.echo(f"INFO: ACL support: {'[OK]' if compat_info['acl_supported'] else '[ERROR]'}")
+        click.echo(f"INFO: Current user groups: {', '.join(compat_info['current_user_groups'])}")
         
         if compat_info['recommendations']:
             click.echo("\n💡 Recommendations:")
@@ -865,11 +1058,11 @@ def setup_permissions(ctx, dry_run: bool):
                 click.echo(f"   • {rec}")
         
         if not compat_info['libvirt_user']:
-            click.echo("❌ No libvirt user found. Please install libvirt-daemon-system.")
+            click.echo("[ERROR] No libvirt user found. Please install libvirt-daemon-system.")
             sys.exit(1)
         
         if not compat_info['acl_supported']:
-            click.echo("❌ ACL commands not found. Please install the 'acl' package.")
+            click.echo("[ERROR] ACL commands not found. Please install the 'acl' package.")
             sys.exit(1)
         
         click.echo("\n🔧 Setting up permissions...")
@@ -878,21 +1071,21 @@ def setup_permissions(ctx, dry_run: bool):
         success = manager.setup_cyris_environment(config.cyris_path)
         
         if success:
-            click.echo("✅ Successfully configured libvirt permissions")
+            click.echo("[OK] Successfully configured libvirt permissions")
             click.echo("\n💡 You can now use bridge networking with:")
             click.echo("   cyris create --network-mode bridge --enable-ssh examples/basic.yml")
         else:
-            click.echo("⚠️  Some permission configurations failed")
+            click.echo("WARNING:  Some permission configurations failed")
             click.echo("   Check the verbose output for details")
             if not verbose:
                 click.echo("   Run with --verbose for more information")
             sys.exit(1)
             
     except ImportError as e:
-        click.echo(f"❌ Failed to import permission manager: {e}", err=True)
+        click.echo(f"[ERROR] Failed to import permission manager: {e}", err=True)
         sys.exit(1)
     except Exception as e:
-        click.echo(f"❌ Error setting up permissions: {e}", err=True)
+        click.echo(f"[ERROR] Error setting up permissions: {e}", err=True)
         if verbose:
             import traceback
             traceback.print_exc()
