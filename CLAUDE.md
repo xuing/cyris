@@ -246,6 +246,18 @@ The project has undergone modernization but is not complete. Many functions lack
 - Ensure backward compatibility with existing YAML descriptions
 - Validate changes against existing examples in `examples/` directory
 
+### TDD Development Pitfalls and Solutions
+
+**Critical Testing Issues Encountered**:
+- **CLI测试导入路径**: 使用 `patch('cyris.services.orchestrator.RangeOrchestrator')` 而不是 `patch('cyris.cli.main.get_orchestrator')` 来正确模拟CLI测试
+- **文本匹配断言**: CLI输出是分行的独立消息，测试应检查 `"destroyed successfully"` 和 `"removed completely"` 而不是组合消息 `"destroyed and removed successfully"`
+- **参数传递bug发现**: TDD测试发现CLI `destroy --rm` 缺少 `force` 参数传递，修复: `orchestrator.remove_range(range_id, force=force)`
+
+**TDD最佳实践**:
+- 始终先写测试，再实现功能，最后修复所有测试 - 这种方法能发现实现中的关键bug
+- CLI测试需要仔细匹配实际输出格式，不要假设消息组合方式
+- 通过系统性测试分析区分程序bug vs测试期望错误
+
 ### Troubleshooting Common Issues
 - "No route to host" errors: Destroy partially created ranges and recreate
 - KVM domain cleanup: Use `destroy_all_cr.sh CYRIS_PATH CYBER_RANGE_PATH` for complete cleanup
