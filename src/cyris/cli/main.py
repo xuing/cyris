@@ -16,6 +16,7 @@ from rich.table import Table
 from rich.panel import Panel
 from rich.text import Text
 from rich.markup import escape
+from rich.status import Status
 from rich import print as rich_print
 
 from ..config.parser import parse_modern_config, ConfigurationError
@@ -25,35 +26,40 @@ from ..config.settings import CyRISSettings
 # Disable logging to prevent output mixing - Rich handles all output
 logging.disable(logging.CRITICAL)
 
-# Create global Rich console
+# Create Rich consoles following best practices
 console = Console()
+error_console = Console(stderr=True, style="bold red")
 logger = logging.getLogger(__name__)
 
 
-# Rich-based status indicators with colors and styles
+# Rich-based status indicators using proper Text objects
 def get_status_text(status: str, label: str = None) -> Text:
-    """Get Rich Text with appropriate styling for status"""
+    """Get Rich Text object with appropriate styling for status"""
     status_lower = status.lower()
-    label_text = label or status
+    label_text = escape(label or status)  # Always escape text content
     
-    # Define status styles with Rich markup
+    # Use Rich emoji names and proper styling
     styles = {
-        'active': ('●', 'green'),
-        'creating': ('●', 'yellow'), 
-        'error': ('●', 'red'),
-        'ok': ('✓', 'green'),
-        'fail': ('✗', 'red'),
-        'warning': ('!', 'orange3'),
-        'info': ('i', 'blue'),
-        'running': ('▶', 'green'),
-        'stopped': ('■', 'red'),
-        'healthy': ('♥', 'green'),
-        'unhealthy': ('✗', 'red')
+        'active': (':green_circle:', 'green'),
+        'creating': (':yellow_circle:', 'yellow'), 
+        'error': (':red_circle:', 'red'),
+        'ok': (':check_mark:', 'green'),
+        'fail': (':cross_mark:', 'red'),
+        'warning': (':warning:', 'orange3'),
+        'info': (':information:', 'blue'),
+        'running': (':arrow_forward:', 'green'),
+        'stopped': (':stop_button:', 'red'),
+        'healthy': (':green_heart:', 'green'),
+        'unhealthy': (':cross_mark:', 'red')
     }
     
     if status_lower in styles:
-        symbol, color = styles[status_lower]
-        return Text(f"{symbol} {label_text}", style=color)
+        emoji, color = styles[status_lower]
+        # Create Text object with proper emoji handling
+        text = Text()
+        text.append(f"{emoji} ", style=color)
+        text.append(label_text, style=color)
+        return text
     else:
         return Text(f"• {label_text}", style="dim")
 
@@ -190,10 +196,10 @@ def create(ctx, description_file: Path, range_id: Optional[int], dry_run: bool, 
             if result:
                 click.echo(f"[OK] Validation successful. Would create range: {result}")
             else:
-                click.echo("[ERROR] Validation failed")
+                error_console.print("Validation failed")
                 sys.exit(1)
         except Exception as e:
-            click.echo(f"[ERROR] Validation error: {e}", err=True)
+            error_console.print(f"Validation error: {escape(str(e))}")
             if verbose:
                 import traceback
                 traceback.print_exc()
@@ -299,8 +305,9 @@ def list(ctx, range_id: Optional[int], list_all: bool, verbose: bool):
                 _check_running_vms(provider)
                 return
             
-            # Display orchestrated ranges using Rich
-            console.print(f"\n[bold blue]Cyber Ranges[/bold blue] ([dim]{'all' if list_all else 'active only'}[/dim])")
+            # Display orchestrated ranges using Rich markup properly
+            filter_text = "all" if list_all else "active only"
+            console.print(f"\n[bold blue]Cyber Ranges[/bold blue] [dim]({filter_text})[/dim]")
             
             displayed_count = 0
             for range_meta in sorted(ranges, key=lambda r: r.created_at):
@@ -312,11 +319,17 @@ def list(ctx, range_id: Optional[int], list_all: bool, verbose: bool):
                 # Create status indicator using Rich Text
                 status_text = get_status_text(range_meta.status.value, range_meta.status.value.upper())
                 
-                # Range header with status
-                console.print(f"  {status_text} [bold]{range_meta.range_id}[/bold]: {range_meta.name}")
+                # Range header with status - use Rich Text objects for safety
+                header = Text("  ")
+                header.append_text(status_text)
+                header.append(f" {range_meta.range_id}: ", style="bold")
+                header.append(escape(range_meta.name))
+                console.print(header)
+                
+                # Range details with proper escaping
                 console.print(f"     [dim]Created:[/dim] {range_meta.created_at.strftime('%Y-%m-%d %H:%M')}")
                 if range_meta.description:
-                    console.print(f"     [dim]Description:[/dim] {range_meta.description}")
+                    console.print(f"     [dim]Description:[/dim] {escape(range_meta.description)}")
                 
                 # Show VM status information if verbose and range is active
                 if verbose and range_meta.status.value in ['active', 'creating']:
@@ -601,20 +614,30 @@ def status(ctx, range_id: str, verbose: bool):
             table.add_column("Field", style="dim", width=15)
             table.add_column("Value")
             
-            # Add status with color
+            # Add status with proper Rich Text object
             status_text = get_status_text(range_metadata.status.value, range_metadata.status.value.upper())
             table.add_row("Status", status_text)
-            table.add_row("Name", f"[bold]{range_metadata.name}[/bold]")
-            table.add_row("Description", range_metadata.description)
+            
+            # Use Rich markup safely with escape
+            name_text = Text(escape(range_metadata.name), style="bold")
+            table.add_row("Name", name_text)
+            table.add_row("Description", escape(range_metadata.description))
             table.add_row("Created", range_metadata.created_at.strftime('%Y-%m-%d %H:%M:%S'))
             table.add_row("Last Modified", range_metadata.last_modified.strftime('%Y-%m-%d %H:%M:%S'))
             
             if range_metadata.owner:
-                table.add_row("Owner", range_metadata.owner)
+                table.add_row("Owner", escape(range_metadata.owner))
             
             if range_metadata.tags:
-                tags_str = ', '.join(f"[cyan]{k}[/cyan]={v}" for k, v in range_metadata.tags.items())
-                table.add_row("Tags", tags_str)
+                # Create tags text safely
+                tags_text = Text()
+                for i, (k, v) in enumerate(range_metadata.tags.items()):
+                    if i > 0:
+                        tags_text.append(", ")
+                    tags_text.append(escape(k), style="cyan")
+                    tags_text.append("=")
+                    tags_text.append(escape(str(v)))
+                table.add_row("Tags", tags_text)
             
             console.print(table)
             
@@ -653,24 +676,32 @@ def status(ctx, range_id: str, verbose: bool):
                                     vm_table.add_column("", style="dim", width=12)
                                     vm_table.add_column("")
                                     
-                                    vm_table.add_row("Libvirt", f"[cyan]{health_info.libvirt_status}[/cyan]")
-                                    vm_table.add_row("Healthy", f"[green]Yes[/green]" if health_info.is_healthy else f"[red]No[/red]")
+                                    # Use Text objects for safe styling
+                                    libvirt_text = Text(escape(health_info.libvirt_status), style="cyan")
+                                    vm_table.add_row("Libvirt", libvirt_text)
+                                    
+                                    healthy_text = Text("Yes", style="green") if health_info.is_healthy else Text("No", style="red")
+                                    vm_table.add_row("Healthy", healthy_text)
                                     
                                     if health_info.ip_addresses:
                                         ip_list = ', '.join(health_info.ip_addresses)
-                                        vm_table.add_row("IP Address", f"[green]{ip_list}[/green]")
+                                        ip_text = Text(escape(ip_list), style="green")
+                                        vm_table.add_row("IP Address", ip_text)
+                                        
                                         if health_info.network_reachable:
-                                            vm_table.add_row("Network", f"[green]✓ Reachable[/green]")
+                                            network_text = Text(":check_mark: Reachable", style="green")
                                         else:
-                                            vm_table.add_row("Network", f"[yellow]⚠ Not reachable[/yellow]")
+                                            network_text = Text(":warning: Not reachable", style="yellow")
+                                        vm_table.add_row("Network", network_text)
                                     else:
-                                        vm_table.add_row("IP Address", f"[dim]Not assigned[/dim]")
+                                        vm_table.add_row("IP Address", Text("Not assigned", style="dim"))
                                     
                                     if health_info.uptime:
-                                        vm_table.add_row("Uptime", health_info.uptime)
+                                        vm_table.add_row("Uptime", escape(health_info.uptime))
                                     
                                     if health_info.disk_path:
-                                        vm_table.add_row("Disk", f"[dim]{escape(health_info.disk_path)}[/dim]")
+                                        disk_text = Text(escape(health_info.disk_path), style="dim")
+                                        vm_table.add_row("Disk", disk_text)
                                     
                                     console.print(vm_table)
                                     
