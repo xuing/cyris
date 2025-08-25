@@ -15,13 +15,33 @@ from ..config.parser import parse_modern_config, ConfigurationError
 from ..config.settings import CyRISSettings
 
 
-# Setup logging
+# Setup logging - disable by default to avoid output mixing
 import sys
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    stream=sys.stderr
-)
+
+# Disable logging by default for CLI commands to prevent output corruption
+# Only enable if explicitly requested with --verbose
+def setup_logging(verbose: bool = False):
+    """Setup logging configuration"""
+    if verbose:
+        logging.basicConfig(
+            level=logging.DEBUG,
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            stream=sys.stderr,
+            force=True  # Override any existing config
+        )
+    else:
+        # Disable all logging to prevent output mixing
+        logging.basicConfig(
+            level=logging.CRITICAL + 1,  # Higher than CRITICAL to disable all
+            handlers=[],
+            force=True
+        )
+        # Also disable specific loggers that might have been configured
+        for logger_name in ['cyris', 'cyris.infrastructure', 'cyris.services', 'cyris.tools']:
+            logging.getLogger(logger_name).setLevel(logging.CRITICAL + 1)
+
+# Initialize with no logging by default
+setup_logging(False)
 logger = logging.getLogger(__name__)
 
 
@@ -183,9 +203,8 @@ def cli(ctx, config: Optional[str], verbose: bool, version: bool):
         click.echo("CyRIS v1.4.0 - Cyber Range Instantiation System")
         ctx.exit()
     
-    # Set logging level
-    if verbose:
-        logging.getLogger().setLevel(logging.DEBUG)
+    # Set logging level - only enable logging if verbose is requested
+    setup_logging(verbose)
     
     # Initialize context
     ctx.ensure_object(dict)
@@ -345,6 +364,9 @@ def create(ctx, description_file: Path, range_id: Optional[int], dry_run: bool, 
 def list(ctx, range_id: Optional[int], list_all: bool, verbose: bool):
     """List cyber ranges"""
     config: CyRISSettings = get_config(ctx)
+    
+    # Enable logging if verbose is requested for this specific command
+    setup_logging(verbose)
     
     try:
         # Flush stdout to ensure proper ordering with stderr logging
