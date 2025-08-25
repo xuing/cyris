@@ -11,36 +11,51 @@ import logging
 import locale
 import os
 
+from rich.console import Console
+from rich.table import Table
+from rich.panel import Panel
+from rich.text import Text
+from rich.markup import escape
+from rich import print as rich_print
+
 from ..config.parser import parse_modern_config, ConfigurationError
 from ..config.settings import CyRISSettings
 
 
-# Simple unified logging - just disable it completely for CLI
-import sys
-import os
-
-# Disable ALL logging for CLI commands to prevent output mixing
-# This is the simplest solution - just turn off all logs
+# Disable logging to prevent output mixing - Rich handles all output
 logging.disable(logging.CRITICAL)
 
+# Create global Rich console
+console = Console()
 logger = logging.getLogger(__name__)
 
 
-# Simple status indicators - ASCII by default, emoji if requested
-def get_status_indicator(status: str) -> str:
-    """Get status indicator - simple ASCII by default, emoji if CYRIS_ENABLE_EMOJI=1"""
-    use_emoji = os.environ.get('CYRIS_ENABLE_EMOJI', '').strip() == '1'
+# Rich-based status indicators with colors and styles
+def get_status_text(status: str, label: str = None) -> Text:
+    """Get Rich Text with appropriate styling for status"""
+    status_lower = status.lower()
+    label_text = label or status
     
-    if use_emoji:
-        return {
-            'active': '🟢', 'creating': '🟡', 'error': '🔴',
-            'ok': '✅', 'fail': '❌', 'warning': '⚠️', 'info': '💡'
-        }.get(status.lower(), f'🔸')
+    # Define status styles with Rich markup
+    styles = {
+        'active': ('●', 'green'),
+        'creating': ('●', 'yellow'), 
+        'error': ('●', 'red'),
+        'ok': ('✓', 'green'),
+        'fail': ('✗', 'red'),
+        'warning': ('!', 'orange3'),
+        'info': ('i', 'blue'),
+        'running': ('▶', 'green'),
+        'stopped': ('■', 'red'),
+        'healthy': ('♥', 'green'),
+        'unhealthy': ('✗', 'red')
+    }
+    
+    if status_lower in styles:
+        symbol, color = styles[status_lower]
+        return Text(f"{symbol} {label_text}", style=color)
     else:
-        return {
-            'active': '[ACTIVE]', 'creating': '[CREATING]', 'error': '[ERROR]',
-            'ok': '[OK]', 'fail': '[ERROR]', 'warning': '[WARN]', 'info': '[INFO]'
-        }.get(status.lower(), f'[{status.upper()}]')
+        return Text(f"• {label_text}", style="dim")
 
 
 # Simple output - just use click.echo directly, no need for complex wrapper
@@ -284,8 +299,8 @@ def list(ctx, range_id: Optional[int], list_all: bool, verbose: bool):
                 _check_running_vms(provider)
                 return
             
-            # Display orchestrated ranges
-            click.echo(f"Cyber ranges ({'all' if list_all else 'active only'}):")
+            # Display orchestrated ranges using Rich
+            console.print(f"\n[bold blue]Cyber Ranges[/bold blue] ([dim]{'all' if list_all else 'active only'}[/dim])")
             
             displayed_count = 0
             for range_meta in sorted(ranges, key=lambda r: r.created_at):
@@ -294,19 +309,14 @@ def list(ctx, range_id: Optional[int], list_all: bool, verbose: bool):
                     
                 displayed_count += 1
                 
-                # Use smart status indicators with emoji fallback
-                if range_meta.status.value == "active":
-                    status_indicator = get_status_indicator('active')
-                elif range_meta.status.value == "creating":
-                    status_indicator = get_status_indicator('creating')
-                else:
-                    status_indicator = get_status_indicator('error')
+                # Create status indicator using Rich Text
+                status_text = get_status_text(range_meta.status.value, range_meta.status.value.upper())
                 
-                click.echo(f"  {status_indicator} {range_meta.range_id}: {range_meta.name}")
-                click.echo(f"     Status: {range_meta.status.value}")
-                click.echo(f"     Created: {range_meta.created_at.strftime('%Y-%m-%d %H:%M')}")
+                # Range header with status
+                console.print(f"  {status_text} [bold]{range_meta.range_id}[/bold]: {range_meta.name}")
+                console.print(f"     [dim]Created:[/dim] {range_meta.created_at.strftime('%Y-%m-%d %H:%M')}")
                 if range_meta.description:
-                    click.echo(f"     Description: {range_meta.description}")
+                    console.print(f"     [dim]Description:[/dim] {range_meta.description}")
                 
                 # Show VM status information if verbose and range is active
                 if verbose and range_meta.status.value in ['active', 'creating']:
@@ -321,44 +331,46 @@ def list(ctx, range_id: Optional[int], list_all: bool, verbose: bool):
                             from ..tools.vm_ip_manager import VMIPManager
                             ip_manager = VMIPManager(libvirt_uri=libvirt_uri)
                             
-                            vm_statuses = []
+                            vm_texts = []
                             has_issues = False
                             
                             for guest in resources['guests']:
                                 try:
                                     health_info = ip_manager.get_vm_health_info(guest)
                                     
-                                    # Use smart status indicators with emoji fallback
-                                    status_icon = get_status_indicator('ok') if health_info.is_healthy else get_status_indicator('fail')
-                                    compact_status = health_info.get_compact_status()
-                                    
-                                    vm_status = f"{status_icon} {guest}: {compact_status}"
-                                    vm_statuses.append(vm_status)
-                                    
-                                    # Track if there are any issues
-                                    if health_info.error_details or not health_info.is_healthy:
+                                    # Create Rich Text for VM status
+                                    if health_info.is_healthy:
+                                        vm_text = get_status_text('healthy', f"{guest}: {health_info.get_compact_status()}")
+                                    else:
+                                        vm_text = get_status_text('unhealthy', f"{guest}: {health_info.get_compact_status()}")
                                         has_issues = True
+                                    
+                                    vm_texts.append(vm_text)
                                         
                                 except Exception:
-                                    vm_statuses.append(f"[FAIL] {guest}: check failed")
+                                    vm_text = get_status_text('error', f"{guest}: check failed")
+                                    vm_texts.append(vm_text)
                                     has_issues = True
                             
-                            if vm_statuses:
-                                click.echo(f"     VMs: {' | '.join(vm_statuses)}")
+                            if vm_texts:
+                                # Display VMs in a clean format
+                                console.print("     [bold]VMs:[/bold]")
+                                for vm_text in vm_texts:
+                                    console.print(f"       {vm_text}")
                                 
-                                # If there are issues, show a hint
+                                # Show hint if there are issues
                                 if has_issues:
-                                    click.echo(f"     HINT: Issues detected - use 'cyris status {range_meta.range_id} --verbose' for details")
+                                    console.print(f"     [yellow]💡 Issues detected - use 'cyris status {range_meta.range_id} --verbose' for details[/yellow]")
                             
                             ip_manager.close()
                             
                         except ImportError:
-                            click.echo(f"     WARNING:  VM status checking not available")
+                            console.print("     [yellow]⚠️  VM status checking not available[/yellow]")
                         except Exception:
                             pass  # Silently skip health check errors in list mode
             
             if displayed_count == 0:
-                click.echo("  No ranges match the filter criteria")
+                console.print("  [dim]No ranges match the filter criteria[/dim]")
         
         # Ensure all output is flushed before any remaining logs
         sys.stdout.flush()
@@ -569,7 +581,7 @@ def status(ctx, range_id: str, verbose: bool):
     """
     config: CyRISSettings = get_config(ctx)
     
-    click.echo(f"Cyber range {range_id} status:")
+    console.print(f"\n[bold blue]Cyber Range Status[/bold blue]: [bold]{range_id}[/bold]")
     
     try:
         from ..services.orchestrator import RangeOrchestrator
@@ -584,37 +596,40 @@ def status(ctx, range_id: str, verbose: bool):
         range_metadata = orchestrator.get_range(range_id)
         
         if range_metadata:
-            # Show orchestrator information with smart status indicators
-            if range_metadata.status.value == "active":
-                status_icon = get_status_indicator('active')
-            elif range_metadata.status.value == "creating":
-                status_icon = get_status_indicator('creating')
-            else:
-                status_icon = get_status_indicator('error')
-            click.echo(f"  {status_icon} Status: {range_metadata.status.value}")
-            click.echo(f"  Name: {range_metadata.name}")
-            click.echo(f"  Description: {range_metadata.description}")
-            click.echo(f"  Created: {range_metadata.created_at.strftime('%Y-%m-%d %H:%M:%S')}")
-            click.echo(f"  Last Modified: {range_metadata.last_modified.strftime('%Y-%m-%d %H:%M:%S')}")
+            # Create a beautiful info table using Rich
+            table = Table(show_header=False, show_edge=False, padding=(0, 1))
+            table.add_column("Field", style="dim", width=15)
+            table.add_column("Value")
+            
+            # Add status with color
+            status_text = get_status_text(range_metadata.status.value, range_metadata.status.value.upper())
+            table.add_row("Status", status_text)
+            table.add_row("Name", f"[bold]{range_metadata.name}[/bold]")
+            table.add_row("Description", range_metadata.description)
+            table.add_row("Created", range_metadata.created_at.strftime('%Y-%m-%d %H:%M:%S'))
+            table.add_row("Last Modified", range_metadata.last_modified.strftime('%Y-%m-%d %H:%M:%S'))
             
             if range_metadata.owner:
-                click.echo(f"  Owner: {range_metadata.owner}")
+                table.add_row("Owner", range_metadata.owner)
             
             if range_metadata.tags:
-                click.echo(f"  Tags: {range_metadata.tags}")
+                tags_str = ', '.join(f"[cyan]{k}[/cyan]={v}" for k, v in range_metadata.tags.items())
+                table.add_row("Tags", tags_str)
+            
+            console.print(table)
             
             # Show resource information
             resources = orchestrator.get_range_resources(range_id)
             if resources:
-                click.echo(f"  Resources:")
+                console.print(f"\n[bold]Resources:[/bold]")
                 if resources.get('hosts'):
-                    click.echo(f"    Hosts: {len(resources['hosts'])}")
+                    console.print(f"  Hosts: [green]{len(resources['hosts'])}[/green]")
                 if resources.get('guests'):
-                    click.echo(f"    Guests: {len(resources['guests'])}")
+                    console.print(f"  Guests: [green]{len(resources['guests'])}[/green]")
                     
                     # Show VM health information
                     if resources.get('guests') and verbose:
-                        click.echo(f"  INFO: Virtual Machine Health Status:")
+                        console.print(f"\n[bold]Virtual Machine Health Status:[/bold]")
                         
                         # Get libvirt URI from range metadata
                         libvirt_uri = "qemu:///system"
@@ -629,39 +644,47 @@ def status(ctx, range_id: str, verbose: bool):
                                 try:
                                     health_info = ip_manager.get_vm_health_info(guest)
                                     
-                                    # Smart status indicators with emoji fallback
-                                    status_icon = get_status_indicator('ok') if health_info.is_healthy else get_status_indicator('error')
+                                    # Create VM status panel using Rich
+                                    vm_status = get_status_text('healthy' if health_info.is_healthy else 'unhealthy', guest)
+                                    console.print(f"  {vm_status}")
                                     
-                                    click.echo(f"    {status_icon} {guest}")
-                                    click.echo(f"       libvirt: {health_info.libvirt_status} | healthy: {health_info.is_healthy}")
+                                    # Create detailed info table for this VM
+                                    vm_table = Table(show_header=False, show_edge=False, padding=(0, 1))
+                                    vm_table.add_column("", style="dim", width=12)
+                                    vm_table.add_column("")
+                                    
+                                    vm_table.add_row("Libvirt", f"[cyan]{health_info.libvirt_status}[/cyan]")
+                                    vm_table.add_row("Healthy", f"[green]Yes[/green]" if health_info.is_healthy else f"[red]No[/red]")
                                     
                                     if health_info.ip_addresses:
-                                        click.echo(f"       IP: IP: {', '.join(health_info.ip_addresses)}")
+                                        ip_list = ', '.join(health_info.ip_addresses)
+                                        vm_table.add_row("IP Address", f"[green]{ip_list}[/green]")
                                         if health_info.network_reachable:
-                                            click.echo(f"       NET: Network: reachable")
+                                            vm_table.add_row("Network", f"[green]✓ Reachable[/green]")
                                         else:
-                                            click.echo(f"       NET: Network: not reachable")
+                                            vm_table.add_row("Network", f"[yellow]⚠ Not reachable[/yellow]")
                                     else:
-                                        click.echo(f"       IP: IP: not assigned")
+                                        vm_table.add_row("IP Address", f"[dim]Not assigned[/dim]")
                                     
                                     if health_info.uptime:
-                                        click.echo(f"       TIME:  Uptime: {health_info.uptime}")
+                                        vm_table.add_row("Uptime", health_info.uptime)
                                     
                                     if health_info.disk_path:
-                                        click.echo(f"       DISK: Disk: {health_info.disk_path}")
+                                        vm_table.add_row("Disk", f"[dim]{escape(health_info.disk_path)}[/dim]")
                                     
-                                    # Show all error details directly
+                                    console.print(vm_table)
+                                    
+                                    # Show error details if any
                                     if health_info.error_details:
-                                        click.echo(f"       INFO: Error Details:")
+                                        console.print("    [bold red]Error Details:[/bold red]")
                                         for i, error in enumerate(health_info.error_details, 1):
-                                            # For very long errors, wrap them nicely
                                             if len(error) > 80:
-                                                click.echo(f"         {i}. {error[:77]}...")
-                                                click.echo(f"            {error[77:]}")
+                                                console.print(f"      [red]{i}.[/red] {escape(error[:77])}...")
+                                                console.print(f"          {escape(error[77:])}")
                                             else:
-                                                click.echo(f"         {i}. {error}")
+                                                console.print(f"      [red]{i}.[/red] {escape(error)}")
                                     
-                                    click.echo()  # Empty line between VMs
+                                    console.print()  # Empty line between VMs
                                     
                                 except Exception as e:
                                     click.echo(f"    [ERROR] {guest}: Health check failed - {e}")
