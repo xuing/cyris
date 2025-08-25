@@ -55,13 +55,17 @@ def get_status_text(status: str, label: str = None) -> Text:
     
     if status_lower in styles:
         emoji, color = styles[status_lower]
-        # Create Text object with proper emoji handling
-        text = Text()
-        text.append(f"{emoji} ", style=color)
-        text.append(label_text, style=color)
-        return text
+        # Create Text object with proper emoji handling using Text.assemble
+        return Text.assemble(
+            (emoji, color),
+            (" ", color),
+            (label_text, color)
+        )
     else:
-        return Text(f"• {label_text}", style="dim")
+        return Text.assemble(
+            ("• ", "dim"),
+            (label_text, "dim")
+        )
 
 
 # Simple output - just use click.echo directly, no need for complex wrapper
@@ -161,14 +165,23 @@ def create(ctx, description_file: Path, range_id: Optional[int], dry_run: bool, 
     config: CyRISSettings = get_config(ctx)
     verbose = ctx.obj['verbose']
     
-    click.echo(f"Creating cyber range: {description_file}")
+    console.print(Text.assemble(
+        ("Creating cyber range: ", "bold blue"),
+        (str(description_file), "cyan")
+    ))
     
     if verbose:
-        click.echo(f"Configuration: {config}")
-        click.echo(f"Range ID: {range_id or 'auto-assigned'}")
+        console.print(Text.assemble(
+            ("Configuration: ", "dim"),
+            (str(config), "yellow")
+        ))
+        console.print(Text.assemble(
+            ("Range ID: ", "dim"),
+            (str(range_id or 'auto-assigned'), "cyan")
+        ))
     
     if dry_run:
-        click.echo("Dry run mode - will not actually create cyber range")
+        console.print(Text("Dry run mode - will not actually create cyber range", style="bold yellow"))
         try:
             # Still create orchestrator and validate YAML in dry-run mode
             from ..services.orchestrator import RangeOrchestrator
@@ -194,12 +207,19 @@ def create(ctx, description_file: Path, range_id: Optional[int], dry_run: bool, 
             )
             
             if result:
-                click.echo(f"[OK] Validation successful. Would create range: {result}")
+                console.print(Text.assemble(
+                    ("[OK] ", "bold green"),
+                    ("Validation successful. Would create range: ", "green"),
+                    (str(result), "cyan")
+                ))
             else:
-                error_console.print("Validation failed")
+                error_console.print(Text("Validation failed", style="bold red"))
                 sys.exit(1)
         except Exception as e:
-            error_console.print(f"Validation error: {escape(str(e))}")
+            error_console.print(Text.assemble(
+                ("Validation error: ", "bold red"),
+                (escape(str(e)), "red")
+            ))
             if verbose:
                 import traceback
                 traceback.print_exc()
@@ -228,7 +248,7 @@ def create(ctx, description_file: Path, range_id: Optional[int], dry_run: bool, 
         orchestrator = RangeOrchestrator(config, provider)
         
         # Create range
-        click.echo("Initializing cyber range creation...")
+        console.print(Text("Initializing cyber range creation...", style="bold blue"))
         result = orchestrator.create_range_from_yaml(
             description_file=description_file,
             range_id=range_id,
@@ -236,13 +256,20 @@ def create(ctx, description_file: Path, range_id: Optional[int], dry_run: bool, 
         )
         
         if result:
-            click.echo(f"[OK] Cyber range created successfully: {result}")
+            console.print(Text.assemble(
+                ("[OK] ", "bold green"),
+                ("Cyber range created successfully: ", "green"),
+                (str(result), "cyan")
+            ))
         else:
-            click.echo("[ERROR] Cyber range creation failed")
+            error_console.print(Text("[ERROR] Cyber range creation failed", style="bold red"))
             sys.exit(1)
             
     except Exception as e:
-        click.echo(f"[ERROR] Error creating cyber range: {e}", err=True)
+        error_console.print(Text.assemble(
+            ("[ERROR] Error creating cyber range: ", "bold red"),
+            (str(e), "red")
+        ))
         if verbose:
             import traceback
             traceback.print_exc()
@@ -272,34 +299,69 @@ def list(ctx, range_id: Optional[int], list_all: bool, verbose: bool):
         
         if range_id:
             # Show specific range details
-            click.echo(f"Cyber range {range_id} details:")
+            console.print(Text.assemble(
+                ("Cyber range ", "bold blue"),
+                (range_id, "bold cyan"),
+                (" details:", "bold blue")
+            ))
             range_metadata = orchestrator.get_range(range_id)
             if range_metadata:
-                click.echo(f"  Name: {range_metadata.name}")
-                click.echo(f"  Status: {range_metadata.status.value}")
-                click.echo(f"  Created: {range_metadata.created_at}")
-                click.echo(f"  Description: {range_metadata.description}")
+                console.print(Text.assemble(
+                    ("  Name: ", "dim"),
+                    (range_metadata.name, "cyan")
+                ))
+                status_text = get_status_text(range_metadata.status.value, range_metadata.status.value.upper())
+                console.print(Text.assemble(
+                    ("  Status: ", "dim"),
+                    status_text
+                ))
+                console.print(Text.assemble(
+                    ("  Created: ", "dim"),
+                    (str(range_metadata.created_at), "green")
+                ))
+                console.print(Text.assemble(
+                    ("  Description: ", "dim"),
+                    (escape(range_metadata.description), "white")
+                ))
                 if range_metadata.tags:
-                    click.echo(f"  Tags: {range_metadata.tags}")
+                    console.print(Text.assemble(
+                        ("  Tags: ", "dim"),
+                        (str(range_metadata.tags), "yellow")
+                    ))
             else:
-                click.echo(f"  Range {range_id} not found in orchestrator")
+                error_console.print(Text.assemble(
+                    ("  Range ", "bold red"),
+                    (range_id, "red"),
+                    (" not found in orchestrator", "bold red")
+                ))
         else:
             # List ranges
             ranges = orchestrator.list_ranges()
             
             if not ranges:
-                click.echo("No cyber ranges found in orchestrator")
+                console.print(Text("No cyber ranges found in orchestrator", style="yellow"))
                 
                 # Fallback: Check filesystem for range directories  
                 ranges_dir = config.cyber_range_dir
                 if ranges_dir.exists():
                     range_dirs = [d for d in ranges_dir.iterdir() if d.is_dir()]
                     if range_dirs:
-                        click.echo(f"Found {len(range_dirs)} range directories on filesystem:")
+                        console.print(Text.assemble(
+                            ("Found ", "dim"),
+                            (str(len(range_dirs)), "cyan"),
+                            (" range directories on filesystem:", "dim")
+                        ))
                         for range_dir in sorted(range_dirs):
-                            click.echo(f"  {range_dir.name} (filesystem only)")
+                            console.print(Text.assemble(
+                                ("  ", ""),
+                                (range_dir.name, "cyan"),
+                                (" (filesystem only)", "dim")
+                            ))
                 else:
-                    click.echo(f"Cyber range directory does not exist: {ranges_dir}")
+                    error_console.print(Text.assemble(
+                        ("Cyber range directory does not exist: ", "bold red"),
+                        (str(ranges_dir), "red")
+                    ))
                 
                 # Check for running VMs that might be orphaned
                 _check_running_vms(provider)
@@ -307,7 +369,13 @@ def list(ctx, range_id: Optional[int], list_all: bool, verbose: bool):
             
             # Display orchestrated ranges using Rich markup properly
             filter_text = "all" if list_all else "active only"
-            console.print(f"\n[bold blue]Cyber Ranges[/bold blue] [dim]({filter_text})[/dim]")
+            console.print(Text.assemble(
+                ("\n", ""),
+                ("Cyber Ranges", "bold blue"),
+                (" (", "dim"),
+                (filter_text, "dim"),
+                (")", "dim")
+            ))
             
             displayed_count = 0
             for range_meta in sorted(ranges, key=lambda r: r.created_at):
@@ -319,17 +387,31 @@ def list(ctx, range_id: Optional[int], list_all: bool, verbose: bool):
                 # Create status indicator using Rich Text
                 status_text = get_status_text(range_meta.status.value, range_meta.status.value.upper())
                 
-                # Range header with status - use Rich Text objects for safety
-                header = Text("  ")
-                header.append_text(status_text)
-                header.append(f" {range_meta.range_id}: ", style="bold")
-                header.append(escape(range_meta.name))
+                # Range header with status - use Rich Text.assemble for safety
+                header = Text.assemble(
+                    ("  ", ""),
+                    status_text,
+                    (" ", ""),
+                    (str(range_meta.range_id), "bold"),
+                    (": ", "bold"),
+                    (escape(range_meta.name), "")
+                )
                 console.print(header)
                 
                 # Range details with proper escaping
-                console.print(f"     [dim]Created:[/dim] {range_meta.created_at.strftime('%Y-%m-%d %H:%M')}")
+                console.print(Text.assemble(
+                    ("     ", ""),
+                    ("Created:", "dim"),
+                    (" ", ""),
+                    (range_meta.created_at.strftime('%Y-%m-%d %H:%M'), "")
+                ))
                 if range_meta.description:
-                    console.print(f"     [dim]Description:[/dim] {escape(range_meta.description)}")
+                    console.print(Text.assemble(
+                        ("     ", ""),
+                        ("Description:", "dim"),
+                        (" ", ""),
+                        (escape(range_meta.description), "")
+                    ))
                 
                 # Show VM status information if verbose and range is active
                 if verbose and range_meta.status.value in ['active', 'creating']:
@@ -353,27 +435,38 @@ def list(ctx, range_id: Optional[int], list_all: bool, verbose: bool):
                                     
                                     # Create Rich Text for VM status
                                     if health_info.is_healthy:
-                                        vm_text = get_status_text('healthy', f"{guest}: {health_info.get_compact_status()}")
+                                        label = f"{guest}: {health_info.get_compact_status()}"
+                                        vm_text = get_status_text('healthy', label)
                                     else:
-                                        vm_text = get_status_text('unhealthy', f"{guest}: {health_info.get_compact_status()}")
+                                        label = f"{guest}: {health_info.get_compact_status()}"
+                                        vm_text = get_status_text('unhealthy', label)
                                         has_issues = True
                                     
                                     vm_texts.append(vm_text)
                                         
                                 except Exception:
-                                    vm_text = get_status_text('error', f"{guest}: check failed")
+                                    label = f"{guest}: check failed"
+                                    vm_text = get_status_text('error', label)
                                     vm_texts.append(vm_text)
                                     has_issues = True
                             
                             if vm_texts:
                                 # Display VMs in a clean format
-                                console.print("     [bold]VMs:[/bold]")
+                                console.print(Text("     VMs:", style="bold"))
                                 for vm_text in vm_texts:
-                                    console.print(f"       {vm_text}")
+                                    console.print(Text.assemble(
+                                        ("       ", ""),
+                                        vm_text
+                                    ))
                                 
                                 # Show hint if there are issues
                                 if has_issues:
-                                    console.print(f"     [yellow]💡 Issues detected - use 'cyris status {range_meta.range_id} --verbose' for details[/yellow]")
+                                    console.print(Text.assemble(
+                                        ("     ", ""),
+                                        ("💡 Issues detected - use 'cyris status ", "yellow"),
+                                        (str(range_meta.range_id), "yellow"),
+                                        (" --verbose' for details", "yellow")
+                                    ))
                             
                             ip_manager.close()
                             
@@ -650,9 +743,9 @@ def status(ctx, range_id: str, verbose: bool):
                 if resources.get('guests'):
                     console.print(f"  Guests: [green]{len(resources['guests'])}[/green]")
                     
-                    # Show VM health information
+                    # Show VM health information using Rich Panel
                     if resources.get('guests') and verbose:
-                        console.print(f"\n[bold]Virtual Machine Health Status:[/bold]")
+                        vm_panel_content = []
                         
                         # Get libvirt URI from range metadata
                         libvirt_uri = "qemu:///system"
@@ -667,101 +760,166 @@ def status(ctx, range_id: str, verbose: bool):
                                 try:
                                     health_info = ip_manager.get_vm_health_info(guest)
                                     
-                                    # Create VM status panel using Rich
-                                    vm_status = get_status_text('healthy' if health_info.is_healthy else 'unhealthy', guest)
-                                    console.print(f"  {vm_status}")
+                                    # Create VM info table using Rich best practices
+                                    vm_table = Table(show_header=False, show_edge=False, padding=(0, 1), width=80)
+                                    vm_table.add_column("Field", style="dim", width=12)
+                                    vm_table.add_column("Value")
                                     
-                                    # Create detailed info table for this VM
-                                    vm_table = Table(show_header=False, show_edge=False, padding=(0, 1))
-                                    vm_table.add_column("", style="dim", width=12)
-                                    vm_table.add_column("")
-                                    
-                                    # Use Text objects for safe styling
-                                    libvirt_text = Text(escape(health_info.libvirt_status), style="cyan")
+                                    # Use Text.assemble for complex content
+                                    libvirt_text = Text(health_info.libvirt_status, style="cyan")
                                     vm_table.add_row("Libvirt", libvirt_text)
                                     
                                     healthy_text = Text("Yes", style="green") if health_info.is_healthy else Text("No", style="red")
                                     vm_table.add_row("Healthy", healthy_text)
                                     
                                     if health_info.ip_addresses:
-                                        ip_list = ', '.join(health_info.ip_addresses)
-                                        ip_text = Text(escape(ip_list), style="green")
+                                        # Use Text.assemble for IP addresses properly
+                                        ip_parts = []
+                                        for i, ip in enumerate(health_info.ip_addresses):
+                                            if i > 0:
+                                                ip_parts.append((", ", "dim"))
+                                            ip_parts.append((ip, "green"))
+                                        ip_text = Text.assemble(*ip_parts)
                                         vm_table.add_row("IP Address", ip_text)
                                         
-                                        if health_info.network_reachable:
-                                            network_text = Text(":check_mark: Reachable", style="green")
-                                        else:
-                                            network_text = Text(":warning: Not reachable", style="yellow")
+                                        network_text = Text.assemble(
+                                            (":check_mark: ", "green"), 
+                                            ("Reachable", "green")
+                                        ) if health_info.network_reachable else Text.assemble(
+                                            (":warning: ", "yellow"), 
+                                            ("Not reachable", "yellow")
+                                        )
                                         vm_table.add_row("Network", network_text)
                                     else:
                                         vm_table.add_row("IP Address", Text("Not assigned", style="dim"))
                                     
                                     if health_info.uptime:
-                                        vm_table.add_row("Uptime", escape(health_info.uptime))
+                                        vm_table.add_row("Uptime", health_info.uptime)
                                     
                                     if health_info.disk_path:
-                                        disk_text = Text(escape(health_info.disk_path), style="dim")
-                                        vm_table.add_row("Disk", disk_text)
+                                        vm_table.add_row("Disk", Text(health_info.disk_path, style="dim"))
                                     
-                                    console.print(vm_table)
+                                    # Create VM Panel with status indicator using Rich Text.assemble
+                                    vm_status_icon = ":green_heart:" if health_info.is_healthy else ":cross_mark:"
+                                    panel_title_text = Text.assemble(
+                                        (vm_status_icon, "green" if health_info.is_healthy else "red"),
+                                        (" ", ""),
+                                        (guest, "bold")
+                                    )
                                     
-                                    # Show error details if any
+                                    # Create error details if any
+                                    panel_content = [vm_table]
                                     if health_info.error_details:
-                                        console.print("    [bold red]Error Details:[/bold red]")
+                                        error_text = Text()
+                                        error_text.append("Error Details:\n", style="bold red")
                                         for i, error in enumerate(health_info.error_details, 1):
-                                            if len(error) > 80:
-                                                console.print(f"      [red]{i}.[/red] {escape(error[:77])}...")
-                                                console.print(f"          {escape(error[77:])}")
+                                            # Use Text.assemble for error numbering
+                                            error_text.append(str(i), style="red")
+                                            error_text.append(". ", style="red")
+                                            if len(error) > 70:
+                                                error_text.append(error[:67])
+                                                error_text.append("...\n")
+                                                error_text.append("   ")
+                                                error_text.append(error[67:])
+                                                error_text.append("\n")
                                             else:
-                                                console.print(f"      [red]{i}.[/red] {escape(error)}")
+                                                error_text.append(error)
+                                                error_text.append("\n")
+                                        panel_content.append(error_text)
                                     
-                                    console.print()  # Empty line between VMs
+                                    # Create Panel for this VM
+                                    from rich.console import Group
+                                    vm_panel = Panel(
+                                        Group(*panel_content),
+                                        title=panel_title_text,
+                                        expand=False,
+                                        border_style="red" if not health_info.is_healthy else "green"
+                                    )
+                                    console.print(vm_panel)
                                     
                                 except Exception as e:
-                                    click.echo(f"    [ERROR] {guest}: Health check failed - {e}")
+                                    error_console.print(Text.assemble(
+                                        ("    [ERROR] ", "bold red"),
+                                        (guest, "red"),
+                                        (": Health check failed - ", "red"),
+                                        (str(e), "red")
+                                    ))
                             
                             ip_manager.close()
                             
                         except ImportError:
-                            click.echo(f"    WARNING:  VM health checking not available")
+                            console.print(Text("    WARNING:  VM health checking not available", style="yellow"))
                         except Exception as e:
-                            click.echo(f"    [ERROR] Health check error: {e}")
+                            error_console.print(Text.assemble(
+                                ("    [ERROR] Health check error: ", "bold red"),
+                                (str(e), "red")
+                            ))
                     
                     elif resources.get('guests'):
-                        click.echo(f"    💡 Use --verbose to see detailed VM health status")
+                        console.print(Text("    💡 Use --verbose to see detailed VM health status", style="blue"))
         
         else:
-            click.echo(f"  [ERROR] Range not found in orchestrator")
+            error_console.print(Text("  [ERROR] Range not found in orchestrator", style="bold red"))
+        
+        # Add visual separator before filesystem section
+        console.print()  # Empty line for spacing
         
         # Check filesystem regardless
         range_dir = config.cyber_range_dir / range_id
         
         if range_dir.exists():
-            click.echo(f"  DIR: Directory: {range_dir}")
+            # Simple directory display following Rich best practices
+            console.print(Text.assemble(
+                ("Directory: ", "dim"),
+                (str(range_dir), "cyan")
+            ))
             
-            # Show directory contents if verbose
+            # Show directory contents if verbose - simplified display
             if verbose:
                 try:
                     contents = []
                     for item in range_dir.iterdir():
                         contents.append(item)
                     
-                    click.echo(f"  Directory contents ({len(contents)} items):")
-                    for item in sorted(contents):
-                        item_type = "DIR:" if item.is_dir() else "FILE:"
-                        click.echo(f"    {item_type} {item.name}")
+                    if contents:
+                        console.print(Text.assemble(
+                            ("Contents (", "dim"),
+                            (str(len(contents)), "cyan"),
+                            (" items):", "dim")
+                        ))
+                        for item in sorted(contents):
+                            icon = "📁" if item.is_dir() else "📄"
+                            style = "yellow" if item.is_dir() else "white"
+                            console.print(Text.assemble(
+                                ("  ", ""),
+                                (icon, style),
+                                (" ", ""),
+                                (item.name, style)
+                            ))
+                    else:
+                        console.print(Text("  (empty directory)", style="dim italic"))
                         
                 except Exception as e:
-                    click.echo(f"    Could not list directory contents: {e}")
+                    error_console.print(Text.assemble(
+                        ("Could not list directory contents: ", "red"),
+                        (str(e), "red")
+                    ))
         else:
             if not range_metadata:
-                click.echo(f"  [ERROR] Range {range_id} not found (no orchestrator record, no filesystem directory)")
+                error_console.print(Text.assemble(
+                    ("  [ERROR] Range ", "bold red"),
+                    (range_id, "bold red"),
+                    (" not found (no orchestrator record, no filesystem directory)", "bold red")
+                ))
                 sys.exit(1)
             else:
-                click.echo(f"  WARNING:  Range exists in orchestrator but no filesystem directory found")
+                console.print(Text("  WARNING:  Range exists in orchestrator but no filesystem directory found", style="yellow"))
                 
     except Exception as e:
-        click.echo(f"[ERROR] Error checking range status: {e}", err=True)
+        error_console.print(Text.assemble(
+            ("[ERROR] Error checking range status: ", "bold red"),
+            (str(e), "red")
+        ))
         if verbose:
             import traceback
             traceback.print_exc()
@@ -774,17 +932,35 @@ def config_show(ctx):
     """Show current configuration"""
     config: CyRISSettings = get_config(ctx)
     
-    click.echo("Current configuration:")
-    click.echo(f"  CyRIS path: {config.cyris_path}")
-    click.echo(f"  Cyber range directory: {config.cyber_range_dir}")
-    click.echo(f"  Gateway mode: {'enabled' if config.gw_mode else 'disabled'}")
+    console.print(Text("Current configuration:", style="bold blue"))
+    console.print(Text.assemble(
+        ("  CyRIS path: ", "dim"),
+        (str(config.cyris_path), "cyan")
+    ))
+    console.print(Text.assemble(
+        ("  Cyber range directory: ", "dim"),
+        (str(config.cyber_range_dir), "cyan")
+    ))
+    console.print(Text.assemble(
+        ("  Gateway mode: ", "dim"),
+        ("enabled" if config.gw_mode else "disabled", "green" if config.gw_mode else "red")
+    ))
     
     if config.gw_account:
-        click.echo(f"  Gateway account: {config.gw_account}")
+        console.print(Text.assemble(
+            ("  Gateway account: ", "dim"),
+            (config.gw_account, "yellow")
+        ))
     if config.gw_mgmt_addr:
-        click.echo(f"  Gateway management address: {config.gw_mgmt_addr}")
+        console.print(Text.assemble(
+            ("  Gateway management address: ", "dim"),
+            (config.gw_mgmt_addr, "yellow")
+        ))
     if config.user_email:
-        click.echo(f"  User email: {config.user_email}")
+        console.print(Text.assemble(
+            ("  User email: ", "dim"),
+            (config.user_email, "yellow")
+        ))
 
 
 @cli.command()
@@ -795,7 +971,7 @@ def config_init(ctx, output: Path):
     """Initialize default configuration file"""
     if output.exists():
         if not click.confirm(f'Configuration file {output} already exists. Overwrite?'):
-            click.echo('Operation cancelled')
+            console.print(Text('Operation cancelled', style="yellow"))
             return
     
     # Create default configuration
@@ -803,33 +979,54 @@ def config_init(ctx, output: Path):
     
     try:
         settings = create_default_config(output)
-        click.echo(f"[OK] Default configuration file created: {output}")
-        click.echo("Please edit the configuration file to suit your environment")
+        console.print(Text.assemble(
+            ("[OK] ", "bold green"),
+            ("Default configuration file created: ", "green"),
+            (str(output), "cyan")
+        ))
+        console.print(Text("Please edit the configuration file to suit your environment", style="dim"))
     except Exception as e:
-        click.echo(f"[ERROR] Failed to create configuration file: {e}", err=True)
+        error_console.print(Text.assemble(
+            ("[ERROR] Failed to create configuration file: ", "bold red"),
+            (str(e), "red")
+        ))
 
 
 @cli.command()
 @click.pass_context
 def validate(ctx):
     """Validate environment configuration and dependencies"""
-    click.echo("Validating CyRIS environment...")
+    console.print(Text("Validating CyRIS environment...", style="bold blue"))
     
     config: CyRISSettings = get_config(ctx)
     errors = 0
     
     # Check paths
     if not config.cyris_path.exists():
-        click.echo(f"[ERROR] CyRIS path does not exist: {config.cyris_path}")
+        error_console.print(Text.assemble(
+            ("[ERROR] CyRIS path does not exist: ", "bold red"),
+            (str(config.cyris_path), "red")
+        ))
         errors += 1
     else:
-        click.echo(f"[OK] CyRIS path: {config.cyris_path}")
+        console.print(Text.assemble(
+            ("[OK] ", "bold green"),
+            ("CyRIS path: ", "green"),
+            (str(config.cyris_path), "cyan")
+        ))
     
     if not config.cyber_range_dir.exists():
-        click.echo(f"[ERROR] Cyber range directory does not exist: {config.cyber_range_dir}")
+        error_console.print(Text.assemble(
+            ("[ERROR] Cyber range directory does not exist: ", "bold red"),
+            (str(config.cyber_range_dir), "red")
+        ))
         errors += 1
     else:
-        click.echo(f"[OK] Cyber range directory: {config.cyber_range_dir}")
+        console.print(Text.assemble(
+            ("[OK] ", "bold green"),
+            ("Cyber range directory: ", "green"),
+            (str(config.cyber_range_dir), "cyan")
+        ))
     
     # Check legacy scripts
     legacy_script = config.cyris_path / 'main' / 'cyris.py'
@@ -851,9 +1048,13 @@ def validate(ctx):
         click.echo(f"WARNING:  Examples directory does not exist: {examples_dir}")
     
     if errors == 0:
-        click.echo("🎉 Environment validation passed!")
+        console.print(Text("🎉 Environment validation passed!", style="bold green"))
     else:
-        click.echo(f"[ERROR] Found {errors} issues")
+        error_console.print(Text.assemble(
+            ("[ERROR] Found ", "bold red"),
+            (str(errors), "red"),
+            (" issues", "bold red")
+        ))
         sys.exit(1)
 
 
@@ -965,19 +1166,37 @@ def ssh_info(ctx, range_id: str):
         # Get range information
         range_metadata = orchestrator.get_range(range_id)
         if not range_metadata:
-            click.echo(f"[ERROR] Range {range_id} not found", err=True)
+            error_console.print(Text.assemble(
+                ("[ERROR] Range ", "bold red"),
+                (range_id, "red"),
+                (" not found", "bold red")
+            ))
             sys.exit(1)
         
         # Get range resources
         resources = orchestrator.get_range_resources(range_id)
         if not resources or not resources.get('guests'):
-            click.echo(f"[ERROR] No VMs found for range {range_id}", err=True)
+            error_console.print(Text.assemble(
+                ("[ERROR] No VMs found for range ", "bold red"),
+                (range_id, "red")
+            ))
             sys.exit(1)
         
-        click.echo(f"SSH Connection Information for Range {range_id}:")
-        click.echo(f"Range Name: {range_metadata.name}")
-        click.echo(f"Status: {range_metadata.status.value}")
-        click.echo("=" * 60)
+        console.print(Text.assemble(
+            ("SSH Connection Information for Range ", "bold blue"),
+            (range_id, "bold cyan"),
+            (":", "bold blue")
+        ))
+        console.print(Text.assemble(
+            ("Range Name: ", "dim"),
+            (escape(range_metadata.name), "cyan")
+        ))
+        status_text = get_status_text(range_metadata.status.value, range_metadata.status.value)
+        console.print(Text.assemble(
+            ("Status: ", "dim"),
+            status_text
+        ))
+        console.print("=" * 60)
         
         # Get libvirt URI from range metadata for IP discovery
         libvirt_uri = "qemu:///system"
@@ -995,7 +1214,11 @@ def ssh_info(ctx, range_id: str):
         # Get SSH info for each VM
         guest_ids = resources.get('guests', [])
         for vm_id in guest_ids:
-            click.echo(f"\nVM:  VM: {vm_id}")
+            console.print(Text.assemble(
+                ("\nVM: ", "bold magenta"),
+                ("VM: ", "bold blue"),
+                (vm_id, "cyan")
+            ))
             
             # Get comprehensive health information
             vm_ip_addresses = []
@@ -1003,52 +1226,93 @@ def ssh_info(ctx, range_id: str):
                 try:
                     health_info = ip_manager.get_vm_health_info(vm_id)
                     
-                    # Smart status indicators with emoji fallback
-                    status_icon = get_status_indicator('ok') if health_info.is_healthy else get_status_indicator('error')
+                    # Smart status indicators using Rich Text
+                    status_text = get_status_text('ok', 'Status') if health_info.is_healthy else get_status_text('error', 'Status')
                     
-                    click.echo(f"   {status_icon} Status: {health_info.libvirt_status} → {'healthy' if health_info.is_healthy else 'unhealthy'}")
+                    console.print(Text.assemble(
+                        ("   ", ""),
+                        status_text,
+                        (": ", ""),
+                        (health_info.libvirt_status, "cyan"),
+                        (" → ", "dim"),
+                        ("healthy" if health_info.is_healthy else "unhealthy", "green" if health_info.is_healthy else "red")
+                    ))
                     
                     if health_info.ip_addresses:
                         vm_ip_addresses = health_info.ip_addresses
-                        click.echo(f"   IP: IP Addresses: {', '.join(vm_ip_addresses)}")
+                        ip_text = Text.assemble(
+                            ("   IP: IP Addresses: ", "blue"),
+                            *[((", " if i > 0 else "") + ip, "green") for i, ip in enumerate(vm_ip_addresses)]
+                        )
+                        console.print(ip_text)
                         
                         if health_info.network_reachable:
-                            click.echo(f"   NET: Network: Reachable [OK]")
+                            console.print(Text("   NET: Network: Reachable [OK]", style="green"))
                         else:
-                            click.echo(f"   NET: Network: Not reachable WARNING:")
+                            console.print(Text("   NET: Network: Not reachable WARNING:", style="yellow"))
                         
                         # Show direct SSH commands only if healthy
                         if health_info.is_healthy:
-                            click.echo(f"   SSH: SSH Commands:")
+                            console.print(Text("   SSH: SSH Commands:", style="blue"))
                             for ip in vm_ip_addresses:
-                                click.echo(f"      ssh user@{ip}")
-                                click.echo(f"      ssh root@{ip}  # if root access is configured")
+                                console.print(Text.assemble(
+                                    ("      ssh user@", "cyan"),
+                                    (ip, "green")
+                                ))
+                                console.print(Text.assemble(
+                                    ("      ssh root@", "cyan"),
+                                    (ip, "green"),
+                                    ("  # if root access is configured", "dim")
+                                ))
                         else:
-                            click.echo(f"   WARNING:  SSH may not be available due to VM issues")
+                            console.print(Text("   WARNING:  SSH may not be available due to VM issues", style="yellow"))
                     else:
-                        click.echo(f"   IP: IP Address: Not assigned")
+                        console.print(Text("   IP: IP Address: Not assigned", style="dim"))
                     
                     # Show uptime if available
                     if health_info.uptime:
-                        click.echo(f"   TIME:  Uptime: {health_info.uptime}")
+                        console.print(Text.assemble(
+                            ("   TIME:  Uptime: ", "blue"),
+                            (health_info.uptime, "cyan")
+                        ))
                     
                     # Show disk path if available
                     if health_info.disk_path:
-                        click.echo(f"   DISK: Disk: {health_info.disk_path}")
+                        console.print(Text.assemble(
+                            ("   DISK: Disk: ", "blue"),
+                            (health_info.disk_path, "dim")
+                        ))
                     
                     # Show all error details directly
                     if health_info.error_details:
-                        click.echo(f"   INFO: Error Details:")
+                        console.print(Text("   INFO: Error Details:", style="blue"))
                         for i, error in enumerate(health_info.error_details, 1):
                             # For very long errors, wrap them nicely
                             if len(error) > 70:
-                                click.echo(f"      {i}. {error[:67]}...")
-                                click.echo(f"         {error[67:]}")
+                                console.print(Text.assemble(
+                                    ("      ", ""),
+                                    (str(i), "red"),
+                                    (". ", "red"),
+                                    (error[:67], ""),
+                                    ("...", "dim")
+                                ))
+                                console.print(Text.assemble(
+                                    ("         ", ""),
+                                    (error[67:], "")
+                                ))
                             else:
-                                click.echo(f"      {i}. {error}")
+                                console.print(Text.assemble(
+                                    ("      ", ""),
+                                    (str(i), "red"),
+                                    (". ", "red"),
+                                    (error, "")
+                                ))
                             
                 except Exception as e:
-                    click.echo(f"   [ERROR] Health check failed: {e}")
+                    error_console.print(Text.assemble(
+                        ("   [ERROR] Health check failed: ", "bold red"),
+                        (str(e), "red")
+                    ))
             
             # Get traditional SSH info from provider
             ssh_info_data = provider.get_vm_ssh_info(vm_id)
@@ -1080,13 +1344,16 @@ def ssh_info(ctx, range_id: str):
         if ip_manager:
             ip_manager.close()
         
-        click.echo("\n💡 Tips:")
-        click.echo("   • For bridge networking, VMs get DHCP IP addresses")
-        click.echo("   • Use 'nmap -sP 192.168.122.0/24' to scan for active IPs")
-        click.echo("   • VNC console is available on all VMs for direct access")
+        console.print(Text("\n💡 Tips:", style="bold blue"))
+        console.print(Text("   • For bridge networking, VMs get DHCP IP addresses", style="dim"))
+        console.print(Text("   • Use 'nmap -sP 192.168.122.0/24' to scan for active IPs", style="dim"))
+        console.print(Text("   • VNC console is available on all VMs for direct access", style="dim"))
         
     except Exception as e:
-        click.echo(f"[ERROR] Error getting SSH info: {e}", err=True)
+        error_console.print(Text.assemble(
+            ("[ERROR] Error getting SSH info: ", "bold red"),
+            (str(e), "red")
+        ))
         if verbose:
             import traceback
             traceback.print_exc()
