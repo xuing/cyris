@@ -58,12 +58,13 @@ def get_status_text(status: str, label: str = None) -> Text:
         # Create Text object with proper emoji handling using Text.assemble
         return Text.assemble(
             (emoji, color),
-            (" ", color),
+            (" ", ""),
             (label_text, color)
         )
     else:
         return Text.assemble(
-            ("• ", "dim"),
+            ("•", "dim"),
+            (" ", ""),
             (label_text, "dim")
         )
 
@@ -166,17 +167,20 @@ def create(ctx, description_file: Path, range_id: Optional[int], dry_run: bool, 
     verbose = ctx.obj['verbose']
     
     console.print(Text.assemble(
-        ("Creating cyber range: ", "bold blue"),
+        ("Creating cyber range:", "bold blue"),
+        (" ", ""),
         (str(description_file), "cyan")
     ))
     
     if verbose:
         console.print(Text.assemble(
-            ("Configuration: ", "dim"),
+            ("Configuration:", "dim"),
+            (" ", ""),
             (str(config), "yellow")
         ))
         console.print(Text.assemble(
-            ("Range ID: ", "dim"),
+            ("Range ID:", "dim"),
+            (" ", ""),
             (str(range_id or 'auto-assigned'), "cyan")
         ))
     
@@ -870,7 +874,8 @@ def status(ctx, range_id: str, verbose: bool):
         if range_dir.exists():
             # Simple directory display following Rich best practices
             console.print(Text.assemble(
-                ("Directory: ", "dim"),
+                ("Directory:", "dim"),
+                (" ", ""),
                 (str(range_dir), "cyan")
             ))
             
