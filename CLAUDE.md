@@ -26,6 +26,7 @@ CyRIS (Cyber Range Instantiation System) 是一个用于网络安全培训的自
 - 📊 **监控服务**: 实时监控、告警、性能指标收集
 - 🧹 **清理服务**: 自动化资源清理、数据归档、存储管理
 - 🧪 **完整测试**: 单元测试、集成测试、端到端测试
+- 🎨 **智能UI**: 自动emoji检测与ASCII回退，支持各种终端环境
 
 ## Common Commands
 

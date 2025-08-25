@@ -8,6 +8,8 @@ import click
 from pathlib import Path
 from typing import Optional
 import logging
+import locale
+import os
 
 from ..config.parser import parse_modern_config, ConfigurationError
 from ..config.settings import CyRISSettings
@@ -21,6 +23,69 @@ logging.basicConfig(
     stream=sys.stderr
 )
 logger = logging.getLogger(__name__)
+
+
+# Smart emoji/UTF-8 detection
+def _detect_terminal_capabilities():
+    """Detect terminal capabilities for emoji and color support"""
+    # Check encoding support
+    enc = (sys.stdout.encoding or locale.getpreferredencoding(False) or '').upper()
+    utf8_support = 'UTF-8' in enc or 'UTF8' in enc
+    
+    # Check environment variables
+    no_color = os.environ.get('NO_COLOR', '').strip().lower() in ('1', 'true', 'yes')
+    term = os.environ.get('TERM', '').lower()
+    
+    # Basic terminal detection
+    supports_color = not no_color and term not in ('dumb', 'unknown', '')
+    
+    # Conservative emoji support - only if UTF-8 and decent terminal
+    supports_emoji = (
+        utf8_support and 
+        supports_color and 
+        term not in ('linux', 'screen', 'tmux') and
+        not os.environ.get('CI', '').strip()  # Disable in CI environments
+    )
+    
+    return {
+        'utf8_support': utf8_support,
+        'supports_color': supports_color,
+        'supports_emoji': supports_emoji,
+        'encoding': enc,
+        'term': term
+    }
+
+
+# Global terminal capabilities
+TERMINAL_CAPS = _detect_terminal_capabilities()
+
+def get_status_indicator(status: str, use_emoji: bool = None) -> str:
+    """Get appropriate status indicator based on terminal capabilities"""
+    if use_emoji is None:
+        use_emoji = TERMINAL_CAPS['supports_emoji']
+    
+    if use_emoji:
+        indicators = {
+            'active': '🟢',
+            'creating': '🟡', 
+            'error': '🔴',
+            'ok': '✅',
+            'fail': '❌',
+            'warning': '⚠️',
+            'info': '💡'
+        }
+    else:
+        indicators = {
+            'active': '[ACTIVE]',
+            'creating': '[CREATING]',
+            'error': '[ERROR]', 
+            'ok': '[OK]',
+            'fail': '[ERROR]',
+            'warning': '[WARN]',
+            'info': '[INFO]'
+        }
+    
+    return indicators.get(status.lower(), f'[{status.upper()}]')
 
 
 def get_config(ctx) -> 'CyRISSettings':
@@ -273,13 +338,13 @@ def list(ctx, range_id: Optional[int], list_all: bool, verbose: bool):
                     
                 displayed_count += 1
                 
-                # Use text indicators instead of emoji
+                # Use smart status indicators with emoji fallback
                 if range_meta.status.value == "active":
-                    status_indicator = "[ACTIVE]"
+                    status_indicator = get_status_indicator('active')
                 elif range_meta.status.value == "creating":
-                    status_indicator = "[CREATING]"
+                    status_indicator = get_status_indicator('creating')
                 else:
-                    status_indicator = "[ERROR]"
+                    status_indicator = get_status_indicator('error')
                 
                 click.echo(f"  {status_indicator} {range_meta.range_id}: {range_meta.name}")
                 click.echo(f"     Status: {range_meta.status.value}")
@@ -307,8 +372,8 @@ def list(ctx, range_id: Optional[int], list_all: bool, verbose: bool):
                                 try:
                                     health_info = ip_manager.get_vm_health_info(guest)
                                     
-                                    # Use text status indicators
-                                    status_icon = "[OK]" if health_info.is_healthy else "[ERR]"
+                                    # Use smart status indicators with emoji fallback
+                                    status_icon = get_status_indicator('ok') if health_info.is_healthy else get_status_indicator('fail')
                                     compact_status = health_info.get_compact_status()
                                     
                                     vm_status = f"{status_icon} {guest}: {compact_status}"
@@ -563,8 +628,13 @@ def status(ctx, range_id: str, verbose: bool):
         range_metadata = orchestrator.get_range(range_id)
         
         if range_metadata:
-            # Show orchestrator information
-            status_icon = "[ACTIVE]" if range_metadata.status.value == "active" else "[CREATING]" if range_metadata.status.value == "creating" else "[ERROR]"
+            # Show orchestrator information with smart status indicators
+            if range_metadata.status.value == "active":
+                status_icon = get_status_indicator('active')
+            elif range_metadata.status.value == "creating":
+                status_icon = get_status_indicator('creating')
+            else:
+                status_icon = get_status_indicator('error')
             click.echo(f"  {status_icon} Status: {range_metadata.status.value}")
             click.echo(f"  Name: {range_metadata.name}")
             click.echo(f"  Description: {range_metadata.description}")
@@ -603,8 +673,8 @@ def status(ctx, range_id: str, verbose: bool):
                                 try:
                                     health_info = ip_manager.get_vm_health_info(guest)
                                     
-                                    # Simple status based on health
-                                    status_icon = '[OK]' if health_info.is_healthy else '[ERROR]'
+                                    # Smart status indicators with emoji fallback
+                                    status_icon = get_status_indicator('ok') if health_info.is_healthy else get_status_indicator('error')
                                     
                                     click.echo(f"    {status_icon} {guest}")
                                     click.echo(f"       libvirt: {health_info.libvirt_status} | healthy: {health_info.is_healthy}")
@@ -923,8 +993,8 @@ def ssh_info(ctx, range_id: str):
                 try:
                     health_info = ip_manager.get_vm_health_info(vm_id)
                     
-                    # Simple status based on health
-                    status_icon = '[OK]' if health_info.is_healthy else '[ERROR]'
+                    # Smart status indicators with emoji fallback
+                    status_icon = get_status_indicator('ok') if health_info.is_healthy else get_status_indicator('error')
                     
                     click.echo(f"   {status_icon} Status: {health_info.libvirt_status} → {'healthy' if health_info.is_healthy else 'unhealthy'}")
                     
