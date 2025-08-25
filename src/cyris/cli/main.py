@@ -15,162 +15,35 @@ from ..config.parser import parse_modern_config, ConfigurationError
 from ..config.settings import CyRISSettings
 
 
-# Setup logging - disable by default to avoid output mixing
+# Simple unified logging - just disable it completely for CLI
 import sys
+import os
 
-# Disable logging by default for CLI commands to prevent output corruption
-# Only enable if explicitly requested with --verbose
-def setup_logging(verbose: bool = False):
-    """Setup logging configuration"""
-    if verbose:
-        logging.basicConfig(
-            level=logging.DEBUG,
-            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-            stream=sys.stderr,
-            force=True  # Override any existing config
-        )
-    else:
-        # Disable all logging to prevent output mixing
-        logging.basicConfig(
-            level=logging.CRITICAL + 1,  # Higher than CRITICAL to disable all
-            handlers=[],
-            force=True
-        )
-        # Also disable specific loggers that might have been configured
-        for logger_name in ['cyris', 'cyris.infrastructure', 'cyris.services', 'cyris.tools']:
-            logging.getLogger(logger_name).setLevel(logging.CRITICAL + 1)
+# Disable ALL logging for CLI commands to prevent output mixing
+# This is the simplest solution - just turn off all logs
+logging.disable(logging.CRITICAL)
 
-# Initialize with no logging by default
-setup_logging(False)
 logger = logging.getLogger(__name__)
 
 
-# Smart emoji/UTF-8 detection
-def _detect_terminal_capabilities():
-    """Detect terminal capabilities for emoji and color support"""
-    # Check encoding support
-    enc = (sys.stdout.encoding or locale.getpreferredencoding(False) or '').upper()
-    utf8_support = 'UTF-8' in enc or 'UTF8' in enc
-    
-    # Check environment variables
-    no_color = os.environ.get('NO_COLOR', '').strip().lower() in ('1', 'true', 'yes')
-    term = os.environ.get('TERM', '').lower()
-    
-    # Basic terminal detection
-    supports_color = not no_color and term not in ('dumb', 'unknown', '')
-    
-    # Conservative emoji support - disabled by default to avoid terminal corruption
-    # Only enable if explicitly requested via environment variable
-    enable_emoji_override = os.environ.get('CYRIS_ENABLE_EMOJI', '').strip().lower()
-    
-    if enable_emoji_override in ('1', 'true', 'yes'):
-        # User explicitly wants emoji - enable if basic requirements met
-        supports_emoji = utf8_support and supports_color
-    else:
-        # Default: very conservative, disable emoji to avoid terminal issues
-        supports_emoji = False
-    
-    return {
-        'utf8_support': utf8_support,
-        'supports_color': supports_color,
-        'supports_emoji': supports_emoji,
-        'encoding': enc,
-        'term': term
-    }
-
-
-# Global terminal capabilities
-TERMINAL_CAPS = _detect_terminal_capabilities()
-
-def get_status_indicator(status: str, use_emoji: bool = None) -> str:
-    """Get appropriate status indicator based on terminal capabilities"""
-    if use_emoji is None:
-        use_emoji = TERMINAL_CAPS['supports_emoji']
+# Simple status indicators - ASCII by default, emoji if requested
+def get_status_indicator(status: str) -> str:
+    """Get status indicator - simple ASCII by default, emoji if CYRIS_ENABLE_EMOJI=1"""
+    use_emoji = os.environ.get('CYRIS_ENABLE_EMOJI', '').strip() == '1'
     
     if use_emoji:
-        indicators = {
-            'active': '🟢',
-            'creating': '🟡', 
-            'error': '🔴',
-            'ok': '✅',
-            'fail': '❌',
-            'warning': '⚠️',
-            'info': '💡'
-        }
+        return {
+            'active': '🟢', 'creating': '🟡', 'error': '🔴',
+            'ok': '✅', 'fail': '❌', 'warning': '⚠️', 'info': '💡'
+        }.get(status.lower(), f'🔸')
     else:
-        indicators = {
-            'active': '[ACTIVE]',
-            'creating': '[CREATING]',
-            'error': '[ERROR]', 
-            'ok': '[OK]',
-            'fail': '[ERROR]',
-            'warning': '[WARN]',
-            'info': '[INFO]'
-        }
-    
-    return indicators.get(status.lower(), f'[{status.upper()}]')
+        return {
+            'active': '[ACTIVE]', 'creating': '[CREATING]', 'error': '[ERROR]',
+            'ok': '[OK]', 'fail': '[ERROR]', 'warning': '[WARN]', 'info': '[INFO]'
+        }.get(status.lower(), f'[{status.upper()}]')
 
 
-# Store original click.echo before we override it
-_original_click_echo = click.echo
-
-def safe_echo(
-    message: Any = None,
-    file: Optional[IO[Any]] = None,
-    nl: bool = True,
-    err: bool = False,
-    color: Optional[bool] = None,
-) -> None:
-    """
-    Safe echo function that prevents terminal formatting issues.
-    
-    This is a wrapper around click.echo that ensures:
-    1. Proper handling of Unicode characters
-    2. Consistent spacing and alignment
-    3. No cursor position corruption from special characters
-    4. Proper flushing of output streams
-    """
-    if message is None:
-        message = ""
-    
-    # Convert to string and ensure clean formatting
-    message_str = str(message)
-    
-    # Remove any potential problematic control characters (except common ones)
-    # Keep newlines, tabs, and basic printable characters
-    cleaned_message = ""
-    for char in message_str:
-        # Allow printable ASCII, space, tab, newline
-        if (32 <= ord(char) <= 126) or char in '\n\t':
-            cleaned_message += char
-        elif ord(char) > 127:  # Unicode characters
-            # For Unicode, be more careful - only include if terminal supports it
-            if TERMINAL_CAPS.get('utf8_support', False):
-                cleaned_message += char
-            else:
-                cleaned_message += '?'  # Replace with safe character
-        # Skip other control characters
-    
-    try:
-        # Use the original click.echo to avoid recursion
-        _original_click_echo(cleaned_message, file=file, nl=nl, err=err, color=color)
-        
-        # Ensure output is flushed immediately
-        target_file = file or (sys.stderr if err else sys.stdout)
-        if hasattr(target_file, 'flush'):
-            target_file.flush()
-            
-    except UnicodeEncodeError:
-        # Fallback: encode as ASCII with replacement
-        safe_message = cleaned_message.encode('ascii', errors='replace').decode('ascii')
-        _original_click_echo(safe_message, file=file, nl=nl, err=err, color=False)
-        target_file = file or (sys.stderr if err else sys.stdout)
-        if hasattr(target_file, 'flush'):
-            target_file.flush()
-
-
-# Override click.echo in this module to use our safe version
-click.echo = safe_echo
+# Simple output - just use click.echo directly, no need for complex wrapper
 
 
 def get_config(ctx) -> 'CyRISSettings':
@@ -203,8 +76,7 @@ def cli(ctx, config: Optional[str], verbose: bool, version: bool):
         click.echo("CyRIS v1.4.0 - Cyber Range Instantiation System")
         ctx.exit()
     
-    # Set logging level - only enable logging if verbose is requested
-    setup_logging(verbose)
+    # Logging is disabled globally for clean CLI output
     
     # Initialize context
     ctx.ensure_object(dict)
@@ -364,9 +236,6 @@ def create(ctx, description_file: Path, range_id: Optional[int], dry_run: bool, 
 def list(ctx, range_id: Optional[int], list_all: bool, verbose: bool):
     """List cyber ranges"""
     config: CyRISSettings = get_config(ctx)
-    
-    # Enable logging if verbose is requested for this specific command
-    setup_logging(verbose)
     
     try:
         # Flush stdout to ensure proper ordering with stderr logging
