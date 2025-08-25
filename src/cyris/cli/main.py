@@ -6,7 +6,7 @@ Supports modern commands while maintaining backward compatibility
 import sys
 import click
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Any, IO
 import logging
 import locale
 import os
@@ -89,6 +89,68 @@ def get_status_indicator(status: str, use_emoji: bool = None) -> str:
         }
     
     return indicators.get(status.lower(), f'[{status.upper()}]')
+
+
+# Store original click.echo before we override it
+_original_click_echo = click.echo
+
+def safe_echo(
+    message: Any = None,
+    file: Optional[IO[Any]] = None,
+    nl: bool = True,
+    err: bool = False,
+    color: Optional[bool] = None,
+) -> None:
+    """
+    Safe echo function that prevents terminal formatting issues.
+    
+    This is a wrapper around click.echo that ensures:
+    1. Proper handling of Unicode characters
+    2. Consistent spacing and alignment
+    3. No cursor position corruption from special characters
+    4. Proper flushing of output streams
+    """
+    if message is None:
+        message = ""
+    
+    # Convert to string and ensure clean formatting
+    message_str = str(message)
+    
+    # Remove any potential problematic control characters (except common ones)
+    # Keep newlines, tabs, and basic printable characters
+    cleaned_message = ""
+    for char in message_str:
+        # Allow printable ASCII, space, tab, newline
+        if (32 <= ord(char) <= 126) or char in '\n\t':
+            cleaned_message += char
+        elif ord(char) > 127:  # Unicode characters
+            # For Unicode, be more careful - only include if terminal supports it
+            if TERMINAL_CAPS.get('utf8_support', False):
+                cleaned_message += char
+            else:
+                cleaned_message += '?'  # Replace with safe character
+        # Skip other control characters
+    
+    try:
+        # Use the original click.echo to avoid recursion
+        _original_click_echo(cleaned_message, file=file, nl=nl, err=err, color=color)
+        
+        # Ensure output is flushed immediately
+        target_file = file or (sys.stderr if err else sys.stdout)
+        if hasattr(target_file, 'flush'):
+            target_file.flush()
+            
+    except UnicodeEncodeError:
+        # Fallback: encode as ASCII with replacement
+        safe_message = cleaned_message.encode('ascii', errors='replace').decode('ascii')
+        _original_click_echo(safe_message, file=file, nl=nl, err=err, color=False)
+        target_file = file or (sys.stderr if err else sys.stdout)
+        if hasattr(target_file, 'flush'):
+            target_file.flush()
+
+
+# Override click.echo in this module to use our safe version
+click.echo = safe_echo
 
 
 def get_config(ctx) -> 'CyRISSettings':
