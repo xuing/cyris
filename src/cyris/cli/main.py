@@ -39,13 +39,16 @@ def _detect_terminal_capabilities():
     # Basic terminal detection
     supports_color = not no_color and term not in ('dumb', 'unknown', '')
     
-    # Conservative emoji support - only if UTF-8 and decent terminal
-    supports_emoji = (
-        utf8_support and 
-        supports_color and 
-        term not in ('linux', 'screen', 'tmux') and
-        not os.environ.get('CI', '').strip()  # Disable in CI environments
-    )
+    # Conservative emoji support - disabled by default to avoid terminal corruption
+    # Only enable if explicitly requested via environment variable
+    enable_emoji_override = os.environ.get('CYRIS_ENABLE_EMOJI', '').strip().lower()
+    
+    if enable_emoji_override in ('1', 'true', 'yes'):
+        # User explicitly wants emoji - enable if basic requirements met
+        supports_emoji = utf8_support and supports_color
+    else:
+        # Default: very conservative, disable emoji to avoid terminal issues
+        supports_emoji = False
     
     return {
         'utf8_support': utf8_support,
