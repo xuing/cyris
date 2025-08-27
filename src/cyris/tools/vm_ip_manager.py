@@ -10,9 +10,10 @@ import subprocess
 import json
 import time
 from typing import Dict, List, Optional, Any, Tuple
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import xml.etree.ElementTree as ET
 import re
+from datetime import datetime, timedelta
 
 try:
     import libvirt
@@ -32,6 +33,22 @@ class VMIPInfo:
     discovery_method: str
     last_updated: str
     status: str  # "active", "inactive", "unknown"
+
+
+@dataclass
+class CachedIPInfo:
+    """Cached IP information with expiration"""
+    ip_info: VMIPInfo
+    cached_at: datetime = field(default_factory=datetime.now)
+    expires_at: datetime = field(default_factory=lambda: datetime.now() + timedelta(minutes=5))
+    
+    def is_expired(self) -> bool:
+        """Check if cache entry has expired"""
+        return datetime.now() > self.expires_at
+    
+    def is_fresh(self, max_age_seconds: int = 300) -> bool:
+        """Check if cache entry is fresh (within max_age_seconds)"""
+        return (datetime.now() - self.cached_at).total_seconds() < max_age_seconds
 
 
 @dataclass
@@ -124,8 +141,8 @@ class VMIPManager:
             except libvirt.libvirtError as e:
                 self.logger.warning(f"Failed to connect to libvirt: {e}")
         
-        # Cache for IP information
-        self._ip_cache: Dict[str, VMIPInfo] = {}
+        # Cache for IP information with expiration
+        self._ip_cache: Dict[str, CachedIPInfo] = {}
         
         self.logger.info(f"VMIPManager initialized with URI: {libvirt_uri}")
     
@@ -184,8 +201,8 @@ class VMIPManager:
                     vm_info.discovery_method = method
                     vm_info.last_updated = time.strftime("%Y-%m-%d %H:%M:%S")
                     
-                    # Cache the result
-                    self._ip_cache[vm_name] = vm_info
+                    # Cache the result with expiration
+                    self._ip_cache[vm_name] = CachedIPInfo(ip_info=vm_info)
                     
                     self.logger.info(
                         f"Successfully discovered IPs for {vm_name} using {method}: "
@@ -214,6 +231,11 @@ class VMIPManager:
             # KISS: Get IP assignment from metadata
             assigned_ip = self._get_assigned_ip_from_metadata(guest_id)
             if not assigned_ip:
+                return None
+            
+            # Verify that the assigned IP is actually reachable
+            if not self._test_network_reachability(assigned_ip):
+                self.logger.debug(f"Assigned IP {assigned_ip} for {vm_name} is not reachable")
                 return None
             
             # KISS: Create and return VM info
@@ -328,7 +350,7 @@ class VMIPManager:
         try:
             # Try domifaddr command
             result = subprocess.run(
-                ["virsh", "domifaddr", vm_name],
+                ["virsh", "--connect", self.libvirt_uri, "domifaddr", vm_name],
                 capture_output=True,
                 text=True,
                 check=True
@@ -569,7 +591,7 @@ class VMIPManager:
             # If libvirt didn't work, try virsh
             if not mac_addresses:
                 result = subprocess.run(
-                    ["virsh", "dumpxml", vm_name],
+                    ["virsh", "--connect", self.libvirt_uri, "dumpxml", vm_name],
                     capture_output=True,
                     text=True,
                     check=True
@@ -625,7 +647,7 @@ class VMIPManager:
             else:
                 # Fall back to virsh
                 result = subprocess.run(
-                    ["virsh", "list", "--all", "--name"],
+                    ["virsh", "--connect", self.libvirt_uri, "list", "--all", "--name"],
                     capture_output=True,
                     text=True,
                     check=True
@@ -672,9 +694,26 @@ class VMIPManager:
         self.logger.warning(f"Timeout waiting for VM {vm_name} IP address")
         return None
     
-    def get_cached_ip_info(self, vm_name: str) -> Optional[VMIPInfo]:
-        """Get cached IP information for a VM"""
-        return self._ip_cache.get(vm_name)
+    def get_cached_ip_info(self, vm_name: str, max_age_seconds: int = 300) -> Optional[VMIPInfo]:
+        """
+        Get cached IP information for a VM if it's fresh.
+        
+        Args:
+            vm_name: Name of the VM
+            max_age_seconds: Maximum age of cache entry in seconds (default: 5 minutes)
+            
+        Returns:
+            VMIPInfo if cache is fresh, None if expired or not found
+        """
+        cached_entry = self._ip_cache.get(vm_name)
+        if cached_entry and not cached_entry.is_expired() and cached_entry.is_fresh(max_age_seconds):
+            return cached_entry.ip_info
+        
+        # Remove expired cache entry
+        if cached_entry and cached_entry.is_expired():
+            self._ip_cache.pop(vm_name, None)
+            
+        return None
     
     def get_vm_health_info(self, vm_name: str) -> VMHealthInfo:
         """
@@ -882,7 +921,7 @@ class VMIPManager:
         try:
             # Get VM's current bridge/network connections
             result = subprocess.run(
-                ["virsh", "dumpxml", vm_name],
+                ["virsh", "--connect", self.libvirt_uri, "dumpxml", vm_name],
                 capture_output=True,
                 text=True,
                 check=True
@@ -1022,7 +1061,7 @@ class VMIPManager:
         try:
             # Try to get console log or QEMU monitor info
             result = subprocess.run(
-                ["virsh", "console", vm_name, "--force"],
+                ["virsh", "--connect", self.libvirt_uri, "console", vm_name, "--force"],
                 capture_output=True,
                 text=True,
                 timeout=2  # Short timeout since we just want to check if console is accessible
@@ -1037,7 +1076,7 @@ class VMIPManager:
         # Try to check VM domain info
         try:
             result = subprocess.run(
-                ["virsh", "dominfo", vm_name],
+                ["virsh", "--connect", self.libvirt_uri, "dominfo", vm_name],
                 capture_output=True,
                 text=True,
                 check=True
@@ -1193,9 +1232,9 @@ class VMIPManager:
                                 error_details: List[str]) -> VMHealthInfo:
         """Get VM health information using virsh commands as fallback"""
         try:
-            # Get VM state using virsh
+            # Get VM state using virsh with correct libvirt URI
             result = subprocess.run(
-                ["virsh", "domstate", vm_name],
+                ["virsh", "--connect", self.libvirt_uri, "domstate", vm_name],
                 capture_output=True,
                 text=True,
                 check=True
@@ -1205,7 +1244,7 @@ class VMIPManager:
             # Get VM ID using virsh
             try:
                 uuid_result = subprocess.run(
-                    ["virsh", "domuuid", vm_name],
+                    ["virsh", "--connect", self.libvirt_uri, "domuuid", vm_name],
                     capture_output=True,
                     text=True,
                     check=True
@@ -1265,7 +1304,7 @@ class VMIPManager:
                 # Get basic uptime info
                 try:
                     uptime_result = subprocess.run(
-                        ["virsh", "dominfo", vm_name],
+                        ["virsh", "--connect", self.libvirt_uri, "dominfo", vm_name],
                         capture_output=True,
                         text=True,
                         check=True
@@ -1291,9 +1330,9 @@ class VMIPManager:
                                 error_details: List[str]):
         """Check VM disk status using virsh commands and collect error details"""
         try:
-            # Get VM XML using virsh
+            # Get VM XML using virsh with correct libvirt URI
             result = subprocess.run(
-                ["virsh", "dumpxml", vm_name],
+                ["virsh", "--connect", self.libvirt_uri, "dumpxml", vm_name],
                 capture_output=True,
                 text=True,
                 check=True
