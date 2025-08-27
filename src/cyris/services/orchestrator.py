@@ -762,9 +762,11 @@ class RangeOrchestrator:
             range_settings = {}
             topology_config = None
             
-            for element in doc:
-                if 'host_settings' in element:
-                    for h in element['host_settings']:
+            # Handle both list and dictionary YAML formats for flexibility
+            if isinstance(doc, dict):
+                # New dictionary format
+                if 'host_settings' in doc:
+                    for h in doc['host_settings']:
                         host = Host(
                             h['id'], 
                             h.get('virbr_addr', '192.168.122.1'), 
@@ -773,8 +775,8 @@ class RangeOrchestrator:
                         )
                         hosts.append(host)
                 
-                if 'guest_settings' in element:
-                    for g in element['guest_settings']:
+                if 'guest_settings' in doc:
+                    for g in doc['guest_settings']:
                         guest = Guest(
                             guest_id=g['id'],
                             basevm_addr=g.get('ip_addr', '192.168.1.100'),
@@ -788,11 +790,44 @@ class RangeOrchestrator:
                         )
                         guests.append(guest)
                 
-                if 'clone_settings' in element:
-                    for c in element['clone_settings']:
+                if 'clone_settings' in doc:
+                    for c in doc['clone_settings']:
                         range_settings = c
                         # Extract topology configuration - KISS: simple direct lookup
                         topology_config = self._extract_topology_config(c)
+            else:
+                # Legacy list format (maintain backward compatibility)
+                for element in doc:
+                    if 'host_settings' in element:
+                        for h in element['host_settings']:
+                            host = Host(
+                                h['id'], 
+                                h.get('virbr_addr', '192.168.122.1'), 
+                                h['mgmt_addr'], 
+                                h['account']
+                            )
+                            hosts.append(host)
+                    
+                    if 'guest_settings' in element:
+                        for g in element['guest_settings']:
+                            guest = Guest(
+                                guest_id=g['id'],
+                                basevm_addr=g.get('ip_addr', '192.168.1.100'),
+                                root_passwd=g.get('root_passwd', 'password'),
+                                basevm_host=g['basevm_host'],
+                                basevm_config_file=g.get('basevm_config_file', ''),
+                                basevm_os_type=g.get('os_type', 'linux'),
+                                basevm_type=g.get('basevm_type', 'kvm'),
+                                basevm_name=g.get('basevm_name', g['id']),
+                                tasks=g.get('tasks', [])
+                            )
+                            guests.append(guest)
+                    
+                    if 'clone_settings' in element:
+                        for c in element['clone_settings']:
+                            range_settings = c
+                            # Extract topology configuration - KISS: simple direct lookup
+                            topology_config = self._extract_topology_config(c)
             
             # Generate range ID if not provided
             if range_id is None:
