@@ -96,12 +96,55 @@ class ListCommandHandler(BaseCommandHandler, ServiceMixin):
             self.error_console.print(f"[bold red]Cyber range directory does not exist: {ranges_dir}[/bold red]")
     
     def _show_verbose_info(self, orchestrator, ranges) -> None:
-        """显示详细信息"""
+        """显示详细信息，包括VM IP地址"""
         for range_meta in ranges:
             if range_meta.status.value in ['active', 'creating']:
                 resources = orchestrator.get_range_resources(range_meta.range_id)
                 if resources and resources.get('guests'):
-                    self.log_verbose(f"Range {range_meta.range_id} has {len(resources['guests'])} VMs")
+                    self.console.print(f"\n[bold cyan]Range {range_meta.range_id} VM Details:[/bold cyan]")
+                    
+                    # Get libvirt URI from range metadata
+                    libvirt_uri = "qemu:///system"
+                    if range_meta.provider_config:
+                        libvirt_uri = range_meta.provider_config.get('libvirt_uri', libvirt_uri)
+                    
+                    try:
+                        from cyris.tools.vm_ip_manager import VMIPManager
+                        ip_manager = VMIPManager(libvirt_uri=libvirt_uri)
+                        
+                        for guest in resources['guests']:
+                            try:
+                                health_info = ip_manager.get_vm_health_info(guest)
+                                self._display_vm_summary(guest, health_info)
+                            except Exception as e:
+                                self.console.print(f"  [red]{guest}[/red]: [dim]Status check failed - {str(e)}[/dim]")
+                        
+                        ip_manager.close()
+                        
+                    except ImportError:
+                        self.console.print("[yellow]  VM details not available (VMIPManager missing)[/yellow]")
+                    except Exception as e:
+                        self.console.print(f"[red]  Error getting VM details: {str(e)}[/red]")
+    
+    def _display_vm_summary(self, guest: str, health_info) -> None:
+        """显示VM简要信息（用于list -v）"""
+        status_icon = ":green_heart:" if getattr(health_info, 'is_healthy', False) else ":cross_mark:"
+        libvirt_status = getattr(health_info, 'libvirt_status', 'unknown')
+        
+        # Get IP addresses
+        ip_addresses = getattr(health_info, 'ip_addresses', [])
+        if ip_addresses:
+            ip_text = f"[green]{', '.join(ip_addresses)}[/green]"
+            # Check network reachability
+            if hasattr(health_info, 'network_reachable') and health_info.network_reachable:
+                network_status = "[green]✓[/green]"
+            else:
+                network_status = "[yellow]?[/yellow]"
+        else:
+            ip_text = "[dim]No IP assigned[/dim]"
+            network_status = "[dim]-[/dim]"
+        
+        self.console.print(f"  {status_icon} [cyan]{guest}[/cyan] ({libvirt_status}) - {ip_text} {network_status}")
     
     def _check_running_vms(self, provider) -> None:
         """检查运行中的VM（复用原有逻辑）"""
