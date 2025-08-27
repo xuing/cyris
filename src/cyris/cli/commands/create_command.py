@@ -14,8 +14,8 @@ class CreateCommandHandler(BaseCommandHandler, ValidationMixin):
     """Create命令处理器 - 创建新的靶场"""
     
     def execute(self, description_file: Path, range_id: Optional[int] = None,
-                dry_run: bool = False, network_mode: str = 'user',
-                enable_ssh: bool = False) -> bool:
+                dry_run: bool = False, network_mode: str = 'bridge',
+                enable_ssh: bool = True) -> bool:
         """执行create命令"""
         try:
             # Validate inputs

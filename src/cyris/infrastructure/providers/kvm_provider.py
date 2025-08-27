@@ -834,6 +834,9 @@ class KVMProvider(InfrastructureProvider):
         Args:
             interface_elem: XML interface element to configure
         """
+        # Get current interface type from template
+        current_type = interface_elem.get('type', 'user')
+        
         if self.network_mode == "bridge" or self.enable_ssh:
             # Configure bridge networking for SSH access
             self.logger.info("Configuring bridge networking for SSH access")
@@ -849,15 +852,44 @@ class KVMProvider(InfrastructureProvider):
                 
                 self.logger.info("Configured system-level bridge networking")
             else:
-                # Session mode - use user networking with port forwarding
-                interface_elem.set('type', 'user')
-                
-                # Remove existing source
-                source_elem = interface_elem.find('source')
-                if source_elem is not None:
-                    interface_elem.remove(source_elem)
+                # Session mode - try to preserve bridge networking if template specifies it
+                if current_type == 'bridge':
+                    # Keep bridge networking if template specifies it and bridge exists
+                    source_elem = interface_elem.find('source')
+                    bridge_name = source_elem.get('bridge', 'virbr0') if source_elem is not None else 'virbr0'
                     
-                self.logger.info("Configured user-mode networking (SSH through port forwarding)")
+                    # Check if bridge exists (simple check)
+                    try:
+                        import subprocess
+                        result = subprocess.run(['ip', 'link', 'show', bridge_name], 
+                                              capture_output=True, text=True, timeout=5)
+                        if result.returncode == 0:
+                            # Bridge exists, keep bridge networking
+                            self.logger.info(f"Configured session-mode bridge networking using {bridge_name}")
+                        else:
+                            # Bridge doesn't exist, fallback to network mode
+                            interface_elem.set('type', 'network')
+                            if source_elem is None:
+                                source_elem = ET.SubElement(interface_elem, 'source')
+                            source_elem.set('network', 'default')
+                            source_elem.attrib.pop('bridge', None)  # Remove bridge attribute
+                            self.logger.info("Bridge not available, using session-mode network networking")
+                    except Exception as e:
+                        # If check fails, use user mode as fallback
+                        self.logger.warning(f"Failed to check bridge availability: {e}, using user mode")
+                        interface_elem.set('type', 'user')
+                        source_elem = interface_elem.find('source')
+                        if source_elem is not None:
+                            interface_elem.remove(source_elem)
+                        self.logger.info("Configured user-mode networking (bridge check failed)")
+                else:
+                    # Template doesn't specify bridge, use network mode for session
+                    interface_elem.set('type', 'network')
+                    source_elem = interface_elem.find('source')
+                    if source_elem is None:
+                        source_elem = ET.SubElement(interface_elem, 'source')
+                    source_elem.set('network', 'default')
+                    self.logger.info("Configured session-mode network networking")
         else:
             # Use user-mode networking (isolated)
             interface_elem.set('type', 'user')

@@ -80,9 +80,9 @@ def cli(ctx, config: Optional[str], verbose: bool, version: bool):
 @click.option('--dry-run', is_flag=True, help='Dry run mode, do not actually create')
 @click.option('--network-mode', 
               type=click.Choice(['user', 'bridge'], case_sensitive=False),
-              default='user',
+              default='bridge',
               help='Network mode: user (isolated) or bridge (SSH accessible)')
-@click.option('--enable-ssh', is_flag=True, help='Enable SSH access (requires bridge networking)')
+@click.option('--enable-ssh', is_flag=True, default=True, help='Enable SSH access (requires bridge networking)')
 @click.pass_context
 def create(ctx, description_file: Path, range_id: Optional[int], dry_run: bool, network_mode: str, enable_ssh: bool):
     """Create a new cyber range
