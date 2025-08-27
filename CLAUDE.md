@@ -1,173 +1,183 @@
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-use English to write code.
 
 ## Project Overview
 
-CyRIS (Cyber Range Instantiation System) 是一个用于网络安全培训的自动化工具，可以基于YAML描述文件创建和管理网络安全训练环境（网络靶场）。该系统支持KVM虚拟化和AWS云环境。
+CyRIS (Cyber Range Instantiation System) is an automated tool for cybersecurity training that creates and manages cybersecurity training environments (cyber ranges) based on YAML description files. The system supports KVM virtualization and AWS cloud environments.
 
-**重要更新**: 该项目已完成现代化改造，当前进度100%：
-- ✅ 现代化Python架构（Pydantic、Click、pytest等）
-- ✅ 完整的单元测试覆盖（94%覆盖率）
-- ✅ 分步骤部署脚本  
-- ✅ 现代化CLI接口
-- ✅ 向后兼容原始接口
-- ✅ 服务层实现（完成 - orchestrator、monitoring、cleanup等）
-- ✅ 基础设施层抽象（完成 - KVM/AWS提供商接口）
-- ✅ 工具模块现代化（完成 - SSH、用户管理等）
-- ✅ 集成测试扩展（完成 - 完整的服务集成测试）
-- ✅ 端到端测试框架（完成 - CLI和完整部署测试）
+**Current Status**: The project has completed full modernization with 100% progress:
+- ✅ Modern Python architecture (Pydantic, Click, pytest, Rich)
+- ✅ Complete unit test coverage (94% coverage rate)
+- ✅ Stepwise deployment scripts  
+- ✅ Modern CLI interface with Rich terminal output
+- ✅ Backward compatibility with legacy interfaces
+- ✅ Service layer implementation (orchestrator, monitoring, cleanup)
+- ✅ Infrastructure layer abstraction (KVM/AWS provider interfaces)
+- ✅ Modernized tool modules (SSH, user management, VM IP discovery)
+- ✅ Integration test coverage (complete service integration tests)
+- ✅ End-to-end test framework (CLI and complete deployment tests)
 
-**架构现代化成果**:
-- 🏗️ **分层架构**: CLI层、服务层、领域层、基础设施层
-- 🔌 **Provider模式**: 支持KVM和AWS，可扩展其他云平台
-- 🛠️ **工具集成**: SSH管理、用户管理、网络管理、防火墙管理
-- 📊 **监控服务**: 实时监控、告警、性能指标收集
-- 🧹 **清理服务**: 自动化资源清理、数据归档、存储管理
-- 🧪 **完整测试**: 单元测试、集成测试、端到端测试
-- 🎨 **智能UI**: 自动emoji检测与ASCII回退，支持各种终端环境
+**Key Architectural Achievements**:
+- 🏗️ **Layered Architecture**: CLI, Service, Domain, Infrastructure layers
+- 🔌 **Provider Pattern**: Supports KVM and AWS, extensible to other cloud platforms
+- 🛠️ **Tool Integration**: SSH management, user management, network/firewall management
+- 📊 **Monitoring Services**: Real-time monitoring, alerting, performance metrics
+- 🧹 **Cleanup Services**: Automated resource cleanup, data archiving, storage management
+- 🧪 **Comprehensive Testing**: Unit, integration, and end-to-end tests
+- 🎨 **Smart UI**: Rich framework with emoji detection and ASCII fallback
+- 🔍 **VM IP Discovery**: Multi-method IP discovery with topology-aware assignment
 
 ## Common Commands
 
-### 现代化CLI接口（推荐）
+### Modern CLI Interface (Recommended)
 ```bash
-# 环境设置
-source .venv/bin/activate              # 激活虚拟环境
+# Environment setup
+source .venv/bin/activate              # Activate virtual environment
 
-# 基本操作
-./cyris --help                         # 查看帮助
-./cyris validate                       # 验证环境配置
-./cyris config-show                    # 显示当前配置
-./cyris create examples/basic.yml      # 创建网络靶场
-./cyris list                          # 列出所有靶场
-./cyris status 123                    # 查看靶场状态
-./cyris destroy 123                   # 销毁靶场
+# Basic operations
+./cyris --help                         # Show help
+./cyris validate                       # Validate environment configuration
+./cyris config-show                    # Display current configuration
+./cyris create examples/basic.yml      # Create cyber range
+./cyris list                          # List all ranges
+./cyris status basic --verbose        # View range status with detailed health info
+./cyris destroy basic                 # Destroy range
 
-# 配置管理
-./cyris config-init                   # 初始化默认配置
-./cyris config-show                   # 显示配置
+# Configuration management
+./cyris config-init                   # Initialize default configuration
+./cyris config-show                   # Display configuration
 ```
 
-### 传统接口（向后兼容）
+### Legacy Interface (Backward Compatible)
 ```bash
-# 传统方式（仍然支持）
+# Traditional methods (still supported)
 python main/cyris.py examples/basic.yml CONFIG
 main/range_cleanup.sh 123 CONFIG
 
-# 通过现代CLI调用传统接口
+# Call legacy interface through modern CLI
 ./cyris legacy examples/basic.yml CONFIG
 ```
 
-### 部署和环境设置
+### Deployment and Environment Setup
 ```bash
-# 现代化一键部署
-./deploy.sh                           # 完整部署
-./deploy.sh --dry-run                # 查看部署步骤
-./deploy.sh --python-only            # 仅设置Python环境
-./deploy.sh --validate-only          # 仅验证环境
+# Modern one-command deployment
+./deploy.sh                           # Complete deployment
+./deploy.sh --dry-run                # Preview deployment steps
+./deploy.sh --python-only            # Setup Python environment only
+./deploy.sh --validate-only          # Validation only
 
-# 分步骤部署
-scripts/setup/01-prepare-host.sh      # 主机准备（需sudo）
-scripts/setup/02-setup-python-env.sh  # Python环境设置
-scripts/validation/validate-deployment.sh  # 验证部署
+# Step-by-step deployment
+scripts/setup/01-prepare-host.sh      # Host preparation (requires sudo)
+scripts/setup/02-setup-python-env.sh  # Python environment setup
+scripts/validation/validate-deployment.sh  # Deployment validation
 
-# 环境激活
-source .venv/bin/activate            # 或
-source activate-env.sh               # 使用便捷脚本
+# Environment activation
+source .venv/bin/activate            # or
+source activate-env.sh               # Use convenience script
 ```
 
-### 测试和开发
+### Testing and Development
 ```bash
-# 运行现代化单元测试
-python -m pytest tests/unit/test_config_parser.py -v
-python -m pytest tests/unit/test_domain_entities.py -v
+# Run unit tests (modern architecture)
+python -m pytest tests/unit/ -v                          # All unit tests
+python -m pytest tests/unit/test_config_parser.py -v     # Specific module
+python -m pytest tests/unit/test_vm_ip_manager.py -v     # VM IP discovery tests
 
-# 运行所有现代化测试
-python -m pytest tests/unit/test_config_parser.py tests/unit/test_domain_entities.py -v
+# Run integration tests 
+python -m pytest tests/integration/ -v                   # Service integration
+python -m pytest tests/integration/test_orchestrator.py -v  # Orchestrator tests
 
-# 运行传统兼容性测试
-python simple_test.py
+# Run end-to-end tests
+python -m pytest tests/e2e/ -v                          # Full deployment tests
+python -m pytest tests/e2e/test_cli_interface.py -v     # CLI interface tests
 
-# 测试覆盖率报告
+# Test coverage analysis
 python -m pytest tests/unit/ --cov=src --cov-report=html
+python -m pytest tests/ --cov=src --cov-report=term-missing
 
-# 运行集成测试
-python -m pytest tests/integration/ -v
+# Legacy compatibility tests
+python simple_test.py                    # Basic legacy functionality
+python test_legacy_core.py               # Legacy core validation
+python test_modern_services.py           # Modern service validation  
+python test_service_integration.py       # Service integration testing
+python test_complete_functionality.py    # Complete functionality validation
 
-# 运行端到端测试  
-python -m pytest tests/e2e/ -v
-
-# 运行所有测试套件
-python -m pytest tests/ -v
-
-# 运行特定测试验证脚本
-python test_legacy_core.py                    # 传统核心功能验证
-python test_modern_services.py                # 现代服务验证  
-python test_service_integration.py            # 服务集成测试
-python test_complete_functionality.py         # 完整功能测试
+# KVM-specific testing (requires KVM environment)
+python verification_real_kvm.py          # Real KVM environment tests
 ```
 
-### 代码质量和格式化
+### Code Quality and Formatting
 ```bash
-# 运行代码格式化 (仅针对现代化模块)
+# Code formatting (modern modules only)
 python -m black src/
 
-# 运行类型检查 (仅针对现代化模块) 
+# Type checking (modern modules only) 
 python -m mypy src/
 
-# 运行代码风格检查 (仅针对现代化模块)
+# Linting (modern modules only)
 python -m flake8 src/
 
-# 运行预提交钩子
+# Pre-commit hooks
 pre-commit run --all-files
+
+# Poetry-based development
+poetry install                            # Install all dependencies
+poetry run pytest tests/                 # Run tests via poetry
+poetry run black src/                    # Format code via poetry
 ```
 
 ## Architecture Overview
 
-### 现代化架构
+### Modern Architecture
 
-#### 现代化组件状态
-- **src/cyris/config/** - ✅ 现代化配置管理（已完成）
-  - `settings.py` - Pydantic配置模型
-  - `parser.py` - 配置解析器（支持YAML和传统INI）
-- **src/cyris/domain/entities/** - ✅ 现代化领域实体（已完成）
-  - `host.py` - 主机实体和构建器
-  - `guest.py` - 虚拟机实体和构建器
-  - `base.py` - 实体基类
-- **src/cyris/cli/** - ✅ 现代化CLI接口（已完成）
-  - `main.py` - Click-based命令行接口
-- **src/cyris/services/** - ✅ 服务层（已完成）
-  - `orchestrator.py` - 编排服务（完整实现）
-  - `monitoring.py` - 监控服务（完整实现）
-  - `cleanup_service.py` - 清理服务（完整实现）
-- **src/cyris/infrastructure/** - ✅ 基础设施层（已完成）
-  - `providers/` - 虚拟化提供商抽象（完整实现）
-    - `base_provider.py` - 基础接口
-    - `kvm_provider.py` - KVM提供商
-    - `aws_provider.py` - AWS提供商
-  - `network/` - 网络管理（完整实现）
-    - `bridge_manager.py` - 网桥管理
-    - `firewall_manager.py` - 防火墙管理
-- **src/cyris/tools/** - ✅ 工具模块（已完成）
-  - `ssh_manager.py` - SSH管理和密钥管理
-  - `user_manager.py` - 用户账户和权限管理
-- **scripts/** - ✅ 分步骤部署脚本（已完成）
-  - `deploy.py` - Python部署协调器
-  - `setup/` - 主机和环境设置脚本
-  - `validation/` - 部署验证脚本
-- **tests/** - ✅ 测试套件（完整覆盖）
-  - `unit/` - ✅ 单元测试（94%覆盖率）
-  - `integration/` - ✅ 集成测试（完整实现）
-  - `e2e/` - ✅ 端到端测试（完整实现）
+#### Core Component Status
+- **src/cyris/config/** - ✅ Modern configuration management
+  - `settings.py` - Pydantic configuration models
+  - `parser.py` - Configuration parser (supports YAML and legacy INI)
+- **src/cyris/domain/entities/** - ✅ Modern domain entities
+  - `host.py` - Host entities and builders
+  - `guest.py` - Virtual machine entities and builders
+  - `base.py` - Entity base classes
+- **src/cyris/cli/** - ✅ Modern CLI interface with Rich UI
+  - `main.py` - Click-based command-line interface
+  - `commands/` - Structured command handlers (create, destroy, status, etc.)
+  - `presentation/` - Rich framework UI components
+- **src/cyris/services/** - ✅ Service layer implementation
+  - `orchestrator.py` - Orchestration service with topology management
+  - `monitoring.py` - Monitoring service with health checks and alerts
+  - `cleanup_service.py` - Cleanup service for resource management
+  - `network_service.py` - Network configuration and management
+- **src/cyris/infrastructure/** - ✅ Infrastructure abstraction layer
+  - `providers/` - Virtualization provider abstractions
+    - `base_provider.py` - Base provider interface
+    - `kvm_provider.py` - KVM provider implementation
+    - `aws_provider.py` - AWS provider implementation
+    - `virsh_client.py` - Libvirt/virsh client abstraction
+  - `network/` - Network management components
+    - `bridge_manager.py` - Network bridge management
+    - `firewall_manager.py` - Firewall rule management
+    - `topology_manager.py` - Network topology and IP allocation
+- **src/cyris/tools/** - ✅ Tool modules (fully modernized)
+  - `ssh_manager.py` - SSH management and key handling
+  - `user_manager.py` - User account and permission management
+  - `vm_ip_manager.py` - **Multi-method VM IP discovery with topology awareness**
+- **scripts/** - ✅ Deployment automation
+  - `deploy.py` - Python deployment coordinator
+  - `setup/` - Host and environment setup scripts
+  - `validation/` - Deployment validation scripts
+- **tests/** - ✅ Comprehensive test suite
+  - `unit/` - ✅ Unit tests (94% coverage)
+  - `integration/` - ✅ Integration tests (complete implementation)
+  - `e2e/` - ✅ End-to-end tests (complete implementation)
 
-#### 传统组件（保持兼容）
-- **main/cyris.py** - 原始主程序入口
-- **main/entities.py** - 原始实体类定义
-- **main/modules.py** - 功能模块类
-- **main/clone_environment.py** - VM克隆核心类
-- **main/parse_config.py** - 传统配置解析器
-- **main/range_cleanup.py** - 靶场清理功能
+#### Legacy Components (Maintained for Compatibility)
+- **main/cyris.py** - Original main program entry point
+- **main/entities.py** - Original entity class definitions
+- **main/modules.py** - Functional module classes
+- **main/clone_environment.py** - VM cloning core classes
+- **main/parse_config.py** - Legacy configuration parser
+- **main/range_cleanup.py** - Range cleanup functionality
 
 ### AWS Support
 - **main/aws_*.py** - AWS云环境支持模块
@@ -253,8 +263,76 @@ The project has undergone modernization but is not complete. Many functions lack
 - **CLI测试输出匹配**: 不要假设输出消息的组合方式，先运行CLI查看实际输出格式再写断言
 - **TDD调试方法**: 测试失败时，系统性分析是程序逻辑错误还是测试期望错误 - 通过实际运行程序验证预期行为
 
+## Critical Implementation Notes
+
+### VM IP Discovery System
+CyRIS implements a sophisticated multi-method VM IP discovery system in `src/cyris/tools/vm_ip_manager.py`:
+
+#### Discovery Methods (in priority order):
+1. **`cyris_topology`** - Reads IP assignments from topology manager metadata (highest priority)
+2. **`libvirt`** - Uses libvirt Python API for active VMs
+3. **`virsh`** - Uses virsh command-line tool
+4. **`arp`** - Scans ARP table for MAC-to-IP mappings
+5. **`dhcp`** - Parses DHCP lease files
+6. **`bridge`** - Scans bridge interfaces
+
+#### Recent Fixes Applied:
+- **Disk Lock Issues**: Added `--force-share` flag to qemu-img commands to prevent lock conflicts when VMs are running
+- **Network Testing**: Improved ping tests with longer timeouts (3 pings, 5s wait, 15s total timeout)
+- **Topology Integration**: Enhanced orchestrator to extract and store topology configuration from YAML files
+- **Alternative IP Discovery**: Added bridge network scanning and alternative network range discovery
+
+### Status Command Enhancements
+The `./cyris status <range_id> --verbose` command now provides comprehensive VM health information:
+- **Libvirt Status**: Shows VM state (running, shut off, etc.)
+- **IP Address Resolution**: Multi-method IP discovery with error details
+- **Network Reachability**: Tests network connectivity via ping
+- **Disk Health**: Checks disk images with proper lock handling
+- **Error Diagnostics**: Detailed error reporting for troubleshooting
+
 ### Troubleshooting Common Issues
-- "No route to host" errors: Destroy partially created ranges and recreate
-- KVM domain cleanup: Use `destroy_all_cr.sh CYRIS_PATH CYBER_RANGE_PATH` for complete cleanup
-- Network bridge issues: Check with `brctl show` and clean up manually if needed
-- Permission errors: Ensure user is in libvirt group and has KVM access
+
+#### VM Status Problems
+```bash
+# If status shows disk lock errors:
+./cyris status <range_id> --verbose    # Should now work with recent fixes
+
+# If VM has IP but not reachable:
+ping <vm_ip>                           # Test direct connectivity
+virsh console <vm_name>                # Check VM console (may need guest tools)
+```
+
+#### Network Issues
+- **"No route to host" errors**: Destroy partially created ranges and recreate
+- **ARP incomplete entries**: Indicates VM network stack issues, check guest configuration
+- **Bridge connectivity**: Check with `brctl show` and `ip route` for bridge network setup
+
+#### KVM Environment
+- **Domain cleanup**: Use `destroy_all_cr.sh CYRIS_PATH CYBER_RANGE_PATH` for complete cleanup
+- **Permission errors**: Ensure user is in libvirt group and has KVM access
+- **Network bridge issues**: Check bridge status and clean up manually if needed
+
+#### Development Environment
+- **libvirt connection**: Ensure `qemu:///system` URI is accessible
+- **Python virtual environment**: Always activate `.venv` before running commands
+- **KVM acceleration**: Verify `/dev/kvm` device exists and is accessible
+
+## Development Workflow Best Practices
+
+### When Working on Bug Fixes
+1. **Identify root cause** using verbose status commands and log analysis
+2. **Apply KISS principles** - create simple, focused methods for single responsibilities  
+3. **Test thoroughly** with both unit tests and real KVM environment validation
+4. **Document fixes** in commit messages and update BUGFIX_RECORD.md if needed
+
+### When Adding New Features
+1. **Follow layered architecture** - add functionality at appropriate layer (CLI, Service, Infrastructure)
+2. **Maintain backward compatibility** with legacy interfaces
+3. **Add comprehensive tests** covering unit, integration, and e2e scenarios
+4. **Update CLI help and documentation** to reflect new capabilities
+
+### Code Quality Standards
+- **Modern modules** (src/cyris/): Use Pydantic, Click, pytest, Rich framework, type hints
+- **Legacy modules** (main/): Maintain existing patterns for stability
+- **Testing**: Achieve 90%+ coverage for new code, test with real KVM when possible
+- **Error handling**: Provide detailed error messages with actionable guidance
