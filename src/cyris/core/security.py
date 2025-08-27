@@ -232,9 +232,9 @@ def validate_user_input(input_value: str, input_type: str = "general") -> bool:
     
     # Basic validation rules
     if input_type == "username":
-        # Username should be alphanumeric plus underscore, hyphen
+        # Username should be alphanumeric plus underscore, hyphen, dot
         import re
-        return bool(re.match(r'^[a-zA-Z0-9_-]+$', input_value)) and len(input_value) <= 32
+        return bool(re.match(r'^[a-zA-Z0-9_.-]+$', input_value)) and len(input_value) <= 32
     
     elif input_type == "range_id":
         # Range ID should be numeric or alphanumeric
