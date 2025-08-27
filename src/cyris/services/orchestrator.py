@@ -760,6 +760,7 @@ class RangeOrchestrator:
             hosts = []
             guests = []
             range_settings = {}
+            topology_config = None
             
             for element in doc:
                 if 'host_settings' in element:
@@ -790,6 +791,8 @@ class RangeOrchestrator:
                 if 'clone_settings' in element:
                     for c in element['clone_settings']:
                         range_settings = c
+                        # Extract topology configuration - KISS: simple direct lookup
+                        topology_config = self._extract_topology_config(c)
             
             # Generate range ID if not provided
             if range_id is None:
@@ -808,6 +811,7 @@ class RangeOrchestrator:
                 description=f"Range created from {description_file.name}",
                 hosts=hosts,
                 guests=guests,
+                topology_config=topology_config,
                 tags={"source_file": str(description_file)}
             )
             
@@ -816,6 +820,24 @@ class RangeOrchestrator:
         except Exception as e:
             self.logger.error(f"Failed to create range from YAML {description_file}: {e}")
             raise
+    
+    def _extract_topology_config(self, clone_settings: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Extract topology configuration from clone settings.
+        KISS: Simple single-purpose method for topology extraction.
+        
+        Args:
+            clone_settings: Clone settings dictionary
+            
+        Returns:
+            Topology configuration dictionary or None
+        """
+        hosts = clone_settings.get('hosts', [])
+        for host in hosts:
+            topology = host.get('topology', [])
+            if topology:
+                return topology[0]  # Return first topology config
+        return None
     
     def _load_persistent_data(self) -> None:
         """Load persistent data from disk"""

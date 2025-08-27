@@ -147,6 +147,7 @@ class VMIPManager:
             VMIPInfo object with discovered IP information, or None if not found
             
         Available methods:
+        - 'cyris_topology': Use CyRIS topology manager assigned IP (highest priority)
         - 'libvirt': Use libvirt Python API (most reliable)
         - 'virsh': Use virsh command line tool
         - 'arp': Scan ARP table for MAC-to-IP mappings
@@ -155,7 +156,7 @@ class VMIPManager:
         - 'cyris': Use CyRIS-specific calculation method
         """
         if methods is None:
-            methods = ['libvirt', 'virsh', 'arp', 'dhcp', 'bridge']
+            methods = ['cyris_topology', 'libvirt', 'virsh', 'arp', 'dhcp', 'bridge']
         
         self.logger.info(f"Discovering IP addresses for VM: {vm_name}")
         
@@ -164,7 +165,9 @@ class VMIPManager:
             try:
                 vm_info = None
                 
-                if method == 'libvirt' and self.connection:
+                if method == 'cyris_topology':
+                    vm_info = self._get_ips_via_cyris_topology(vm_name)
+                elif method == 'libvirt' and self.connection:
                     vm_info = self._get_ips_via_libvirt(vm_name)
                 elif method == 'virsh':
                     vm_info = self._get_ips_via_virsh(vm_name)
@@ -195,6 +198,72 @@ class VMIPManager:
                 continue
         
         self.logger.warning(f"Could not discover IP addresses for VM: {vm_name}")
+        return None
+
+    def _get_ips_via_cyris_topology(self, vm_name: str) -> Optional[VMIPInfo]:
+        """
+        Get IP addresses from CyRIS topology manager assignments.
+        KISS: Simple method focused on single purpose.
+        """
+        try:
+            # KISS: Extract guest ID first
+            guest_id = self._extract_guest_id_from_vm_name(vm_name)
+            if not guest_id:
+                return None
+            
+            # KISS: Get IP assignment from metadata
+            assigned_ip = self._get_assigned_ip_from_metadata(guest_id)
+            if not assigned_ip:
+                return None
+            
+            # KISS: Create and return VM info
+            return VMIPInfo(
+                vm_name=vm_name,
+                vm_id=guest_id,
+                ip_addresses=[assigned_ip],
+                mac_addresses=self._get_vm_mac_addresses(vm_name),
+                interface_names=['eth0'],
+                discovery_method="cyris_topology",
+                last_updated=time.strftime("%Y-%m-%d %H:%M:%S"),
+                status="assigned"
+            )
+            
+        except Exception as e:
+            self.logger.debug(f"CyRIS topology method failed for {vm_name}: {e}")
+        
+        return None
+    
+    def _extract_guest_id_from_vm_name(self, vm_name: str) -> Optional[str]:
+        """Extract guest ID from VM name (format: cyris-{guest_id}-{uuid})"""
+        parts = vm_name.split('-')
+        if len(parts) >= 3 and parts[0] == 'cyris':
+            return parts[1]
+        return None
+    
+    def _get_assigned_ip_from_metadata(self, guest_id: str) -> Optional[str]:
+        """Get assigned IP address from range metadata"""
+        from pathlib import Path
+        import json
+        
+        metadata_file = Path.cwd() / "cyber_range" / "ranges_metadata.json"
+        if not metadata_file.exists():
+            return None
+        
+        try:
+            with open(metadata_file, 'r') as f:
+                ranges_data = json.load(f)
+            
+            # Search through all ranges for IP assignments
+            for range_metadata in ranges_data.values():
+                tags = range_metadata.get('tags', {})
+                if 'ip_assignments' in tags:
+                    ip_assignments = json.loads(tags['ip_assignments'])
+                    if guest_id in ip_assignments:
+                        return ip_assignments[guest_id]
+            
+        except (json.JSONDecodeError, KeyError, FileNotFoundError):
+            pass
+        
         return None
     
     def _get_ips_via_libvirt(self, vm_name: str) -> Optional[VMIPInfo]:
@@ -714,9 +783,15 @@ class VMIPManager:
             
             # If VM is running but we have no IP, that's likely an error
             if not health_info.ip_addresses:
-                error_details.append("VM appears to be running in libvirt but has no IP address assigned")
+                error_details.append("VM appears running in virsh but has no IP address")
                 if health_info.uptime:
                     error_details.append(f"VM uptime: {health_info.uptime}")
+                
+                # Try additional IP discovery methods
+                try:
+                    self._try_alternative_ip_discovery(vm_name, health_info, error_details)
+                except Exception as e:
+                    error_details.append(f"Alternative IP discovery failed: {e}")
                 
                 # Try to get more diagnostic info by examining QEMU/console logs
                 try:
@@ -766,9 +841,10 @@ class VMIPManager:
                     return
                 
                 # Check disk image with qemu-img and capture any errors
+                # KISS: Skip disk check for running VMs to avoid lock issues
                 try:
                     result = subprocess.run(
-                        ["qemu-img", "info", disk_path],
+                        ["qemu-img", "info", "--force-share", disk_path],
                         capture_output=True,
                         text=True,
                         check=True
@@ -800,6 +876,147 @@ class VMIPManager:
         except Exception as e:
             error_details.append(f"Could not parse VM XML for disk information: {e}")
     
+    def _try_alternative_ip_discovery(self, vm_name: str, health_info: VMHealthInfo, error_details: List[str]):
+        """Try alternative methods to discover VM IP addresses"""
+        # Method 1: Check if VM is on a different bridge network
+        try:
+            # Get VM's current bridge/network connections
+            result = subprocess.run(
+                ["virsh", "dumpxml", vm_name],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            
+            import xml.etree.ElementTree as ET
+            root = ET.fromstring(result.stdout)
+            
+            # Find network interfaces and their bridges
+            interfaces = root.findall('.//interface[@type="bridge"]')
+            for interface in interfaces:
+                source = interface.find('source')
+                if source is not None:
+                    bridge_name = source.get('bridge')
+                    if bridge_name and bridge_name != 'virbr0':
+                        error_details.append(f"VM is connected to custom bridge: {bridge_name}")
+                        
+                        # Try to scan the bridge's network
+                        bridge_ip = self._get_bridge_ip(bridge_name)
+                        if bridge_ip:
+                            error_details.append(f"Bridge {bridge_name} IP: {bridge_ip}")
+                            # Try to scan the bridge network for the VM
+                            discovered_ip = self._scan_bridge_network(bridge_name, health_info.mac_addresses)
+                            if discovered_ip:
+                                health_info.ip_addresses.append(discovered_ip)
+                                error_details.append(f"Found VM IP via bridge scan: {discovered_ip}")
+                        else:
+                            error_details.append(f"Could not determine IP range for bridge: {bridge_name}")
+                    else:
+                        error_details.append(f"VM is connected to default libvirt bridge: {bridge_name or 'virbr0'}")
+        except Exception as e:
+            error_details.append(f"Bridge analysis failed: {e}")
+        
+        # Method 2: Try to find IP by scanning all known networks
+        if not health_info.ip_addresses and health_info.mac_addresses:
+            try:
+                discovered_ip = self._network_scan_for_mac(health_info.mac_addresses[0])
+                if discovered_ip:
+                    health_info.ip_addresses.append(discovered_ip)
+                    error_details.append(f"Found VM IP via network scan: {discovered_ip}")
+            except Exception as e:
+                error_details.append(f"Network scan failed: {e}")
+
+    def _get_bridge_ip(self, bridge_name: str) -> Optional[str]:
+        """Get the IP address/network of a bridge"""
+        try:
+            result = subprocess.run(
+                ["ip", "addr", "show", bridge_name],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            # Look for inet lines
+            for line in result.stdout.split('\n'):
+                if 'inet ' in line and not '127.0.0.1' in line:
+                    # Extract IP/prefix
+                    parts = line.strip().split()
+                    for part in parts:
+                        if '/' in part and not part.startswith('127.'):
+                            return part.split('/')[0]  # Return just the IP
+        except Exception:
+            pass
+        return None
+
+    def _scan_bridge_network(self, bridge_name: str, mac_addresses: List[str]) -> Optional[str]:
+        """Scan a bridge network to find a VM by MAC address"""
+        if not mac_addresses:
+            return None
+            
+        try:
+            bridge_ip = self._get_bridge_ip(bridge_name)
+            if not bridge_ip:
+                return None
+            
+            # Calculate network range (assume /24)
+            network_base = '.'.join(bridge_ip.split('.')[:-1])
+            
+            # Quick scan of common DHCP range
+            for i in range(2, 50):  # Common DHCP range
+                test_ip = f"{network_base}.{i}"
+                try:
+                    # Quick ping test
+                    result = subprocess.run(
+                        ["ping", "-c", "1", "-W", "1", test_ip],
+                        capture_output=True,
+                        timeout=2
+                    )
+                    if result.returncode == 0:
+                        # Check if this IP has the VM's MAC
+                        arp_result = subprocess.run(
+                            ["arp", "-n", test_ip],
+                            capture_output=True,
+                            text=True
+                        )
+                        for mac in mac_addresses:
+                            if mac.lower() in arp_result.stdout.lower():
+                                return test_ip
+                except:
+                    continue
+        except Exception:
+            pass
+        return None
+
+    def _network_scan_for_mac(self, mac_address: str) -> Optional[str]:
+        """Scan common network ranges to find VM by MAC address"""
+        common_ranges = [
+            "192.168.1",
+            "192.168.0", 
+            "192.168.122",
+            "10.0.0",
+            "172.16.0"
+        ]
+        
+        for network_base in common_ranges:
+            for i in range(2, 20):  # Quick scan of first few addresses
+                test_ip = f"{network_base}.{i}"
+                try:
+                    result = subprocess.run(
+                        ["ping", "-c", "1", "-W", "1", test_ip],
+                        capture_output=True,
+                        timeout=1
+                    )
+                    if result.returncode == 0:
+                        arp_result = subprocess.run(
+                            ["arp", "-n", test_ip],
+                            capture_output=True,
+                            text=True
+                        )
+                        if mac_address.lower() in arp_result.stdout.lower():
+                            return test_ip
+                except:
+                    continue
+        return None
+
     def _collect_vm_diagnostic_info(self, vm_name: str, error_details: List[str]):
         """Collect additional diagnostic information about VM problems"""
         try:
@@ -939,11 +1156,11 @@ class VMIPManager:
     def _test_network_reachability(self, ip_address: str) -> bool:
         """Test if VM is reachable over the network"""
         try:
+            # KISS: More lenient network test with longer timeout
             result = subprocess.run(
-                ["ping", "-c", "1", "-W", "2", ip_address],
+                ["ping", "-c", "3", "-W", "5", ip_address],
                 capture_output=True,
-                check=True,
-                timeout=5
+                timeout=15
             )
             return result.returncode == 0
         except:
@@ -1036,6 +1253,13 @@ class VMIPManager:
                 # If running but no IP, collect diagnostic info
                 if not health_info.ip_addresses:
                     error_details.append("VM appears running in virsh but has no IP address")
+                    
+                    # Try alternative IP discovery methods
+                    try:
+                        self._try_alternative_ip_discovery(vm_name, health_info, error_details)
+                    except Exception as e:
+                        error_details.append(f"Alternative IP discovery failed: {e}")
+                    
                     self._collect_vm_diagnostic_info(vm_name, error_details)
                     
                 # Get basic uptime info
@@ -1104,9 +1328,10 @@ class VMIPManager:
                     return
                 
                 # Check disk image with qemu-img and capture any errors
+                # KISS: Skip disk check for running VMs to avoid lock issues
                 try:
                     img_result = subprocess.run(
-                        ["qemu-img", "info", disk_path],
+                        ["qemu-img", "info", "--force-share", disk_path],
                         capture_output=True,
                         text=True,
                         check=True

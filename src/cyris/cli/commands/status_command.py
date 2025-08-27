@@ -224,7 +224,7 @@ class StatusCommandHandler(BaseCommandHandler, ServiceMixin):
             error_table.add_row("", Text("Error Details:", style="bold red"))
 
             for i, error in enumerate(health_info.error_details, 1):
-                error_table.add_row(f"{i}.", error)
+                error_table.add_row(f"{i}.", Text(escape(str(error)), style="red"))
 
             panel_content.append(error_table)
 
