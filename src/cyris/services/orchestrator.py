@@ -339,16 +339,10 @@ class RangeOrchestrator:
             for guest in guests:
                 guest_id = getattr(guest, 'id', None) or getattr(guest, 'guest_id', 'unknown')
                 
-                # Get IP address for the guest
-                guest_ip = None
-                if topology_config and hasattr(self.topology_manager, 'ip_assignments'):
-                    guest_ip = self.topology_manager.get_guest_ip(guest_id)
+                # Get IP address for the guest using VM IP manager
+                guest_ip = self._wait_for_vm_readiness(guest_id, range_id, max_wait_minutes=3)
                 
-                # Use predefined IP if available
-                if not guest_ip and hasattr(guest, 'ip_addr') and guest.ip_addr:
-                    guest_ip = guest.ip_addr
-                
-                # Execute tasks if guest has them and IP is available
+                # Execute tasks if guest is ready and has tasks
                 if guest_ip and hasattr(guest, 'tasks') and guest.tasks:
                     self.logger.info(f"Executing tasks for guest {guest_id} at {guest_ip}")
                     
@@ -368,12 +362,18 @@ class RangeOrchestrator:
                     if results:
                         task_results.extend(results)
                         
-                        # Log task results
-                        for result in results:
-                            if result.success:
-                                self.logger.info(f"Task {result.task_id}: {result.message}")
-                            else:
-                                self.logger.warning(f"Task {result.task_id} failed: {result.message}")
+                elif hasattr(guest, 'tasks') and guest.tasks:
+                    # VM not ready but has tasks - log warning
+                    self.logger.warning(f"Guest {guest_id} has tasks but is not ready for execution (no IP or not reachable)")
+                    # Store failed task info for potential retry
+                    for task_config in guest.tasks:
+                        for task_type, task_params in task_config.items():
+                            task_results.append({
+                                "task_id": f"{guest_id}_{task_type}_pending",
+                                "task_type": task_type, 
+                                "success": False,
+                                "message": "VM not ready during deployment - task execution deferred"
+                            })
             
             # Store task results in metadata
             if task_results:
@@ -1223,6 +1223,76 @@ class RangeOrchestrator:
         
         return resources
     
+    def _wait_for_vm_readiness(self, guest_id: str, range_id: str, max_wait_minutes: int = 3) -> Optional[str]:
+        """
+        Wait for VM to be ready for task execution by checking IP availability and SSH connectivity.
+        
+        Args:
+            guest_id: Guest ID to check
+            range_id: Range ID for context
+            max_wait_minutes: Maximum time to wait in minutes
+            
+        Returns:
+            VM IP address if ready, None if not ready within timeout
+        """
+        wait_seconds = max_wait_minutes * 60
+        start_time = time.time()
+        
+        self.logger.info(f"Waiting up to {max_wait_minutes} minutes for VM {guest_id} to become ready...")
+        
+        from ..tools.vm_ip_manager import VMIPManager
+        vm_ip_manager = VMIPManager()
+        
+        while (time.time() - start_time) < wait_seconds:
+            # Try to find VM by guest_id pattern and get its IP
+            try:
+                # List all VMs matching guest pattern
+                import subprocess
+                result = subprocess.run(['virsh', 'list', '--name', '--state-running'], 
+                                     capture_output=True, text=True, timeout=10)
+                
+                if result.returncode == 0:
+                    for vm_name in result.stdout.strip().split('\n'):
+                        if vm_name and guest_id in vm_name:
+                            health_info = vm_ip_manager.get_vm_health_info(vm_name)
+                            if health_info.ip_addresses:
+                                vm_ip = health_info.ip_addresses[0]
+                                
+                                # Test SSH connectivity to verify VM is ready
+                                if self._test_ssh_connectivity(vm_ip):
+                                    self.logger.info(f"VM {guest_id} ({vm_name}) is ready at {vm_ip} (waited {int(time.time() - start_time)}s)")
+                                    return vm_ip
+                                else:
+                                    self.logger.debug(f"VM {guest_id} has IP {vm_ip} but SSH not ready yet")
+                                    break
+                            else:
+                                self.logger.debug(f"VM {vm_name} found but no IP yet")
+                                break
+                
+                self.logger.debug(f"VM {guest_id} not found or IP not ready, retrying...")
+            except Exception as e:
+                self.logger.debug(f"Error checking VM {guest_id}: {e}")
+            
+            # Wait before retrying
+            time.sleep(10)
+        
+        self.logger.warning(f"VM {guest_id} not ready after {max_wait_minutes} minutes")
+        return None
+    
+    def _test_ssh_connectivity(self, vm_ip: str) -> bool:
+        """Test if VM is ready for SSH connections"""
+        try:
+            # Use task executor's SSH method to test connectivity
+            success, _, _ = self.task_executor._execute_ssh_command(
+                vm_ip, 
+                "echo 'ready'",
+                username="trainee01",
+                password="trainee123"
+            )
+            return success
+        except Exception:
+            return False
+
     def _cleanup_partial_resources(self, range_id: int, resources: Dict[str, List[str]]):
         """
         Clean up partially created resources
