@@ -49,13 +49,26 @@ class SSHInfoCommandHandler(BaseCommandHandler, ServiceMixin):
     def _display_vm_ssh_info(self, vms, provider) -> None:
         """显示VM的SSH信息"""
         for i, vm in enumerate(vms, 1):
-            vm_id = vm.get('id', f'vm-{i}')
-            vm_name = vm.get('name', vm_id)
+            # vms is a list of VM ID strings, not dictionaries
+            if isinstance(vm, dict):
+                vm_id = vm.get('id', f'vm-{i}')
+                vm_name = vm.get('name', vm_id)
+            else:
+                # VM is a string ID
+                vm_id = vm
+                vm_name = vm_id
             
             self.console.print(f"\n[bold cyan]VM {i}: {vm_name}[/bold cyan]")
             
-            # Get IP addresses if available
-            vm_ip = vm.get('ip_address')
+            # Get IP addresses from provider
+            vm_ip = None
+            try:
+                if hasattr(provider, 'get_vm_ip'):
+                    vm_ip = provider.get_vm_ip(vm_id)
+            except Exception as e:
+                if self.verbose:
+                    self.log_verbose(f"Could not get IP for {vm_id}: {e}")
+            
             if vm_ip:
                 self.console.print(f"   🌐 IP Address: [green]{vm_ip}[/green]")
                 self.console.print(f"   🔐 SSH Command: [yellow]ssh user@{vm_ip}[/yellow]")

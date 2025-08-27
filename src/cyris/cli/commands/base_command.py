@@ -51,7 +51,7 @@ class BaseCommandHandler(ABC):
             return False
         return True
     
-    def create_orchestrator(self, network_mode: str = 'user', enable_ssh: bool = False):
+    def create_orchestrator(self, network_mode: str = 'bridge', enable_ssh: bool = True):
         """创建编排器 - 复用逻辑"""
         try:
             from cyris.services.orchestrator import RangeOrchestrator
