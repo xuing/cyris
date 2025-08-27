@@ -1,0 +1,33 @@
+---
+# Test architectural improvements with VM readiness checking
+- host_settings:
+  - id: host_1
+    mgmt_addr: localhost
+    virbr_addr: 192.168.122.1
+    account: ubuntu
+
+- guest_settings:
+  - id: test_arch_vm
+    basevm_host: host_1
+    basevm_config_file: /home/ubuntu/cyris/images/basevm.xml
+    basevm_type: kvm
+
+- clone_settings:
+  - range_id: arch_test
+    hosts:
+    - host_id: host_1
+      instance_number: 1
+      guests:
+      - guest_id: test_arch_vm
+        number: 1
+        entry_point: yes
+        tasks:
+          - add_account:
+              - account: arch_testuser
+                passwd: archpass123
+                full_name: "Architecture Test User"
+      topology:
+      - type: custom
+        networks:
+        - name: arch_network
+          members: test_arch_vm.eth0
