@@ -51,7 +51,7 @@ class TaskResult:
     task_type: TaskType
     success: bool
     message: str
-    execution_time: float
+    execution_time: float = 0.0
     output: Optional[str] = None
     error: Optional[str] = None
 
@@ -142,23 +142,23 @@ class TaskExecutor:
         
         try:
             if task_type == TaskType.ADD_ACCOUNT:
-                result = self._execute_add_account(task_id, params, guest_ip, guest)
+                result = self._execute_add_account(task_id, params, guest_ip, guest, start_time)
             elif task_type == TaskType.MODIFY_ACCOUNT:
-                result = self._execute_modify_account(task_id, params, guest_ip, guest)
+                result = self._execute_modify_account(task_id, params, guest_ip, guest, start_time)
             elif task_type == TaskType.INSTALL_PACKAGE:
-                result = self._execute_install_package(task_id, params, guest_ip, guest)
+                result = self._execute_install_package(task_id, params, guest_ip, guest, start_time)
             elif task_type == TaskType.COPY_CONTENT:
-                result = self._execute_copy_content(task_id, params, guest_ip, guest)
+                result = self._execute_copy_content(task_id, params, guest_ip, guest, start_time)
             elif task_type == TaskType.EXECUTE_PROGRAM:
-                result = self._execute_program(task_id, params, guest_ip, guest)
+                result = self._execute_program(task_id, params, guest_ip, guest, start_time)
             elif task_type == TaskType.EMULATE_ATTACK:
-                result = self._execute_emulate_attack(task_id, params, guest_ip, guest)
+                result = self._execute_emulate_attack(task_id, params, guest_ip, guest, start_time)
             elif task_type == TaskType.EMULATE_MALWARE:
-                result = self._execute_emulate_malware(task_id, params, guest_ip, guest)
+                result = self._execute_emulate_malware(task_id, params, guest_ip, guest, start_time)
             elif task_type == TaskType.EMULATE_TRAFFIC_CAPTURE:
-                result = self._execute_traffic_capture(task_id, params, guest_ip, guest)
+                result = self._execute_traffic_capture(task_id, params, guest_ip, guest, start_time)
             elif task_type == TaskType.FIREWALL_RULES:
-                result = self._execute_firewall_rules(task_id, params, guest_ip, guest)
+                result = self._execute_firewall_rules(task_id, params, guest_ip, guest, start_time)
             else:
                 result = TaskResult(
                     task_id=task_id,
@@ -168,6 +168,10 @@ class TaskExecutor:
                     execution_time=time.time() - start_time
                 )
             
+            # Ensure execution_time is set if not already set by the specific method
+            if result.execution_time == 0.0:
+                result.execution_time = time.time() - start_time
+                
         except Exception as e:
             self.logger.error(f"Task {task_id} failed with exception: {e}")
             result = TaskResult(
@@ -186,7 +190,8 @@ class TaskExecutor:
         task_id: str, 
         params: Dict[str, Any], 
         guest_ip: str, 
-        guest: Any
+        guest: Any,
+        start_time: float
     ) -> TaskResult:
         """Execute add account task securely"""
         
@@ -229,7 +234,7 @@ class TaskExecutor:
             task_type=TaskType.ADD_ACCOUNT,
             success=success,
             message=f"Add account '{account}': {'SUCCESS' if success else 'FAILED'}",
-            execution_time=0,  # Set by caller
+            execution_time=time.time() - start_time,
             output=output,
             error=error
         )
@@ -239,7 +244,8 @@ class TaskExecutor:
         task_id: str, 
         params: Dict[str, Any], 
         guest_ip: str, 
-        guest: Any
+        guest: Any,
+        start_time: float
     ) -> TaskResult:
         """Execute modify account task"""
         
@@ -293,7 +299,7 @@ class TaskExecutor:
             task_type=TaskType.MODIFY_ACCOUNT,
             success=success,
             message=f"Modify account '{account}': {'SUCCESS' if success else 'FAILED'}",
-            execution_time=0,
+            execution_time=time.time() - start_time,
             output=output,
             error=error
         )
@@ -303,7 +309,8 @@ class TaskExecutor:
         task_id: str, 
         params: Dict[str, Any], 
         guest_ip: str, 
-        guest: Any
+        guest: Any,
+        start_time: float
     ) -> TaskResult:
         """Execute install package task with input validation"""
         
@@ -318,7 +325,7 @@ class TaskExecutor:
                 task_type=TaskType.INSTALL_PACKAGE,
                 success=False,
                 message="Invalid package name format",
-                execution_time=0
+                execution_time=time.time() - start_time
             )
         
         # Validate package manager
@@ -329,7 +336,7 @@ class TaskExecutor:
                 task_type=TaskType.INSTALL_PACKAGE,
                 success=False,
                 message=f"Unsupported package manager: {package_manager}",
-                execution_time=0
+                execution_time=time.time() - start_time
             )
         
         # Build install command with proper escaping
@@ -351,7 +358,7 @@ class TaskExecutor:
             task_type=TaskType.INSTALL_PACKAGE,
             success=success,
             message=f"Install package '{name}': {'SUCCESS' if success else 'FAILED'}",
-            execution_time=0,
+            execution_time=time.time() - start_time,
             output=output,
             error=error
         )
@@ -361,7 +368,8 @@ class TaskExecutor:
         task_id: str, 
         params: Dict[str, Any], 
         guest_ip: str, 
-        guest: Any
+        guest: Any,
+        start_time: float
     ) -> TaskResult:
         """Execute copy content task with path validation"""
         
@@ -375,7 +383,7 @@ class TaskExecutor:
                 task_type=TaskType.COPY_CONTENT,
                 success=False,
                 message="Invalid file path detected",
-                execution_time=0
+                execution_time=time.time() - start_time
             )
         
         os_type = getattr(guest, 'basevm_os_type', 'linux')
@@ -397,7 +405,7 @@ class TaskExecutor:
             task_type=TaskType.COPY_CONTENT,
             success=success,
             message=f"Copy '{src}' to '{dst}': {'SUCCESS' if success else 'FAILED'}",
-            execution_time=0,
+            execution_time=time.time() - start_time,
             output=output,
             error=error
         )
@@ -407,7 +415,8 @@ class TaskExecutor:
         task_id: str, 
         params: Dict[str, Any], 
         guest_ip: str, 
-        guest: Any
+        guest: Any,
+        start_time: float
     ) -> TaskResult:
         """Execute program task with input validation"""
         
@@ -423,7 +432,7 @@ class TaskExecutor:
                 task_type=TaskType.EXECUTE_PROGRAM,
                 success=False,
                 message="Invalid program path",
-                execution_time=0
+                execution_time=time.time() - start_time
             )
         
         # Validate interpreter
@@ -434,7 +443,7 @@ class TaskExecutor:
                 task_type=TaskType.EXECUTE_PROGRAM,
                 success=False,
                 message=f"Unsupported interpreter: {interpreter}",
-                execution_time=0
+                execution_time=time.time() - start_time
             )
         
         os_type = getattr(guest, 'basevm_os_type', 'linux')
@@ -457,7 +466,7 @@ class TaskExecutor:
             task_type=TaskType.EXECUTE_PROGRAM,
             success=success,
             message=f"Execute program '{program}': {'SUCCESS' if success else 'FAILED'}",
-            execution_time=0,
+            execution_time=time.time() - start_time,
             output=output,
             error=error
         )
@@ -467,7 +476,8 @@ class TaskExecutor:
         task_id: str, 
         params: Dict[str, Any], 
         guest_ip: str, 
-        guest: Any
+        guest: Any,
+        start_time: float
     ) -> TaskResult:
         """Execute emulate attack task"""
         
@@ -507,7 +517,7 @@ class TaskExecutor:
             task_type=TaskType.EMULATE_ATTACK,
             success=success,
             message=f"Emulate {attack_type} attack: {'SUCCESS' if success else 'FAILED'}",
-            execution_time=0,
+            execution_time=time.time() - start_time,
             output=output,
             error=error
         )
@@ -517,7 +527,8 @@ class TaskExecutor:
         task_id: str, 
         params: Dict[str, Any], 
         guest_ip: str, 
-        guest: Any
+        guest: Any,
+        start_time: float
     ) -> TaskResult:
         """Execute emulate malware task"""
         
@@ -561,7 +572,7 @@ class TaskExecutor:
             task_type=TaskType.EMULATE_MALWARE,
             success=success,
             message=f"Deploy malware '{malware_name}': {'SUCCESS' if success else 'FAILED'}",
-            execution_time=0,
+            execution_time=time.time() - start_time,
             output=output,
             error=error
         )
@@ -571,7 +582,8 @@ class TaskExecutor:
         task_id: str, 
         params: Dict[str, Any], 
         guest_ip: str, 
-        guest: Any
+        guest: Any,
+        start_time: float
     ) -> TaskResult:
         """Execute traffic capture file generation task"""
         
@@ -588,7 +600,7 @@ class TaskExecutor:
             task_type=TaskType.EMULATE_TRAFFIC_CAPTURE,
             success=True,
             message=f"Traffic capture file task '{file_name}' scheduled",
-            execution_time=0,
+            execution_time=time.time() - start_time,
             output=f"Task configured for {attack_type} with {noise_level} noise level"
         )
     
@@ -597,7 +609,8 @@ class TaskExecutor:
         task_id: str, 
         params: Dict[str, Any], 
         guest_ip: str, 
-        guest: Any
+        guest: Any,
+        start_time: float
     ) -> TaskResult:
         """Execute firewall rules task with input validation"""
         
@@ -610,7 +623,7 @@ class TaskExecutor:
                 task_type=TaskType.FIREWALL_RULES,
                 success=False,
                 message="Invalid rule file path",
-                execution_time=0
+                execution_time=time.time() - start_time
             )
         
         os_type = getattr(guest, 'basevm_os_type', 'linux')
@@ -627,7 +640,7 @@ class TaskExecutor:
             task_type=TaskType.FIREWALL_RULES,
             success=success,
             message=f"Apply firewall rules from '{rule_file}': {'SUCCESS' if success else 'FAILED'}",
-            execution_time=0,
+            execution_time=time.time() - start_time,
             output=output,
             error=error
         )
@@ -636,9 +649,10 @@ class TaskExecutor:
         self, 
         host: str, 
         command: str,
-        username: str = "root"
+        username: str = "trainee01",
+        password: str = "trainee123"
     ) -> tuple[bool, str, str]:
-        """Execute command via SSH"""
+        """Execute command via SSH with password authentication"""
         
         if not SSH_AVAILABLE:
             self.logger.warning("SSH not available, simulating command execution")
@@ -648,14 +662,19 @@ class TaskExecutor:
             ssh = paramiko.SSHClient()
             ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             
-            # Connect with key-based authentication (no password)
+            # Connect with password authentication for cloud-init configured user
             ssh.connect(
                 host, 
                 username=username,
+                password=password,
                 timeout=self.ssh_timeout,
-                look_for_keys=True,
-                allow_agent=True
+                look_for_keys=False,
+                allow_agent=False
             )
+            
+            # For non-root users, prepend sudo to commands that need privilege escalation
+            if username != "root" and self._command_needs_sudo(command):
+                command = f"sudo {command}"
             
             stdin, stdout, stderr = ssh.exec_command(command)
             
@@ -676,6 +695,24 @@ class TaskExecutor:
         """Get status of a task (placeholder for future async execution)"""
         # This would be implemented for async task tracking
         return None
+    
+    def _command_needs_sudo(self, command: str) -> bool:
+        """Determine if a command needs sudo privileges"""
+        sudo_commands = [
+            'useradd', 'usermod', 'userdel', 'chpasswd', 'chfn',
+            'apt-get', 'yum', 'dnf', 'zypper', 'pacman',
+            'systemctl', 'service', 'chkconfig',
+            'iptables', 'firewall-cmd', 'ufw',
+            'mount', 'umount', 'fdisk', 'parted'
+        ]
+        
+        command_parts = command.strip().split()
+        if not command_parts:
+            return False
+            
+        # Check if the first word (command name) requires sudo
+        first_command = command_parts[0]
+        return any(first_command.startswith(sudo_cmd) for sudo_cmd in sudo_commands)
     
     def _execute_secure_linux_add_user(self, guest_ip: str, username: str, password: str, full_name: str = "") -> tuple[bool, str, str]:
         """Securely add user on Linux systems without exposing password in command line"""
