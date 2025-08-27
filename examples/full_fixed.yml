@@ -1,0 +1,131 @@
+#########################################################################################
+# Fixed version of full.yml that uses correct paths and existing infrastructure
+#########################################################################################
+
+#########################################################################################
+# Host settings - corrected account to ubuntu
+#########################################################################################
+- host_settings:
+  - id: host_1
+    mgmt_addr: localhost
+    virbr_addr: 192.168.122.1
+    account: ubuntu
+
+#########################################################################################
+# Guest settings - corrected paths and simplified for testing
+#########################################################################################
+- guest_settings:
+
+  # Desktop base image
+  - id: desktop
+    ip_addr: 192.168.122.50
+    basevm_host: host_1
+    basevm_config_file: /home/ubuntu/cyris/images/basevm.xml
+    basevm_type: kvm
+    basevm_os_type: linux
+    tasks:
+    - add_account:
+      - account: daniel
+        passwd: danielpass
+        full_name: Daniel Radcliffe
+
+    - modify_account:
+      - account: root
+        new_passwd: abcd1234
+
+    - install_package:
+      - package_manager: apt-get
+        name: vim
+      - package_manager: apt-get
+        name: curl
+      - package_manager: apt-get
+        name: net-tools
+
+    - emulate_attack:
+      - attack_type: ssh_attack
+        target_account: daniel
+        attempt_number: 200
+        attack_time: 2017-11-18
+
+    - emulate_traffic_capture_file:
+      - format: pcap
+        file_name: /home/trainee/traffic1.pcap
+        attack_type: ssh_attack
+        attack_source: 69.89.31.226
+        noise_level: medium
+
+    - emulate_malware:
+      - name: daemon
+        mode: dummy_calculation
+        cpu_utilization: 40
+
+  # Web server base image
+  - id: webserver
+    ip_addr: 192.168.122.51
+    basevm_host: host_1
+    basevm_config_file: /home/ubuntu/cyris/images/basevm.xml
+    basevm_type: kvm
+    basevm_os_type: linux
+    tasks:
+    - add_account:
+      - account: daniel
+        passwd: JamesBond
+
+    - modify_account:
+      - account: root
+        new_passwd: new-root-password
+
+    - install_package:
+      - package_manager: apt-get
+        name: apache2
+      - package_manager: apt-get
+        name: php
+
+    - emulate_traffic_capture_file:
+      - format: pcap
+        file_name: /home/traffic.pcap
+        attack_type: ddos_attack
+        noise_level: medium
+
+  # Firewall base image
+  - id: firewall
+    ip_addr: 192.168.122.10
+    basevm_host: host_1
+    basevm_config_file: /home/ubuntu/cyris/images/basevm.xml
+    basevm_type: kvm
+    basevm_os_type: linux
+    tasks:
+    - add_account:
+      - account: robot.abc
+        passwd: abcrb1357
+
+#########################################################################################
+# Clone settings - simplified for testing
+#########################################################################################
+- clone_settings:
+
+  - range_id: 127
+    hosts:
+    - host_id: host_1
+      instance_number: 1
+      guests:
+      - guest_id: desktop
+        number: 1
+        entry_point: yes
+
+      - guest_id: webserver
+        number: 1
+
+      - guest_id: firewall
+        number: 1
+
+      topology:
+      - type: custom
+        networks:
+        - name: office
+          members: desktop.eth0
+          gateway: firewall.eth0
+
+        - name: servers
+          members: webserver.eth0
+          gateway: firewall.eth1
