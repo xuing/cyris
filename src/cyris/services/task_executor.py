@@ -721,15 +721,15 @@ class TaskExecutor:
             script_content = f"""#!/bin/bash
 set -euo pipefail
 
-# Create user
-useradd -m -s /bin/bash "{sanitize_for_shell(username)}"
+# Create user (needs sudo)
+sudo useradd -m -s /bin/bash "{sanitize_for_shell(username)}"
 
-# Set password securely using chpasswd
-echo "{sanitize_for_shell(username)}:$1" | chpasswd
+# Set password securely using chpasswd (needs sudo)
+echo "{sanitize_for_shell(username)}:$1" | sudo chpasswd
 
-# Set full name if provided
+# Set full name if provided (needs sudo)
 if [ -n "$2" ]; then
-    chfn -f "$2" "{sanitize_for_shell(username)}"
+    sudo chfn -f "$2" "{sanitize_for_shell(username)}"
 fi
 
 echo "User {sanitize_for_shell(username)} created successfully"
@@ -741,11 +741,20 @@ echo "User {sanitize_for_shell(username)} created successfully"
             # Upload script
             upload_success, upload_output, upload_error = self._execute_ssh_command(
                 guest_ip, 
-                f"cat > {temp_script} << 'EOF'\n{script_content}\nEOF && chmod +x {temp_script}"
+                f"cat > {temp_script} << 'EOF'\n{script_content}\nEOF"
             )
             
             if not upload_success:
                 return False, upload_output, f"Failed to upload user creation script: {upload_error}"
+            
+            # Make script executable
+            chmod_success, chmod_output, chmod_error = self._execute_ssh_command(
+                guest_ip, 
+                f"chmod +x {temp_script}"
+            )
+            
+            if not chmod_success:
+                return False, chmod_output, f"Failed to make script executable: {chmod_error}"
             
             # Execute script with password as argument (more secure than command line)
             exec_command = f"{temp_script} '{password}' '{sanitize_for_shell(full_name)}'"
@@ -827,8 +836,8 @@ try {{
             # Change username if requested
             if new_username != 'null' and new_username != username:
                 script_parts.append(f'# Rename user from {sanitize_for_shell(username)} to {sanitize_for_shell(new_username)}')
-                script_parts.append(f'usermod -l "{sanitize_for_shell(new_username)}" "{sanitize_for_shell(username)}"')
-                script_parts.append(f'usermod -d "/home/{sanitize_for_shell(new_username)}" -m "{sanitize_for_shell(new_username)}"')
+                script_parts.append(f'sudo usermod -l "{sanitize_for_shell(new_username)}" "{sanitize_for_shell(username)}"')
+                script_parts.append(f'sudo usermod -d "/home/{sanitize_for_shell(new_username)}" -m "{sanitize_for_shell(new_username)}"')
                 actual_username = new_username
             else:
                 actual_username = username
@@ -836,7 +845,7 @@ try {{
             # Change password if requested
             if new_password != 'null':
                 script_parts.append(f'# Change password for {sanitize_for_shell(actual_username)}')
-                script_parts.append(f'echo "{sanitize_for_shell(actual_username)}:$1" | chpasswd')
+                script_parts.append(f'echo "{sanitize_for_shell(actual_username)}:$1" | sudo chpasswd')
             
             script_parts.append(f'echo "User modification completed for {sanitize_for_shell(actual_username)}"')
             
@@ -848,11 +857,20 @@ try {{
             # Upload script
             upload_success, upload_output, upload_error = self._execute_ssh_command(
                 guest_ip, 
-                f"cat > {temp_script} << 'EOF'\n{script_content}\nEOF && chmod +x {temp_script}"
+                f"cat > {temp_script} << 'EOF'\n{script_content}\nEOF"
             )
             
             if not upload_success:
                 return False, upload_output, f"Failed to upload user modification script: {upload_error}"
+            
+            # Make script executable
+            chmod_success, chmod_output, chmod_error = self._execute_ssh_command(
+                guest_ip, 
+                f"chmod +x {temp_script}"
+            )
+            
+            if not chmod_success:
+                return False, chmod_output, f"Failed to make script executable: {chmod_error}"
             
             # Execute script with password as argument if needed
             if new_password != 'null':
