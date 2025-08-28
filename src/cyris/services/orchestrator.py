@@ -336,11 +336,20 @@ class RangeOrchestrator:
             
             # Execute tasks on guests if they have task configurations
             task_results = []
-            for guest in guests:
+            for i, guest in enumerate(guests):
                 guest_id = getattr(guest, 'id', None) or getattr(guest, 'guest_id', 'unknown')
                 
-                # Get IP address for the guest using VM IP manager
-                guest_ip = self._wait_for_vm_readiness(guest_id, range_id, max_wait_minutes=3)
+                # Get the actual VM name from range resources
+                range_resources = self._range_resources.get(range_id, {})
+                guest_vms = range_resources.get("guests", [])
+                
+                if i < len(guest_vms):
+                    actual_vm_name = guest_vms[i]
+                    # Get IP address using the exact VM name
+                    guest_ip = self._get_vm_ip_by_name(actual_vm_name, max_wait_minutes=3)
+                else:
+                    # Fallback to pattern matching if exact name not available
+                    guest_ip = self._wait_for_vm_readiness(guest_id, range_id, max_wait_minutes=3)
                 
                 # Execute tasks if guest is ready and has tasks
                 if guest_ip and hasattr(guest, 'tasks') and guest.tasks:
@@ -368,12 +377,15 @@ class RangeOrchestrator:
                     # Store failed task info for potential retry
                     for task_config in guest.tasks:
                         for task_type, task_params in task_config.items():
-                            task_results.append({
-                                "task_id": f"{guest_id}_{task_type}_pending",
-                                "task_type": task_type, 
-                                "success": False,
-                                "message": "VM not ready during deployment - task execution deferred"
-                            })
+                            # Create proper TaskResult object instead of dictionary
+                            task_result = TaskResult(
+                                task_id=f"{guest_id}_{task_type}_pending",
+                                task_type=TaskType(task_type), 
+                                success=False,
+                                message="VM not ready during deployment - task execution deferred",
+                                execution_time=0.0
+                            )
+                            task_results.append(task_result)
             
             # Store task results in metadata
             if task_results:
@@ -795,6 +807,8 @@ class RangeOrchestrator:
                         range_settings = c
                         # Extract topology configuration - KISS: simple direct lookup
                         topology_config = self._extract_topology_config(c)
+                        # Extract and merge tasks from clone_settings into guests
+                        self._merge_tasks_from_clone_settings(c, guests)
             else:
                 # Legacy list format (maintain backward compatibility)
                 for element in doc:
@@ -828,6 +842,8 @@ class RangeOrchestrator:
                             range_settings = c
                             # Extract topology configuration - KISS: simple direct lookup
                             topology_config = self._extract_topology_config(c)
+                            # Extract and merge tasks from clone_settings into guests
+                            self._merge_tasks_from_clone_settings(c, guests)
             
             # Generate range ID if not provided
             if range_id is None:
@@ -873,6 +889,33 @@ class RangeOrchestrator:
             if topology:
                 return topology[0]  # Return first topology config
         return None
+    
+    def _merge_tasks_from_clone_settings(self, clone_settings: Dict[str, Any], guests: List[Guest]) -> None:
+        """
+        Merge tasks from clone_settings into corresponding guest objects.
+        This handles the CyRIS YAML format where tasks can be defined in clone_settings.
+        
+        Args:
+            clone_settings: Clone settings dictionary
+            guests: List of guest objects to update
+        """
+        hosts = clone_settings.get('hosts', [])
+        for host in hosts:
+            host_guests = host.get('guests', [])
+            for host_guest in host_guests:
+                guest_id = host_guest.get('guest_id')
+                guest_tasks = host_guest.get('tasks', [])
+                
+                if guest_id and guest_tasks:
+                    # Find the corresponding guest object and merge tasks
+                    for guest in guests:
+                        if guest.guest_id == guest_id:
+                            # Merge tasks - extend existing tasks with clone_settings tasks
+                            if not hasattr(guest, 'tasks') or not guest.tasks:
+                                guest.tasks = []
+                            guest.tasks.extend(guest_tasks)
+                            self.logger.info(f"Merged {len(guest_tasks)} task configurations for guest {guest_id}")
+                            break
     
     def _load_persistent_data(self) -> None:
         """Load persistent data from disk"""
@@ -1223,6 +1266,49 @@ class RangeOrchestrator:
         
         return resources
     
+    def _get_vm_ip_by_name(self, vm_name: str, max_wait_minutes: int = 3) -> Optional[str]:
+        """
+        Get VM IP address using exact VM name instead of pattern matching.
+        
+        Args:
+            vm_name: Exact VM name (e.g., 'cyris-test_vm-1cd7035a')
+            max_wait_minutes: Maximum time to wait in minutes
+            
+        Returns:
+            VM IP address if ready, None if not ready within timeout
+        """
+        wait_seconds = max_wait_minutes * 60
+        start_time = time.time()
+        
+        self.logger.info(f"Waiting up to {max_wait_minutes} minutes for VM {vm_name} to become ready...")
+        
+        from ..tools.vm_ip_manager import VMIPManager
+        vm_ip_manager = VMIPManager()
+        
+        while (time.time() - start_time) < wait_seconds:
+            try:
+                health_info = vm_ip_manager.get_vm_health_info(vm_name)
+                if health_info.ip_addresses:
+                    vm_ip = health_info.ip_addresses[0]
+                    
+                    # Test SSH connectivity to verify VM is ready
+                    if self._test_ssh_connectivity(vm_ip):
+                        self.logger.info(f"VM {vm_name} is ready at {vm_ip} (waited {int(time.time() - start_time)}s)")
+                        return vm_ip
+                    else:
+                        self.logger.debug(f"VM {vm_name} has IP {vm_ip} but SSH not ready yet")
+                else:
+                    self.logger.debug(f"VM {vm_name} found but no IP yet")
+                
+            except Exception as e:
+                self.logger.debug(f"Error checking VM {vm_name}: {e}")
+            
+            # Wait before retrying
+            time.sleep(10)
+        
+        self.logger.warning(f"VM {vm_name} not ready after {max_wait_minutes} minutes")
+        return None
+    
     def _wait_for_vm_readiness(self, guest_id: str, range_id: str, max_wait_minutes: int = 3) -> Optional[str]:
         """
         Wait for VM to be ready for task execution by checking IP availability and SSH connectivity.
@@ -1286,8 +1372,8 @@ class RangeOrchestrator:
             success, _, _ = self.task_executor._execute_ssh_command(
                 vm_ip, 
                 "echo 'ready'",
-                username="trainee01",
-                password="trainee123"
+                username="ubuntu",
+                password="ubuntu"
             )
             return success
         except Exception:

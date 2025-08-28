@@ -28,16 +28,17 @@ class MockInfrastructureProvider:
         self.destroyed_guests = []
         self.host_statuses = {}
         self.guest_statuses = {}
+        self.libvirt_uri = "qemu:///session"  # Mock libvirt URI
     
     def create_hosts(self, hosts):
-        host_ids = [f"host-{host.id}" for host in hosts]
+        host_ids = [f"host-{host.host_id}" for host in hosts]
         self.created_hosts.extend(host_ids)
         for host_id in host_ids:
             self.host_statuses[host_id] = "active"
         return host_ids
     
     def create_guests(self, guests, host_mapping):
-        guest_ids = [f"guest-{guest.id}" for guest in guests]
+        guest_ids = [f"guest-{guest.guest_id}" for guest in guests]
         self.created_guests.extend(guest_ids)
         for guest_id in guest_ids:
             self.guest_statuses[guest_id] = "active"
@@ -76,10 +77,10 @@ def temp_dir():
 def cyris_settings(temp_dir):
     """Create test CyRIS settings"""
     return CyRISSettings(
-        cyber_range_dir=str(temp_dir / "cyber_range"),
-        gateway_addr="192.168.1.1",
-        gateway_account="cyris",
-        cyris_path=str(temp_dir)
+        cyber_range_dir=temp_dir / "cyber_range",
+        gw_mgmt_addr="192.168.1.1",
+        gw_account="cyris",
+        cyris_path=temp_dir
     )
 
 
@@ -101,14 +102,16 @@ def sample_hosts():
     """Create sample host configurations"""
     return [
         Host(
-            id="web-server",
+            host_id="web-server",
             mgmt_addr="192.168.1.10",
-            virbr_addr="10.0.0.1"
+            virbr_addr="10.0.0.1",
+            account="cyris"
         ),
         Host(
-            id="db-server", 
+            host_id="db-server", 
             mgmt_addr="192.168.1.11",
-            virbr_addr="10.0.0.2"
+            virbr_addr="10.0.0.2",
+            account="cyris"
         )
     ]
 
@@ -116,20 +119,23 @@ def sample_hosts():
 @pytest.fixture
 def sample_guests():
     """Create sample guest configurations"""
+    from cyris.domain.entities.guest import OSType, BaseVMType
     return [
         Guest(
-            id="web-vm",
-            host_id="web-server",
-            os_type="ubuntu.20.04",
-            memory_mb=2048,
-            vcpus=2
+            guest_id="web-vm",
+            basevm_host="web-server",
+            basevm_config_file="/path/to/web.xml",
+            basevm_os_type=OSType.UBUNTU_20,
+            basevm_type=BaseVMType.KVM,
+            ip_addr="10.0.0.10"
         ),
         Guest(
-            id="db-vm",
-            host_id="db-server", 
-            os_type="ubuntu.20.04",
-            memory_mb=4096,
-            vcpus=4
+            guest_id="db-vm",
+            basevm_host="db-server", 
+            basevm_config_file="/path/to/db.xml",
+            basevm_os_type=OSType.UBUNTU_20,
+            basevm_type=BaseVMType.KVM,
+            ip_addr="10.0.0.11"
         )
     ]
 

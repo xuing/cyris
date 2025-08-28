@@ -39,6 +39,7 @@ cyris = "cyris.cli.main:main"
 minversion = "7.0"
 addopts = "-ra -q --cov=cyris --cov-report=term-missing --cov-report=html"
 testpaths = ["tests"]
+pythonpath = ["src"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]

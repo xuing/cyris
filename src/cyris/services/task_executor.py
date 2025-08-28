@@ -649,8 +649,8 @@ class TaskExecutor:
         self, 
         host: str, 
         command: str,
-        username: str = "trainee01",
-        password: str = "trainee123"
+        username: str = "ubuntu",
+        password: str = "ubuntu"
     ) -> tuple[bool, str, str]:
         """Execute command via SSH with password authentication"""
         

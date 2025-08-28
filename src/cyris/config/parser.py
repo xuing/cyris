@@ -11,6 +11,8 @@ import yaml
 from pydantic import ValidationError
 
 from .settings import CyRISSettings
+from ..domain.entities.host import Host, HostBuilder
+from ..domain.entities.guest import Guest, GuestBuilder, OSType, BaseVMType
 
 
 logger = logging.getLogger(__name__)
@@ -147,3 +149,154 @@ def create_default_config(config_file: Union[str, Path]) -> CyRISSettings:
     
     logger.info(f"Created default config file: {config_file}")
     return settings
+
+
+class YAMLParseResult:
+    """Result object from YAML parsing"""
+    
+    def __init__(self, hosts: list, guests: list, clone_settings: dict):
+        self.hosts = hosts
+        self.guests = guests
+        self.clone_settings = clone_settings
+
+
+class CyRISConfigParser:
+    """
+    YAML Configuration Parser
+    Parses CyRIS YAML description files into domain entities
+    """
+    
+    def parse_file(self, yaml_file: Union[str, Path]) -> YAMLParseResult:
+        """
+        Parse YAML description file
+        
+        Args:
+            yaml_file: Path to YAML description file
+            
+        Returns:
+            YAMLParseResult: Parsed hosts, guests, and clone settings
+            
+        Raises:
+            ConfigurationError: If parsing fails
+        """
+        yaml_file = Path(yaml_file)
+        
+        if not yaml_file.exists():
+            raise ConfigurationError(f"YAML file not found: {yaml_file}")
+        
+        try:
+            with open(yaml_file, 'r', encoding='utf-8') as f:
+                yaml_data = yaml.safe_load(f)
+            
+            hosts = []
+            guests = []
+            clone_settings = {}
+            
+            # Handle list-based YAML structure where each section is a list item
+            if isinstance(yaml_data, list):
+                for section in yaml_data:
+                    if isinstance(section, dict):
+                        # Parse host settings
+                        if 'host_settings' in section:
+                            for host_data in section['host_settings']:
+                                host = self._parse_host(host_data)
+                                if host:
+                                    hosts.append(host)
+                        
+                        # Parse guest settings  
+                        if 'guest_settings' in section:
+                            for guest_data in section['guest_settings']:
+                                guest = self._parse_guest(guest_data)
+                                if guest:
+                                    guests.append(guest)
+                        
+                        # Parse clone settings
+                        if 'clone_settings' in section:
+                            clone_settings = section['clone_settings']
+            
+            # Handle dictionary-based YAML structure
+            elif isinstance(yaml_data, dict):
+                # Parse host settings
+                if 'host_settings' in yaml_data:
+                    for host_data in yaml_data['host_settings']:
+                        host = self._parse_host(host_data)
+                        if host:
+                            hosts.append(host)
+                
+                # Parse guest settings  
+                if 'guest_settings' in yaml_data:
+                    for guest_data in yaml_data['guest_settings']:
+                        guest = self._parse_guest(guest_data)
+                        if guest:
+                            guests.append(guest)
+                
+                # Parse clone settings
+                if 'clone_settings' in yaml_data:
+                    clone_settings = yaml_data['clone_settings']
+            
+            return YAMLParseResult(hosts, guests, clone_settings)
+            
+        except yaml.YAMLError as e:
+            raise ConfigurationError(f"YAML parsing error: {e}")
+        except Exception as e:
+            raise ConfigurationError(f"Error parsing YAML file: {e}")
+    
+    def _parse_host(self, host_data: dict) -> Optional[Host]:
+        """Parse host configuration from YAML data"""
+        try:
+            return Host(
+                host_id=host_data.get('name', host_data.get('id', 'unknown')),
+                mgmt_addr=host_data.get('mgmt_addr', '127.0.0.1'),
+                virbr_addr=host_data.get('virbr_addr', '192.168.122.1'),
+                account=host_data.get('account', 'root')
+            )
+        except Exception as e:
+            logger.warning(f"Failed to parse host: {e}")
+            return None
+    
+    def _parse_guest(self, guest_data: dict) -> Optional[Guest]:
+        """Parse guest configuration from YAML data"""
+        try:
+            # Map common OS strings to OSType enum values
+            os_type_mapping = {
+                'ubuntu.20.04': OSType.UBUNTU_20,
+                'ubuntu.18.04': OSType.UBUNTU_18,
+                'ubuntu.16.04': OSType.UBUNTU_16,
+                'ubuntu': OSType.UBUNTU,
+                'windows.7': OSType.WINDOWS_7,
+                'windows.10': OSType.WINDOWS_10,
+                'centos': OSType.CENTOS
+            }
+            
+            # Try multiple field names for OS type
+            os_type_str = guest_data.get('basevm_os_type', guest_data.get('os_type', 'ubuntu'))
+            os_type = os_type_mapping.get(os_type_str, OSType.UBUNTU)
+            
+            # Map basevm_type
+            basevm_type_mapping = {
+                'kvm': BaseVMType.KVM,
+                'aws': BaseVMType.AWS,
+                'docker': BaseVMType.DOCKER
+            }
+            basevm_type_str = guest_data.get('basevm_type', 'kvm')
+            basevm_type = basevm_type_mapping.get(basevm_type_str, BaseVMType.KVM)
+            
+            # Extract all tasks from the tasks list if it exists
+            tasks = []
+            if 'tasks' in guest_data and isinstance(guest_data['tasks'], list):
+                for task_item in guest_data['tasks']:
+                    if isinstance(task_item, dict):
+                        tasks.append(task_item)
+            
+            return Guest(
+                guest_id=guest_data.get('name', guest_data.get('id', 'unknown')),
+                basevm_host=guest_data.get('basevm_host', 'localhost'),
+                basevm_config_file=guest_data.get('basevm_config_file', '/tmp/base.xml'),
+                basevm_os_type=os_type,
+                basevm_type=basevm_type,
+                ip_addr=guest_data.get('ip_addr'),
+                tasks=tasks
+            )
+        except Exception as e:
+            logger.warning(f"Failed to parse guest: {e}")
+            return None
