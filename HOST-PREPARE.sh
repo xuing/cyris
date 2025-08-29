@@ -41,4 +41,4 @@ sudo apt-get install sendemail
 ssh-copy-id localhost
 
 # 13. Other Python 3 packages
-sudo apt-get install python3-psutil 
+sudo pip3 install python3-psutil
