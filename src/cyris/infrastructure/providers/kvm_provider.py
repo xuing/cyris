@@ -216,21 +216,21 @@ class KVMProvider(InfrastructureProvider):
                 
                 # Create VM disk from base image
                 disk_path = self._create_vm_disk(vm_name, guest)
-                    
-                    # Generate VM XML configuration
-                    vm_xml = self._generate_vm_xml(vm_name, guest, disk_path, host_mapping)
-                    
-                    # Define and start VM
-                    domain = self._connection.defineXML(vm_xml)
-                    if domain is None:
-                        raise ResourceCreationError(f"Failed to define VM {vm_name}")
-                    
-                    # Start the VM
-                    if domain.create() < 0:
-                        raise ResourceCreationError(f"Failed to start VM {vm_name}")
-                    
-                    # Wait for VM to be running
-                    self._wait_for_vm_state(domain, libvirt.VIR_DOMAIN_RUNNING)
+                
+                # Generate VM XML configuration
+                vm_xml = self._generate_vm_xml(vm_name, guest, disk_path, host_mapping)
+                
+                # Define and start VM
+                domain = self._connection.defineXML(vm_xml)
+                if domain is None:
+                    raise ResourceCreationError(f"Failed to define VM {vm_name}")
+                
+                # Start the VM
+                if domain.create() < 0:
+                    raise ResourceCreationError(f"Failed to start VM {vm_name}")
+                
+                # Wait for VM to be running
+                self._wait_for_vm_state(domain, libvirt.VIR_DOMAIN_RUNNING)
                 
                 # Register guest resource
                 guest_resource = ResourceInfo(
