@@ -586,3 +586,285 @@ class SSHManager:
             stats = self._connection_stats[hostname]
             stats["commands_executed"] += 1
             stats["last_used"] = time.time()
+    
+    def execute_with_retry(
+        self,
+        credentials: SSHCredentials,
+        command: Union[str, SSHCommand],
+        max_retries: int = 3,
+        retry_delay: float = 2.0,
+        backoff_factor: float = 2.0
+    ) -> SSHResult:
+        """
+        Execute command with retry logic and exponential backoff.
+        
+        Args:
+            credentials: SSH connection credentials
+            command: Command to execute
+            max_retries: Maximum number of retry attempts
+            retry_delay: Initial delay between retries in seconds
+            backoff_factor: Multiplicative factor for delay increase
+        
+        Returns:
+            SSH execution result
+        """
+        if isinstance(command, str):
+            command = SSHCommand(command, "Execute with retry")
+            
+        last_result = None
+        current_delay = retry_delay
+        
+        for attempt in range(max_retries + 1):
+            try:
+                self.logger.debug(f"SSH attempt {attempt + 1}/{max_retries + 1} to {credentials.hostname}")
+                result = self.execute_command(credentials, command)
+                
+                if result.success:
+                    if attempt > 0:
+                        self.logger.info(f"SSH command succeeded on attempt {attempt + 1} to {credentials.hostname}")
+                    return result
+                    
+                last_result = result
+                
+                # Check if this is a retryable error
+                if not self._is_retryable_error(result):
+                    self.logger.info(f"Non-retryable error on {credentials.hostname}, stopping retries")
+                    break
+                    
+            except Exception as e:
+                self.logger.warning(f"SSH attempt {attempt + 1} failed to {credentials.hostname}: {e}")
+                last_result = SSHResult(
+                    hostname=credentials.hostname,
+                    command=command.command,
+                    return_code=-1,
+                    stdout="",
+                    stderr=str(e),
+                    execution_time=0.0,
+                    success=False,
+                    error_message=str(e)
+                )
+            
+            # Wait before retry (except on last attempt)
+            if attempt < max_retries:
+                import random
+                self.logger.debug(f"Waiting {current_delay:.1f}s before retry to {credentials.hostname}")
+                time.sleep(current_delay + random.uniform(0, 0.5))  # Add jitter
+                current_delay *= backoff_factor
+        
+        self.logger.error(f"SSH command failed after {max_retries + 1} attempts to {credentials.hostname}")
+        return last_result
+    
+    def verify_connectivity(self, credentials: SSHCredentials, timeout: int = 10) -> Dict[str, Any]:
+        """
+        Comprehensive connectivity verification.
+        
+        Args:
+            credentials: SSH connection credentials
+            timeout: Connection timeout in seconds
+            
+        Returns:
+            Dictionary with connectivity details
+        """
+        from datetime import datetime
+        
+        result = {
+            "hostname": credentials.hostname,
+            "port": credentials.port,
+            "reachable": False,
+            "ssh_available": False,
+            "auth_working": False,
+            "latency_ms": None,
+            "error_message": None,
+            "diagnostics": {},
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        try:
+            # Step 1: Network connectivity test
+            start_time = time.time()
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(timeout)
+            
+            try:
+                connection_result = sock.connect_ex((credentials.hostname, credentials.port))
+                if connection_result == 0:
+                    result["reachable"] = True
+                    result["latency_ms"] = round((time.time() - start_time) * 1000, 2)
+                else:
+                    result["error_message"] = f"Port {credentials.port} not reachable"
+                    return result
+            finally:
+                sock.close()
+            
+            # Step 2: SSH service test
+            try:
+                client = paramiko.SSHClient()
+                client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                
+                # Try connection without authentication first
+                try:
+                    client.connect(
+                        hostname=credentials.hostname,
+                        port=credentials.port,
+                        username="invalid_user",
+                        password="invalid_password",
+                        timeout=timeout,
+                        look_for_keys=False,
+                        allow_agent=False
+                    )
+                except paramiko.AuthenticationException:
+                    # SSH service is available (authentication expected to fail)
+                    result["ssh_available"] = True
+                except Exception as e:
+                    result["error_message"] = f"SSH service not available: {e}"
+                    return result
+                finally:
+                    try:
+                        client.close()
+                    except:
+                        pass
+                
+                # Step 3: Authentication test
+                test_result = self.execute_command(
+                    credentials, 
+                    SSHCommand("echo 'connectivity_test'", "Connectivity test", timeout=timeout)
+                )
+                
+                if test_result.success and "connectivity_test" in test_result.stdout:
+                    result["auth_working"] = True
+                else:
+                    result["error_message"] = f"Authentication failed: {test_result.stderr}"
+                    result["diagnostics"]["auth_error"] = test_result.stderr
+                
+            except Exception as e:
+                result["error_message"] = f"SSH connection failed: {e}"
+                result["diagnostics"]["ssh_error"] = str(e)
+            
+        except Exception as e:
+            result["error_message"] = f"Network connectivity failed: {e}"
+            result["diagnostics"]["network_error"] = str(e)
+        
+        return result
+    
+    def establish_connection(self, credentials: SSHCredentials, max_retries: int = 3) -> bool:
+        """
+        Establish and verify SSH connection with retry logic.
+        
+        Args:
+            credentials: SSH connection credentials
+            max_retries: Maximum connection attempts
+            
+        Returns:
+            True if connection established successfully
+        """
+        for attempt in range(max_retries):
+            try:
+                self.logger.info(f"Establishing SSH connection to {credentials.hostname} (attempt {attempt + 1}/{max_retries})")
+                
+                # Test connectivity first
+                connectivity = self.verify_connectivity(credentials)
+                
+                if not connectivity["reachable"]:
+                    self.logger.warning(f"Host {credentials.hostname} not reachable: {connectivity['error_message']}")
+                    if attempt < max_retries - 1:
+                        time.sleep(2 ** attempt)  # Exponential backoff
+                        continue
+                    return False
+                
+                if not connectivity["ssh_available"]:
+                    self.logger.warning(f"SSH service not available on {credentials.hostname}: {connectivity['error_message']}")
+                    return False
+                
+                if not connectivity["auth_working"]:
+                    self.logger.warning(f"SSH authentication failed to {credentials.hostname}: {connectivity['error_message']}")
+                    return False
+                
+                self.logger.info(f"SSH connection established to {credentials.hostname} (latency: {connectivity['latency_ms']}ms)")
+                return True
+                
+            except Exception as e:
+                self.logger.warning(f"Connection attempt {attempt + 1} failed to {credentials.hostname}: {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(2 ** attempt)
+        
+        self.logger.error(f"Failed to establish SSH connection to {credentials.hostname} after {max_retries} attempts")
+        return False
+    
+    def create_from_vm_info(self, vm_name: str, vm_ip: str, username: str = "ubuntu", 
+                           ssh_key_path: Optional[str] = None) -> SSHCredentials:
+        """
+        Create SSH credentials from VM information.
+        
+        Args:
+            vm_name: VM identifier
+            vm_ip: VM IP address
+            username: SSH username
+            ssh_key_path: Path to SSH private key
+            
+        Returns:
+            SSH credentials object
+        """
+        # Use default key if not specified
+        if not ssh_key_path:
+            default_keys = [
+                self.key_dir / "cyris",
+                Path.home() / ".ssh/id_rsa",
+                Path.home() / ".ssh/id_ed25519"
+            ]
+            
+            for key_path in default_keys:
+                if key_path.exists():
+                    ssh_key_path = str(key_path)
+                    break
+        
+        return SSHCredentials(
+            hostname=vm_ip,
+            port=22,
+            username=username,
+            private_key_path=ssh_key_path,
+            timeout=30
+        )
+    
+    def get_or_create_default_keypair(self, name: str = "cyris") -> Tuple[str, str]:
+        """
+        Get existing default keypair or create new one.
+        
+        Args:
+            name: Key pair name
+            
+        Returns:
+            Tuple of (private_key_path, public_key_path)
+        """
+        private_key_path = self.key_dir / name
+        public_key_path = self.key_dir / f"{name}.pub"
+        
+        if private_key_path.exists() and public_key_path.exists():
+            self.logger.debug(f"Using existing SSH key pair: {name}")
+            return str(private_key_path), str(public_key_path)
+        
+        # Create new key pair
+        self.logger.info(f"Creating new SSH key pair: {name}")
+        return self.generate_ssh_keypair(name, overwrite=True)
+    
+    def _is_retryable_error(self, result: SSHResult) -> bool:
+        """
+        Determine if an SSH error is retryable.
+        
+        Args:
+            result: SSH execution result
+            
+        Returns:
+            True if error might be transient and worth retrying
+        """
+        retryable_indicators = [
+            "connection refused",
+            "connection timed out",
+            "network is unreachable",
+            "temporary failure",
+            "resource temporarily unavailable",
+            "operation timed out"
+        ]
+        
+        error_text = (result.stderr + (result.error_message or "")).lower()
+        
+        return any(indicator in error_text for indicator in retryable_indicators)
