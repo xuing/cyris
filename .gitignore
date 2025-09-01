@@ -24,3 +24,4 @@ images/user-data
 # Test and temporary files
 .coverage
 validation-report.txt
+cyber_range/test-demo/
