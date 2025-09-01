@@ -22,23 +22,7 @@ import ipaddress
 # Import permission manager for automatic libvirt access setup
 from ..permissions import PermissionManager
 
-try:
-    import libvirt
-    LIBVIRT_AVAILABLE = True
-    LIBVIRT_TYPE = "python-binding"
-except ImportError:
-    # Try using virsh command-line client as fallback
-    try:
-        from .virsh_client import VirshLibvirt
-        libvirt = VirshLibvirt()
-        LIBVIRT_AVAILABLE = True
-        LIBVIRT_TYPE = "virsh-client"
-    except Exception as e:
-        raise ImportError(
-            f"Neither libvirt-python nor virsh_client is available. "
-            f"Please install libvirt-python or ensure virsh is installed and accessible. "
-            f"Original error: {e}"
-        )
+import libvirt
 
 from .base_provider import (
     InfrastructureProvider, ResourceInfo, ResourceStatus,
@@ -99,7 +83,7 @@ class KVMProvider(InfrastructureProvider):
         self.permission_manager = PermissionManager()
         
         self.logger.info(f"KVMProvider initialized with URI: {self.libvirt_uri}")
-        self.logger.info(f"Libvirt type: {LIBVIRT_TYPE}")
+        self.logger.info("Using native libvirt-python API")
     
     def connect(self) -> None:
         """
@@ -230,13 +214,8 @@ class KVMProvider(InfrastructureProvider):
                 # Generate unique VM name
                 vm_name = f"{self.network_prefix}-{guest_id}-{str(uuid.uuid4())[:8]}"
                 
-                # In mock mode, simulate VM creation
-                if LIBVIRT_TYPE == "mock":
-                    self.logger.info(f"Mock mode: simulating VM creation for {vm_name}")
-                    disk_path = f"/mock/path/{vm_name}.qcow2"
-                else:
-                    # Create VM disk from base image
-                    disk_path = self._create_vm_disk(vm_name, guest)
+                # Create VM disk from base image
+                disk_path = self._create_vm_disk(vm_name, guest)
                     
                     # Generate VM XML configuration
                     vm_xml = self._generate_vm_xml(vm_name, guest, disk_path, host_mapping)
@@ -859,11 +838,6 @@ ethernets:
         timeout: int = 60
     ) -> None:
         """Wait for VM to reach expected state"""
-        # In mock mode, skip waiting
-        if LIBVIRT_TYPE == "mock":
-            self.logger.info(f"Mock mode: skipping VM state wait")
-            return
-            
         start_time = time.time()
         
         while time.time() - start_time < timeout:
@@ -1282,19 +1256,8 @@ ethernets:
         try:
             domain = self._connection.lookupByName(vm_id)
             
-            # Get network interfaces - handle both libvirt types
-            if LIBVIRT_TYPE == "virsh-client":
-                # Use virsh command to get XML
-                import subprocess
-                result = subprocess.run(['virsh', '--connect', self.libvirt_uri, 'dumpxml', vm_id], 
-                                        capture_output=True, text=True)
-                if result.returncode != 0:
-                    self.logger.error(f"Failed to get XML for {vm_id}: {result.stderr}")
-                    return None
-                desc = result.stdout
-            else:
-                # Use python libvirt binding
-                desc = domain.XMLDesc(0)
+            # Get network interfaces using libvirt-python
+            desc = domain.XMLDesc(0)
                 
             root = ET.fromstring(desc)
             
@@ -1513,9 +1476,6 @@ ethernets:
     def _get_ip_from_dhcp_leases(self, domain) -> Optional[str]:
         """Get IP from libvirt DHCP leases"""
         try:
-            if LIBVIRT_TYPE == "mock":
-                return "192.168.122.100"  # Mock IP
-                
             # Try to get interface addresses
             interfaces = domain.interfaceAddresses(
                 libvirt.VIR_DOMAIN_INTERFACE_ADDRESSES_SRC_LEASE

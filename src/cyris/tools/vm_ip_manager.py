@@ -47,13 +47,7 @@ from ..infrastructure.providers.libvirt_domain_wrapper import (
     NetworkInterface
 )
 
-try:
-    import libvirt
-    LIBVIRT_AVAILABLE = True
-except ImportError:
-    libvirt = None
-    LIBVIRT_AVAILABLE = False
-    logging.warning("libvirt-python not available, falling back to subprocess methods")
+import libvirt
 
 
 @dataclass
@@ -213,17 +207,13 @@ class EnhancedVMIPManager:
         self.cache_ttl = cache_ttl
         self.logger = logger or logging.getLogger(__name__)
         
-        # Enhanced connection management
-        self.connection_manager: Optional[LibvirtConnectionManager] = None
-        if LIBVIRT_AVAILABLE:
-            try:
-                self.connection_manager = get_connection_manager(libvirt_uri)
-                self.logger.info(f"Using native libvirt-python with connection pooling")
-            except LibvirtConnectionError as e:
-                self.logger.error(f"Failed to initialize libvirt connection manager: {e}")
-                self.connection_manager = None
-        else:
-            self.logger.warning("libvirt-python not available, using fallback methods only")
+        # Enhanced connection management with libvirt-python
+        try:
+            self.connection_manager = get_connection_manager(libvirt_uri)
+            self.logger.info(f"Using native libvirt-python with connection pooling")
+        except LibvirtConnectionError as e:
+            self.logger.error(f"Failed to initialize libvirt connection manager: {e}")
+            self.connection_manager = None
         
         # Enhanced caching with thread safety
         self._ip_cache: Dict[str, CachedIPInfo] = {}
@@ -841,7 +831,7 @@ class EnhancedVMIPManager:
         return {
             **self.stats,
             'cache_size': len(self._ip_cache),
-            'libvirt_available': LIBVIRT_AVAILABLE,
+            'libvirt_available': True,
             'connection_manager_available': self.connection_manager is not None,
             'cache_ttl': self.cache_ttl
         }

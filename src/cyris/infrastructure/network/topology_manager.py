@@ -15,15 +15,7 @@ from pathlib import Path
 from dataclasses import dataclass, asdict
 from datetime import datetime
 
-try:
-    import libvirt
-    LIBVIRT_AVAILABLE = True
-except ImportError:
-    LIBVIRT_AVAILABLE = False
-    # Mock libvirt for testing
-    class MockLibvirt:
-        pass
-    libvirt = MockLibvirt()
+import libvirt
 
 
 class NetworkTopologyManager:
