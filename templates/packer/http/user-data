@@ -1,0 +1,86 @@
+#cloud-config
+# Ubuntu 22.04 autoinstall configuration for Packer
+autoinstall:
+  version: 1
+  
+  # Locale and keyboard
+  locale: en_US.UTF-8
+  keyboard:
+    layout: us
+  
+  # Network configuration
+  network:
+    network:
+      version: 2
+      ethernets:
+        enp1s0:
+          dhcp4: true
+  
+  # Storage configuration
+  storage:
+    layout:
+      name: direct
+    config:
+      - type: disk
+        id: disk0
+        path: /dev/vda
+        wipe: superblock-recursive
+        preserve: false
+        name: ''
+        grub_device: false
+      - type: partition
+        id: partition0
+        device: disk0
+        size: 1048576
+        flag: bios_grub
+        number: 1
+        preserve: false
+      - type: partition
+        id: partition1
+        device: disk0
+        size: -1
+        number: 2
+        preserve: false
+      - type: format
+        id: format1
+        fstype: ext4
+        volume: partition1
+        preserve: false
+      - type: mount
+        id: mount1
+        device: format1
+        path: /
+        preserve: false
+  
+  # User configuration
+  identity:
+    hostname: cyris-ubuntu
+    username: ubuntu
+    password: $6$rounds=4096$aQ7QXXyKukJdJ$FhER9SrpM9FLPbEjWnl5ZTfEFccMZWCY9WDUN3R2kNjYCDJTbJKfgVKqgFq5Qg1RZR2xZy.PrCf5t.ZOSy3HZ.
+    # Password: ubuntu (for compatibility)
+  
+  # SSH configuration
+  ssh:
+    install-server: true
+    allow-pw: true
+  
+  # Package configuration
+  packages:
+    - openssh-server
+    - cloud-init
+    - qemu-guest-agent
+    - curl
+    - wget
+    - vim
+    - htop
+  
+  # Late commands
+  late-commands:
+    - echo 'ubuntu ALL=(ALL) NOPASSWD:ALL' > /target/etc/sudoers.d/ubuntu
+    - chmod 440 /target/etc/sudoers.d/ubuntu
+    - systemctl enable ssh
+    - systemctl enable cloud-init
+    - systemctl enable qemu-guest-agent
+  
+  # Shutdown after installation
+  shutdown: poweroff
