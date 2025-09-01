@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<domain type="kvm">
+  <name>test-minimal-vm</name>
+  <uuid>11111111-1111-1111-1111-111111111111</uuid>
+  <memory unit="KiB">1048576</memory>
+  <currentMemory unit="KiB">1048576</currentMemory>
+  <vcpu placement="static">1</vcpu>
+  <os>
+    <type arch="x86_64" machine="pc">hvm</type>
+    <boot dev="hd"/>
+  </os>
+  <features>
+    <acpi/>
+    <apic/>
+  </features>
+  <clock offset="utc"/>
+  <on_poweroff>destroy</on_poweroff>
+  <on_reboot>restart</on_reboot>
+  <on_crash>destroy</on_crash>
+  <devices>
+    <emulator>/usr/bin/qemu-system-x86_64</emulator>
+    <disk type="file" device="disk">
+      <driver name="qemu" type="qcow2"/>
+      <source file="/home/ubuntu/cyris/cyber_range/125/disks/base.qcow2"/>
+      <target dev="vda" bus="virtio"/>
+    </disk>
+    <interface type="network">
+      <source network="default"/>
+      <model type="virtio"/>
+    </interface>
+    <serial type="pty">
+      <target port="0"/>
+    </serial>
+    <console type="pty">
+      <target type="serial" port="0"/>
+    </console>
+    <input type="mouse" bus="ps2"/>
+    <input type="keyboard" bus="ps2"/>
+    <graphics type="vnc" port="-1" autoport="yes"/>
+    <video>
+      <model type="cirrus" vram="16384" heads="1"/>
+    </video>
+  </devices>
+</domain>
