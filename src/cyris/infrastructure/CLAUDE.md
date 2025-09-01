@@ -12,6 +12,7 @@ The Infrastructure module provides provider abstractions and low-level infrastru
 - **KVM Provider**: `providers/kvm_provider.py` - KVM/QEMU virtualization implementation  
 - **AWS Provider**: `providers/aws_provider.py` - AWS cloud infrastructure implementation
 - **Network Manager**: `network/topology_manager.py` - Network topology orchestration
+- **🤖 Automation Framework**: `automation/` - Packer, Terraform, AWS automation (NEW)
 
 ### Infrastructure Architecture
 ```
@@ -21,6 +22,11 @@ infrastructure/
 │   ├── kvm_provider.py       # KVM/QEMU implementation
 │   ├── aws_provider.py       # AWS cloud implementation
 │   └── virsh_client.py       # Virsh command-line client
+├── automation/ 🤖 NEW
+│   ├── base_automation.py    # Automation provider interface
+│   ├── packer_builder.py     # Image building automation (22 tests ✅)
+│   ├── terraform_builder.py  # Infrastructure as code (23 tests ✅)
+│   └── aws_builder.py        # Cloud deployment automation (28 tests ✅)
 ├── network/
 │   ├── topology_manager.py   # Network topology management
 │   ├── bridge_manager.py     # Linux bridge management

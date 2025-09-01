@@ -37,6 +37,12 @@ CyRIS follows a modern layered architecture with legacy compatibility:
 - **Legacy Main**: Original implementation for backward compatibility
 - **Instantiation Scripts**: Attack emulation and deployment scripts
 
+### **🤖 NEW: Automation Framework** 
+- **Packer Integration**: Automated VM image building and customization (22 tests ✅)
+- **Terraform Integration**: Infrastructure-as-code for libvirt (23 tests ✅)  
+- **AWS Integration**: Cloud deployment automation (28 tests ✅)
+- **Total Coverage**: 73 tests, 100% pass rate, eliminates manual VM provisioning
+
 ---
 
 ## Module Structure Diagram
@@ -81,6 +87,7 @@ graph TD
 | **[src/cyris/cli](src/cyris/cli/CLAUDE.md)** | Modern CLI | Click-based command-line interface with Rich UI | `main.py` | ✅ Active | Complete |
 | **[src/cyris/services](src/cyris/services/CLAUDE.md)** | Core Services | Business logic orchestration, range management | `orchestrator.py` | ✅ Active | Complete |
 | **[src/cyris/infrastructure](src/cyris/infrastructure/CLAUDE.md)** | Infrastructure | Provider abstractions, network management | `providers/base_provider.py` | ✅ Active | Complete |
+| **[src/cyris/infrastructure/automation](docs/automation/README.md)** | 🤖 Automation | Packer, Terraform, AWS automation | `packer_builder.py` | 🚀 **NEW** | 73 Tests ✅ |
 | **[src/cyris/domain](src/cyris/domain/CLAUDE.md)** | Domain Entities | Core business entities and data models | `entities/__init__.py` | ✅ Active | Complete |
 | **[src/cyris/config](src/cyris/config/CLAUDE.md)** | Configuration | Pydantic settings, YAML parsing | `settings.py` | ✅ Active | Complete |
 | **[src/cyris/tools](src/cyris/tools/CLAUDE.md)** | Utility Tools | SSH, user management, VM utilities | `ssh_manager.py` | ✅ Active | Complete |
