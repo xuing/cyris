@@ -1235,10 +1235,10 @@ class RangeOrchestrator:
         
         try:
             # Discover virtual machines
-            from cyris.infrastructure.providers.virsh_client import VirshLibvirt
-            virsh_client = VirshLibvirt()
+            from cyris.infrastructure.providers.libvirt_provider import LibvirtProvider
+            libvirt_provider = LibvirtProvider()
             
-            all_vms = virsh_client.list_all_domains()
+            all_vms = libvirt_provider.list_all_domains()
             for vm in all_vms:
                 if vm['name'].startswith('cyris-'):
                     resources['vms'].append(vm['name'])
@@ -1379,14 +1379,14 @@ class RangeOrchestrator:
         self.logger.info(f"Cleaning up partial resources for range {range_id}")
         
         try:
-            from cyris.infrastructure.providers.virsh_client import VirshLibvirt
-            virsh_client = VirshLibvirt()
+            from cyris.infrastructure.providers.libvirt_provider import LibvirtProvider
+            libvirt_provider = LibvirtProvider()
             
             # Clean up virtual machines
             for vm_name in resources.get('vms', []):
                 try:
-                    virsh_client.destroy_domain(vm_name)
-                    virsh_client.undefine_domain(vm_name)
+                    libvirt_provider.destroy_domain(vm_name)
+                    libvirt_provider.undefine_domain(vm_name)
                     self.logger.debug(f"Cleaned up VM: {vm_name}")
                 except Exception as e:
                     self.logger.warning(f"Failed to cleanup VM {vm_name}: {e}")

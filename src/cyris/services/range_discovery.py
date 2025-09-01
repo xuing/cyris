@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 from cyris.config.settings import CyRISSettings
 from cyris.services.orchestrator import RangeOrchestrator, RangeStatus, RangeMetadata
-from cyris.infrastructure.providers.virsh_client import VirshLibvirt
+from cyris.infrastructure.providers.libvirt_provider import LibvirtProvider
 from cyris.core.exceptions import CyRISException
 
 
@@ -44,7 +44,7 @@ class RangeDiscoveryService:
         """
         self.settings = settings
         self.orchestrator = orchestrator
-        self.virsh_client = VirshLibvirt()
+        self.libvirt_provider = LibvirtProvider()
         
         # VM naming patterns
         self.vm_patterns = {
@@ -110,7 +110,7 @@ class RangeDiscoveryService:
         
         try:
             # 获取所有虚拟机
-            all_vms = self.virsh_client.list_all_domains()
+            all_vms = self.libvirt_provider.list_all_domains()
             
             for vm in all_vms:
                 if vm['name'].startswith('cyris-'):
@@ -372,7 +372,7 @@ class RangeDiscoveryService:
         
         try:
             # 查找与此靶场相关的虚拟机
-            all_vms = self.virsh_client.list_all_domains()
+            all_vms = self.libvirt_provider.list_all_domains()
             for vm in all_vms:
                 # 使用启发式方法匹配VM到靶场
                 # 这里需要更复杂的逻辑来正确匹配
@@ -449,8 +449,8 @@ class RangeDiscoveryService:
         for vm in orphaned_vms:
             try:
                 if not dry_run:
-                    self.virsh_client.destroy_domain(vm.name)
-                    self.virsh_client.undefine_domain(vm.name)
+                    self.libvirt_provider.destroy_domain(vm.name)
+                    self.libvirt_provider.undefine_domain(vm.name)
                 cleanup_result['cleaned_vms'].append(vm.name)
                 logger.info(f"Cleaned orphaned VM: {vm.name}")
             except Exception as e:
