@@ -12,8 +12,9 @@ import tempfile
 import os
 from typing import Dict, List, Optional, Any, Union
 from pathlib import Path
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
+from datetime import datetime
 
 # Import security utilities
 from ..core.security import (
@@ -46,7 +47,7 @@ class TaskType(Enum):
 
 @dataclass
 class TaskResult:
-    """Result of task execution"""
+    """Result of task execution with verification support"""
     task_id: str
     task_type: TaskType
     success: bool
@@ -54,6 +55,12 @@ class TaskResult:
     execution_time: float = 0.0
     output: Optional[str] = None
     error: Optional[str] = None
+    # Enhanced fields for verification (optional for backward compatibility)
+    vm_name: Optional[str] = None
+    vm_ip: Optional[str] = None
+    evidence: Optional[str] = None  # Verification evidence
+    verification_passed: bool = False
+    timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
 
 
 class TaskExecutor:
@@ -177,6 +184,8 @@ class TaskExecutor:
             result = TaskResult(
                 task_id=task_id,
                 task_type=task_type,
+                vm_name=getattr(guest, 'id', 'unknown'),
+                vm_ip=guest_ip,
                 success=False,
                 message=f"Task execution failed: {str(e)}",
                 execution_time=time.time() - start_time,
@@ -184,6 +193,344 @@ class TaskExecutor:
             )
         
         return result
+    
+    def _execute_add_account(
+        self, 
+        task_id: str, 
+        params: Dict[str, Any], 
+        guest_ip: str, 
+        guest: Any,
+        start_time: float
+    ) -> TaskResult:
+        """Execute add_account task with verification"""
+        account = params.get('account')
+        passwd = params.get('passwd')
+        full_name = params.get('full_name', account)
+        
+        if not account or not passwd:
+            return TaskResult(
+                task_id=task_id,
+                task_type=TaskType.ADD_ACCOUNT,
+                vm_name=getattr(guest, 'id', 'unknown'),
+                vm_ip=guest_ip,
+                success=False,
+                message="Missing required parameters: account or passwd",
+                execution_time=time.time() - start_time
+            )
+        
+        try:
+            # Import SSH manager
+            from ..tools.ssh_manager import SSHManager, SSHCredentials, SSHCommand
+            
+            # Create SSH connection
+            ssh_manager = SSHManager()
+            credentials = ssh_manager.create_from_vm_info("guest", guest_ip, "root")
+            
+            # Verify connection
+            if not ssh_manager.establish_connection(credentials):
+                return TaskResult(
+                    task_id=task_id,
+                    task_type=TaskType.ADD_ACCOUNT,
+                    vm_name=getattr(guest, 'id', 'unknown'),
+                    vm_ip=guest_ip,
+                    success=False,
+                    message=f"Cannot establish SSH connection to {guest_ip}",
+                    execution_time=time.time() - start_time
+                )
+            
+            # Execute user creation commands
+            commands = [
+                f"useradd -m -c '{full_name}' -s /bin/bash {account}",
+                f"echo '{account}:{passwd}' | chpasswd",
+                f"mkdir -p /home/{account}/.ssh",
+                f"chmod 700 /home/{account}/.ssh",
+                f"chown {account}:{account} /home/{account}/.ssh"
+            ]
+            
+            all_success = True
+            outputs = []
+            
+            for cmd in commands:
+                result = ssh_manager.execute_with_retry(credentials, SSHCommand(cmd, "Create user"))
+                outputs.append(f"Command: {cmd}\\nResult: {result.stdout}\\nError: {result.stderr}\\n")
+                if not result.success:
+                    all_success = False
+                    break
+            
+            # Verification: Check if user exists and can login
+            verification_success = False
+            evidence = ""
+            
+            if all_success:
+                # Verify user exists
+                verify_result = ssh_manager.execute_command(
+                    credentials, 
+                    SSHCommand(f"id {account}", "Verify user exists")
+                )
+                
+                if verify_result.success:
+                    evidence = f"User verification: {verify_result.stdout.strip()}"
+                    
+                    # Test user login
+                    user_credentials = SSHCredentials(
+                        hostname=guest_ip,
+                        username=account,
+                        password=passwd,
+                        timeout=10
+                    )
+                    
+                    test_result = ssh_manager.execute_command(
+                        user_credentials,
+                        SSHCommand("whoami", "Test user login")
+                    )
+                    
+                    if test_result.success and account in test_result.stdout:
+                        verification_success = True
+                        evidence += f"\\nLogin test: SUCCESS ({test_result.stdout.strip()})"
+                    else:
+                        evidence += f"\\nLogin test: FAILED ({test_result.stderr})"
+                else:
+                    evidence = f"User verification failed: {verify_result.stderr}"
+            
+            return TaskResult(
+                task_id=task_id,
+                task_type=TaskType.ADD_ACCOUNT,
+                vm_name=getattr(guest, 'id', 'unknown'),
+                vm_ip=guest_ip,
+                success=all_success,
+                message=f"Account '{account}' {'created successfully' if all_success else 'creation failed'}",
+                evidence=evidence,
+                execution_time=time.time() - start_time,
+                output="\\n".join(outputs),
+                verification_passed=verification_success
+            )
+            
+        except Exception as e:
+            return TaskResult(
+                task_id=task_id,
+                task_type=TaskType.ADD_ACCOUNT,
+                vm_name=getattr(guest, 'id', 'unknown'),
+                vm_ip=guest_ip,
+                success=False,
+                message=f"Add account task failed: {str(e)}",
+                error=str(e),
+                execution_time=time.time() - start_time
+            )
+    
+    def _execute_modify_account(
+        self,
+        task_id: str,
+        params: Dict[str, Any],
+        guest_ip: str,
+        guest: Any,
+        start_time: float
+    ) -> TaskResult:
+        """Execute modify_account task with verification"""
+        account = params.get('account')
+        new_account = params.get('new_account')
+        new_passwd = params.get('new_passwd')
+        
+        if not account or (not new_account and not new_passwd):
+            return TaskResult(
+                task_id=task_id,
+                task_type=TaskType.MODIFY_ACCOUNT,
+                vm_name=getattr(guest, 'id', 'unknown'),
+                vm_ip=guest_ip,
+                success=False,
+                message="Missing required parameters",
+                execution_time=time.time() - start_time
+            )
+        
+        try:
+            from ..tools.ssh_manager import SSHManager, SSHCredentials, SSHCommand
+            
+            ssh_manager = SSHManager()
+            credentials = ssh_manager.create_from_vm_info("guest", guest_ip, "root")
+            
+            if not ssh_manager.establish_connection(credentials):
+                return TaskResult(
+                    task_id=task_id,
+                    task_type=TaskType.MODIFY_ACCOUNT,
+                    vm_name=getattr(guest, 'id', 'unknown'),
+                    vm_ip=guest_ip,
+                    success=False,
+                    message=f"Cannot establish SSH connection to {guest_ip}",
+                    execution_time=time.time() - start_time
+                )
+            
+            commands = []
+            
+            # Change password if requested
+            if new_passwd:
+                commands.append(f"echo '{account}:{new_passwd}' | chpasswd")
+            
+            # Change username if requested
+            if new_account:
+                commands.extend([
+                    f"usermod -l {new_account} {account}",
+                    f"usermod -d /home/{new_account} -m {new_account}"
+                ])
+            
+            all_success = True
+            outputs = []
+            
+            for cmd in commands:
+                result = ssh_manager.execute_with_retry(credentials, SSHCommand(cmd, "Modify user"))
+                outputs.append(f"Command: {cmd}\\nResult: {result.stdout}\\nError: {result.stderr}\\n")
+                if not result.success:
+                    all_success = False
+                    break
+            
+            # Verification
+            verification_success = False
+            evidence = ""
+            
+            if all_success:
+                final_username = new_account or account
+                verify_result = ssh_manager.execute_command(
+                    credentials,
+                    SSHCommand(f"id {final_username}", "Verify modified user")
+                )
+                
+                if verify_result.success:
+                    evidence = f"Modified user verification: {verify_result.stdout.strip()}"
+                    verification_success = True
+                else:
+                    evidence = f"Verification failed: {verify_result.stderr}"
+            
+            return TaskResult(
+                task_id=task_id,
+                task_type=TaskType.MODIFY_ACCOUNT,
+                vm_name=getattr(guest, 'id', 'unknown'),
+                vm_ip=guest_ip,
+                success=all_success,
+                message=f"Account '{account}' modification {'completed' if all_success else 'failed'}",
+                evidence=evidence,
+                execution_time=time.time() - start_time,
+                output="\\n".join(outputs),
+                verification_passed=verification_success
+            )
+            
+        except Exception as e:
+            return TaskResult(
+                task_id=task_id,
+                task_type=TaskType.MODIFY_ACCOUNT,
+                vm_name=getattr(guest, 'id', 'unknown'),
+                vm_ip=guest_ip,
+                success=False,
+                message=f"Modify account task failed: {str(e)}",
+                error=str(e),
+                execution_time=time.time() - start_time
+            )
+    
+    def _execute_install_package(
+        self,
+        task_id: str,
+        params: Dict[str, Any],
+        guest_ip: str,
+        guest: Any,
+        start_time: float
+    ) -> TaskResult:
+        """Execute install_package task with verification"""
+        package_manager = params.get('package_manager', 'yum')
+        name = params.get('name')
+        version = params.get('version')
+        
+        if not name:
+            return TaskResult(
+                task_id=task_id,
+                task_type=TaskType.INSTALL_PACKAGE,
+                vm_name=getattr(guest, 'id', 'unknown'),
+                vm_ip=guest_ip,
+                success=False,
+                message="Missing required parameter: name",
+                execution_time=time.time() - start_time
+            )
+        
+        try:
+            from ..tools.ssh_manager import SSHManager, SSHCredentials, SSHCommand
+            
+            ssh_manager = SSHManager()
+            credentials = ssh_manager.create_from_vm_info("guest", guest_ip, "root")
+            
+            if not ssh_manager.establish_connection(credentials):
+                return TaskResult(
+                    task_id=task_id,
+                    task_type=TaskType.INSTALL_PACKAGE,
+                    vm_name=getattr(guest, 'id', 'unknown'),
+                    vm_ip=guest_ip,
+                    success=False,
+                    message=f"Cannot establish SSH connection to {guest_ip}",
+                    execution_time=time.time() - start_time
+                )
+            
+            # Build install command based on package manager
+            package_spec = f"{name}-{version}" if version else name
+            
+            if package_manager in ['yum', 'dnf']:
+                install_cmd = f"{package_manager} install -y {package_spec}"
+                check_cmd = f"{package_manager} list installed {name}"
+            elif package_manager in ['apt', 'apt-get']:
+                install_cmd = f"{package_manager} update && {package_manager} install -y {package_spec}"
+                check_cmd = f"dpkg -l | grep {name}"
+            else:
+                return TaskResult(
+                    task_id=task_id,
+                    task_type=TaskType.INSTALL_PACKAGE,
+                    vm_name=getattr(guest, 'id', 'unknown'),
+                    vm_ip=guest_ip,
+                    success=False,
+                    message=f"Unsupported package manager: {package_manager}",
+                    execution_time=time.time() - start_time
+                )
+            
+            # Execute installation
+            result = ssh_manager.execute_with_retry(
+                credentials,
+                SSHCommand(install_cmd, "Install package", timeout=600)  # Longer timeout for packages
+            )
+            
+            # Verification: Check if package is installed
+            verification_success = False
+            evidence = ""
+            
+            if result.success:
+                verify_result = ssh_manager.execute_command(
+                    credentials,
+                    SSHCommand(check_cmd, "Verify package installation")
+                )
+                
+                if verify_result.success and name in verify_result.stdout:
+                    verification_success = True
+                    evidence = f"Package verification: {verify_result.stdout.strip()}"
+                else:
+                    evidence = f"Package verification failed: {verify_result.stderr}"
+            
+            return TaskResult(
+                task_id=task_id,
+                task_type=TaskType.INSTALL_PACKAGE,
+                vm_name=getattr(guest, 'id', 'unknown'),
+                vm_ip=guest_ip,
+                success=result.success,
+                message=f"Package '{name}' installation {'completed' if result.success else 'failed'}",
+                evidence=evidence,
+                execution_time=time.time() - start_time,
+                output=result.stdout,
+                error=result.stderr if not result.success else None,
+                verification_passed=verification_success
+            )
+            
+        except Exception as e:
+            return TaskResult(
+                task_id=task_id,
+                task_type=TaskType.INSTALL_PACKAGE,
+                vm_name=getattr(guest, 'id', 'unknown'),
+                vm_ip=guest_ip,
+                success=False,
+                message=f"Install package task failed: {str(e)}",
+                error=str(e),
+                execution_time=time.time() - start_time
+            )
     
     def _execute_add_account(
         self, 
