@@ -27,72 +27,18 @@ try:
     LIBVIRT_AVAILABLE = True
     LIBVIRT_TYPE = "python-binding"
 except ImportError:
-    LIBVIRT_AVAILABLE = False
-    # Try using virsh command-line client
+    # Try using virsh command-line client as fallback
     try:
         from .virsh_client import VirshLibvirt
         libvirt = VirshLibvirt()
         LIBVIRT_AVAILABLE = True
         LIBVIRT_TYPE = "virsh-client"
     except Exception as e:
-        LIBVIRT_TYPE = "mock"
-        # Mock libvirt for testing purposes
-        class MockLibvirt:
-            VIR_DOMAIN_RUNNING = 1
-            VIR_DOMAIN_SHUTOFF = 5
-            VIR_DOMAIN_PAUSED = 3
-        
-        class virDomain:
-            """Mock domain class"""
-            def create(self):
-                return 0  # Success
-                
-            def destroy(self):
-                return 0  # Success
-                
-            def undefine(self):
-                return 0  # Success
-                
-            def state(self):
-                return [MockLibvirt.VIR_DOMAIN_RUNNING, 0]
-                
-            def info(self):
-                return [MockLibvirt.VIR_DOMAIN_RUNNING, 1024, 1024, 1, 0]
-                
-            def isActive(self):
-                return 1  # Active
-            
-        class libvirtError(Exception):
-            """Mock libvirt error"""
-            pass
-            
-        class virConnect:
-            """Mock connection class"""
-            def isAlive(self):
-                return True
-            
-            def getHostname(self):
-                return "mock-host"
-            
-            def close(self):
-                pass
-                
-            def lookupByName(self, name):
-                """Mock domain lookup"""
-                return MockLibvirt.virDomain()
-                
-            def defineXML(self, xml):
-                """Mock domain definition"""
-                return MockLibvirt.virDomain()
-            
-        @staticmethod
-        def open(uri=None):
-            return MockLibvirt.virConnect()
-        
-        libvirt = MockLibvirt()
-
-if LIBVIRT_TYPE == "mock":
-    libvirt = MockLibvirt()
+        raise ImportError(
+            f"Neither libvirt-python nor virsh_client is available. "
+            f"Please install libvirt-python or ensure virsh is installed and accessible. "
+            f"Original error: {e}"
+        )
 
 from .base_provider import (
     InfrastructureProvider, ResourceInfo, ResourceStatus,
