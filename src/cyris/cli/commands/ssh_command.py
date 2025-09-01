@@ -1,6 +1,6 @@
 """
-SSH信息命令处理器
-处理SSH连接信息显示逻辑
+SSH Info Command Handler
+Handles SSH connection information display logic
 """
 
 from .base_command import BaseCommandHandler, ServiceMixin
@@ -8,39 +8,40 @@ from cyris.cli.presentation import MessageFormatter
 
 
 class SSHInfoCommandHandler(BaseCommandHandler, ServiceMixin):
-    """SSH信息命令处理器 - 显示SSH连接信息"""
+    """SSH info command handler - Display SSH connection information for ranges"""
     
     def execute(self, range_id: str) -> bool:
-        """执行ssh-info命令"""
+        """Execute ssh-info command to display connection details"""
         try:
             if not self.validate_range_id(range_id):
                 return False
             
             self.console.print(f"[bold blue]SSH Connection Information[/bold blue]: [cyan]{range_id}[/cyan]")
             
-            orchestrator, provider = self.create_orchestrator()
+            orchestrator, provider, singleton = self.create_orchestrator()
             if not orchestrator:
                 return False
-            
-            # Get range metadata
-            range_metadata = orchestrator.get_range(range_id)
-            if not range_metadata:
-                self.error_display.display_range_not_found(range_id)
-                return False
-            
-            # Get resources
-            resources = orchestrator.get_range_resources(range_id)
-            if not resources or not resources.get('guests'):
-                self.console.print("[yellow]No VMs found in this range[/yellow]")
+                
+            with singleton:
+                # Get range metadata
+                range_metadata = orchestrator.get_range(range_id)
+                if not range_metadata:
+                    self.error_display.display_range_not_found(range_id)
+                    return False
+                
+                # Get resources
+                resources = orchestrator.get_range_resources(range_id)
+                if not resources or not resources.get('guests'):
+                    self.console.print("[yellow]No VMs found in this range[/yellow]")
+                    return True
+                
+                # Display SSH info for each VM
+                self._display_vm_ssh_info(resources['guests'], provider)
+                
+                # Show helpful tips
+                self._show_ssh_tips()
+                
                 return True
-            
-            # Display SSH info for each VM
-            self._display_vm_ssh_info(resources['guests'], provider)
-            
-            # Show helpful tips
-            self._show_ssh_tips()
-            
-            return True
             
         except Exception as e:
             self.handle_error(e, "ssh-info")

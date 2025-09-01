@@ -1,6 +1,6 @@
 """
-基础命令处理器 - 提供命令处理器的抽象基类
-遵循OCP原则 - 对扩展开放，对修改封闭
+Base Command Handler - Provides abstract base class for command handlers
+Follows OCP principle - Open for extension, closed for modification
 """
 
 from abc import ABC, abstractmethod
@@ -12,7 +12,7 @@ from cyris.cli.presentation import get_console, get_error_console, ErrorDisplayM
 
 
 class BaseCommandHandler(ABC):
-    """命令处理器基类 - 实现通用功能，定义扩展接口"""
+    """Command handler base class - Implements common functionality, defines extension interface"""
     
     def __init__(self, config: CyRISSettings, verbose: bool = False):
         self.config = config
@@ -23,11 +23,11 @@ class BaseCommandHandler(ABC):
     
     @abstractmethod
     def execute(self, **kwargs) -> bool:
-        """执行命令 - 子类必须实现"""
+        """Execute command - Subclasses must implement"""
         pass
     
     def handle_error(self, error: Exception, context: str = "") -> None:
-        """统一的错误处理 - DRY原则"""
+        """Unified error handling - DRY principle"""
         if context:
             self.error_display.display_command_error(context, error)
         else:
@@ -38,21 +38,21 @@ class BaseCommandHandler(ABC):
             self.error_console.print(traceback.format_exc())
     
     def validate_range_id(self, range_id: str) -> bool:
-        """验证靶场ID格式"""
+        """Validate range ID format"""
         if not range_id or not range_id.strip():
             self.error_display.display_error("Range ID cannot be empty")
             return False
         return True
     
     def validate_file_exists(self, file_path: Path) -> bool:
-        """验证文件存在"""
+        """Validate file exists"""
         if not file_path.exists():
             self.error_display.display_error(f"File not found: {file_path}")
             return False
         return True
     
     def create_orchestrator(self, network_mode: str = 'bridge', enable_ssh: bool = True):
-        """创建编排器 - 复用逻辑"""
+        """Create orchestrator with singleton pattern - Reusable logic"""
         try:
             from cyris.services.orchestrator import RangeOrchestrator
             from cyris.infrastructure.providers.kvm_provider import KVMProvider
@@ -69,9 +69,13 @@ class BaseCommandHandler(ABC):
             }
             
             provider = KVMProvider(kvm_settings)
+            
+            # Use singleton pattern for orchestrator
+            from cyris.services.orchestrator import CyRISSingleton
+            singleton = CyRISSingleton(self.config.cyber_range_dir / '.cyris.lock')
             orchestrator = RangeOrchestrator(self.config, provider)
             
-            return orchestrator, provider
+            return orchestrator, provider, singleton
             
         except ImportError as e:
             self.error_display.display_error(f"Failed to import required modules: {e}")
@@ -81,16 +85,16 @@ class BaseCommandHandler(ABC):
             return None, None
     
     def log_verbose(self, message: str) -> None:
-        """详细日志输出"""
+        """Verbose logging output"""
         if self.verbose:
             self.console.print(f"[dim]{message}[/dim]")
 
 
 class ValidationMixin:
-    """验证混入类 - 提供通用验证功能"""
+    """Validation mixin class - Provides common validation functionality"""
     
     def validate_yaml_file(self, file_path: Path) -> bool:
-        """验证YAML文件格式"""
+        """Validate YAML file format"""
         try:
             import yaml
             with open(file_path, 'r') as f:
@@ -104,7 +108,7 @@ class ValidationMixin:
             return False
     
     def validate_network_mode(self, network_mode: str) -> bool:
-        """验证网络模式"""
+        """Validate network mode"""
         valid_modes = ['user', 'bridge']
         if network_mode not in valid_modes:
             self.error_display.display_error(
@@ -115,10 +119,10 @@ class ValidationMixin:
 
 
 class ServiceMixin:
-    """服务混入类 - 提供通用服务访问"""
+    """Service mixin class - Provides common service access"""
     
     def get_ip_manager(self, libvirt_uri: str = "qemu:///system"):
-        """获取IP管理器"""
+        """Get IP manager"""
         try:
             from cyris.tools.vm_ip_manager import VMIPManager
             return VMIPManager(libvirt_uri=libvirt_uri)
@@ -131,7 +135,7 @@ class ServiceMixin:
             return None
     
     def get_permission_manager(self, dry_run: bool = False):
-        """获取权限管理器"""
+        """Get permission manager"""
         try:
             from cyris.infrastructure.permissions import PermissionManager
             return PermissionManager(dry_run=dry_run)

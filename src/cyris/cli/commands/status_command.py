@@ -1,6 +1,6 @@
 """
-Status命令处理器
-处理靶场状态查看逻辑 - 完整实现原始功能
+Status Command Handler
+Handles cyber range status checking logic with comprehensive status display
 """
 
 import sys
@@ -17,40 +17,42 @@ from ...tools.vm_diagnostics import quick_vm_health_check
 
 
 class StatusCommandHandler(BaseCommandHandler, ServiceMixin):
-    """Status命令处理器 - 显示靶场状态"""
+    """Status command handler - Display cyber range status with detailed VM information"""
     
     def execute(self, range_id: str, verbose: bool = False) -> bool:
-        """执行status命令"""
+        """Execute status command with comprehensive range status display"""
         try:
             if not self.validate_range_id(range_id):
                 return False
             
             self.console.print(f"\n[bold blue]Cyber Range Status[/bold blue]: [bold]{range_id}[/bold]")
             
-            orchestrator, provider = self.create_orchestrator()
+            orchestrator, provider, singleton = self.create_orchestrator()
             if not orchestrator:
                 return False
             
-            # Get detailed status using our enhanced method
-            detailed_status = orchestrator.get_range_status_detailed(range_id)
+            with singleton:
             
-            if detailed_status:
-                # Display comprehensive range status
-                self._display_detailed_status(detailed_status, verbose)
-                return True
-            else:
-                # Fallback to basic range check
-                range_metadata = orchestrator.get_range(range_id) if hasattr(orchestrator, 'get_range') else None
+                # Get detailed status using our enhanced method
+                detailed_status = orchestrator.get_range_status_detailed(range_id)
                 
-                if range_metadata:
-                    self.console.print("[yellow]⚠️ Range exists but detailed status unavailable[/yellow]")
-                    self._display_basic_range_info(range_metadata)
+                if detailed_status:
+                    # Display comprehensive range status
+                    self._display_detailed_status(detailed_status, verbose)
                     return True
                 else:
-                    self.error_console.print(Text("  [ERROR] Range not found", style="bold red"))
-                    # Check filesystem status
-                    self._check_filesystem_status(range_id, None, verbose)
-                    return False
+                    # Fallback to basic range check
+                    range_metadata = orchestrator.get_range(range_id) if hasattr(orchestrator, 'get_range') else None
+                    
+                    if range_metadata:
+                        self.console.print("[yellow]⚠️ Range exists but detailed status unavailable[/yellow]")
+                        self._display_basic_range_info(range_metadata)
+                        return True
+                    else:
+                        self.error_console.print(Text("  [ERROR] Range not found", style="bold red"))
+                        # Check filesystem status
+                        self._check_filesystem_status(range_id, None, verbose)
+                        return False
                 
         except Exception as e:
             self.error_console.print(Text.assemble(
@@ -295,7 +297,7 @@ class StatusCommandHandler(BaseCommandHandler, ServiceMixin):
             return Text(label_text, style="white")
     
     def _check_filesystem_status(self, range_id: str, range_metadata, verbose: bool) -> None:
-        """检查文件系统状态"""
+        """Check filesystem status for range directory and contents"""
         self.console.print()  # Empty line for spacing
         
         range_dir = self.config.cyber_range_dir / range_id
@@ -323,7 +325,7 @@ class StatusCommandHandler(BaseCommandHandler, ServiceMixin):
                 self.console.print(Text("  WARNING: Range exists in orchestrator but no filesystem directory found", style="yellow"))
     
     def _show_directory_contents_verbose(self, range_dir) -> None:
-        """显示目录内容（verbose模式）"""
+        """Show directory contents in verbose mode"""
         try:
             contents = []
             for item in range_dir.iterdir():

@@ -1,6 +1,6 @@
 """
-Create命令处理器
-处理靶场创建逻辑
+Create Command Handler
+Handles cyber range creation logic with comprehensive validation
 """
 
 from pathlib import Path
@@ -13,12 +13,12 @@ from ...tools.vm_diagnostics import VMDiagnostics
 
 
 class CreateCommandHandler(BaseCommandHandler, ValidationMixin):
-    """Create命令处理器 - 创建新的靶场"""
+    """Create command handler - Create new cyber ranges with validation"""
     
     def execute(self, description_file: Path, range_id: Optional[int] = None,
                 dry_run: bool = False, network_mode: str = 'bridge',
                 enable_ssh: bool = True) -> bool:
-        """执行create命令"""
+        """Execute create command with comprehensive validation and error handling"""
         try:
             # Validate inputs
             if not self.validate_file_exists(description_file):
@@ -64,62 +64,63 @@ class CreateCommandHandler(BaseCommandHandler, ValidationMixin):
         self.console.print("[bold yellow]Dry run mode - will not actually create cyber range[/bold yellow]")
         
         try:
-            orchestrator, provider = self.create_orchestrator(network_mode, enable_ssh)
+            orchestrator, provider, singleton = self.create_orchestrator(network_mode, enable_ssh)
             if not orchestrator:
                 return False
-            
-            # For dry run, we'll validate YAML and show what would be created
-            import yaml
-            
-            try:
-                with open(description_file, 'r') as f:
-                    yaml_data = yaml.safe_load(f)
                 
-                self.console.print(f"[green]✓[/green] YAML syntax valid")
+            with singleton:
+                # For dry run, we'll validate YAML and show what would be created
+                import yaml
                 
-                # Extract information from range description
-                hosts = []
-                guests = []
-                range_name = description_file.stem
-                
-                # Parse the YAML structure (supports both list and dict formats)
-                if isinstance(yaml_data, list):
-                    for section in yaml_data:
-                        if isinstance(section, dict):
-                            if 'host_settings' in section:
-                                hosts.extend(section['host_settings'])
-                            if 'guest_settings' in section:
-                                guests.extend(section['guest_settings'])
-                            if 'clone_settings' in section:
-                                for clone in section['clone_settings']:
-                                    if clone.get('range_id'):
-                                        range_name = clone['range_id']
-                elif isinstance(yaml_data, dict):
-                    if 'host_settings' in yaml_data:
-                        hosts.extend(yaml_data['host_settings'])
-                    if 'guest_settings' in yaml_data:
-                        guests.extend(yaml_data['guest_settings'])
-                    if 'clone_settings' in yaml_data:
-                        for clone in yaml_data['clone_settings']:
-                            if clone.get('range_id'):
-                                range_name = clone['range_id']
-                
-                self.console.print(f"[cyan]Range Name:[/cyan] {range_name}")
-                self.console.print(f"[cyan]Hosts:[/cyan] {len(hosts)}")
-                self.console.print(f"[cyan]Guests:[/cyan] {len(guests)}")
-                
-                # Show guest details
-                for i, guest in enumerate(guests):
-                    guest_id = guest.get('id', f'guest-{i+1}')
-                    self.console.print(f"  {i+1}. {guest_id}")
+                try:
+                    with open(description_file, 'r') as f:
+                        yaml_data = yaml.safe_load(f)
                     
-                return True
-            except yaml.YAMLError as e:
-                self.error_display.display_error(f"YAML parsing failed: {e}")
-                return False
-            except Exception as e:
-                self.error_display.display_error(f"YAML validation failed: {e}")
-                return False
+                    self.console.print(f"[green]✓[/green] YAML syntax valid")
+                
+                    # Extract information from range description
+                    hosts = []
+                    guests = []
+                    range_name = description_file.stem
+                    
+                    # Parse the YAML structure (supports both list and dict formats)
+                    if isinstance(yaml_data, list):
+                        for section in yaml_data:
+                            if isinstance(section, dict):
+                                if 'host_settings' in section:
+                                    hosts.extend(section['host_settings'])
+                                if 'guest_settings' in section:
+                                    guests.extend(section['guest_settings'])
+                                if 'clone_settings' in section:
+                                    for clone in section['clone_settings']:
+                                        if clone.get('range_id'):
+                                            range_name = clone['range_id']
+                    elif isinstance(yaml_data, dict):
+                        if 'host_settings' in yaml_data:
+                            hosts.extend(yaml_data['host_settings'])
+                        if 'guest_settings' in yaml_data:
+                            guests.extend(yaml_data['guest_settings'])
+                        if 'clone_settings' in yaml_data:
+                            for clone in yaml_data['clone_settings']:
+                                if clone.get('range_id'):
+                                    range_name = clone['range_id']
+                    
+                    self.console.print(f"[cyan]Range Name:[/cyan] {range_name}")
+                    self.console.print(f"[cyan]Hosts:[/cyan] {len(hosts)}")
+                    self.console.print(f"[cyan]Guests:[/cyan] {len(guests)}")
+                    
+                    # Show guest details
+                    for i, guest in enumerate(guests):
+                        guest_id = guest.get('id', f'guest-{i+1}')
+                        self.console.print(f"  {i+1}. {guest_id}")
+                        
+                    return True
+                except yaml.YAMLError as e:
+                    self.error_display.display_error(f"YAML parsing failed: {e}")
+                    return False
+                except Exception as e:
+                    self.error_display.display_error(f"YAML validation failed: {e}")
+                    return False
                 
         except Exception as e:
             self.error_display.display_error(f"Validation error: {str(e)}")
@@ -132,11 +133,12 @@ class CreateCommandHandler(BaseCommandHandler, ValidationMixin):
                                network_mode: str, enable_ssh: bool) -> bool:
         """执行实际的靶场创建"""
         try:
-            orchestrator, provider = self.create_orchestrator(network_mode, enable_ssh)
+            orchestrator, provider, singleton = self.create_orchestrator(network_mode, enable_ssh)
             if not orchestrator:
                 return False
-            
-            self.console.print("[bold blue]Initializing cyber range creation...[/bold blue]")
+                
+            with singleton:
+                self.console.print("[bold blue]Initializing cyber range creation...[/bold blue]")
             
             # Use the working create_range_from_yaml method
             with self.console.status("[bold green]Creating cyber range...") as status:

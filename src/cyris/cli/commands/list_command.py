@@ -1,6 +1,6 @@
 """
-List命令处理器
-处理靶场列表显示逻辑
+List Command Handler
+Handles cyber range list display logic with auto-discovery
 """
 
 from typing import Optional
@@ -12,7 +12,7 @@ from ...tools.vm_diagnostics import quick_vm_health_check
 
 
 class ListCommandHandler(BaseCommandHandler, ServiceMixin):
-    """List命令处理器 - 显示靶场列表"""
+    """List command handler - Display cyber range list with auto-discovery"""
     
     def __init__(self, config, verbose: bool = False):
         super().__init__(config, verbose)
@@ -20,23 +20,25 @@ class ListCommandHandler(BaseCommandHandler, ServiceMixin):
     
     def execute(self, range_id: Optional[str] = None, list_all: bool = False, 
                 verbose: bool = False) -> bool:
-        """执行list命令"""
+        """Execute list command with auto-discovery and singleton pattern"""
         try:
-            orchestrator, provider = self.create_orchestrator()
+            orchestrator, provider, singleton = self.create_orchestrator()
             if not orchestrator:
                 return False
             
-            if range_id:
-                return self._show_specific_range(orchestrator, range_id)
-            else:
-                return self._list_all_ranges(orchestrator, list_all, verbose)
+            # Use singleton pattern to prevent conflicts
+            with singleton:
+                if range_id:
+                    return self._show_specific_range(orchestrator, range_id)
+                else:
+                    return self._list_all_ranges(orchestrator, list_all, verbose)
                 
         except Exception as e:
             self.handle_error(e, "list")
             return False
     
     def _show_specific_range(self, orchestrator, range_id: str) -> bool:
-        """显示特定靶场详情"""
+        """Show specific range details"""
         if not self.validate_range_id(range_id):
             return False
         
@@ -68,13 +70,13 @@ class ListCommandHandler(BaseCommandHandler, ServiceMixin):
             return False
     
     def _list_all_ranges(self, orchestrator, list_all: bool, verbose: bool) -> bool:
-        """列出所有靶场"""
+        """List all ranges with auto-discovery from filesystem"""
+        # Auto-discovery already happened at orchestrator initialization
+        # So list_ranges() will include any discovered ranges
         ranges = orchestrator.list_ranges()
         
         if not ranges:
-            self.console.print("[yellow]No cyber ranges found in orchestrator[/yellow]")
-            # Fallback: Check filesystem for range directories
-            self._check_filesystem_ranges()
+            self.console.print("[yellow]No cyber ranges found[/yellow]")
             return True
         
         # Use display manager for consistent formatting
@@ -86,7 +88,7 @@ class ListCommandHandler(BaseCommandHandler, ServiceMixin):
         return True
     
     def _check_filesystem_ranges(self) -> None:
-        """检查文件系统中的靶场目录"""
+        """Check filesystem for range directories (legacy fallback)"""
         ranges_dir = self.config.cyber_range_dir
         if ranges_dir.exists():
             range_dirs = [d for d in ranges_dir.iterdir() if d.is_dir()]
@@ -98,7 +100,7 @@ class ListCommandHandler(BaseCommandHandler, ServiceMixin):
             self.error_console.print(f"[bold red]Cyber range directory does not exist: {ranges_dir}[/bold red]")
     
     def _show_verbose_info(self, orchestrator, ranges, verbose: bool = True) -> None:
-        """显示详细信息，包括VM IP地址"""
+        """Show detailed information including VM IP addresses"""
         for range_meta in ranges:
             if range_meta.status.value in ['active', 'creating']:
                 resources = orchestrator.get_range_resources(range_meta.range_id)
@@ -129,7 +131,7 @@ class ListCommandHandler(BaseCommandHandler, ServiceMixin):
                         self.console.print(f"[red]  Error getting VM details: {str(e)}[/red]")
     
     def _display_vm_summary(self, guest: str, health_info, verbose: bool = False) -> None:
-        """显示VM简要信息（用于list -v）"""
+        """Display VM summary information (for list -v)"""
         status_icon = ":green_heart:" if getattr(health_info, 'is_healthy', False) else ":cross_mark:"
         libvirt_status = getattr(health_info, 'libvirt_status', 'unknown')
         
@@ -173,7 +175,7 @@ class ListCommandHandler(BaseCommandHandler, ServiceMixin):
         self.console.print(f"  {status_icon} [cyan]{guest}[/cyan] ({libvirt_status}) - {ip_text} {network_status}{health_indicator}")
     
     def _check_running_vms(self, provider) -> None:
-        """检查运行中的VM（复用原有逻辑）"""
+        """Check running VMs (legacy logic reuse)"""
         try:
             import subprocess
             result = subprocess.run(
