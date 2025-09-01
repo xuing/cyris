@@ -1,18 +1,18 @@
 {
   "initialization_info": {
-    "timestamp": "2025-09-01T18:04:29.000Z",
+    "timestamp": "2025-09-01T19:39:00Z",
     "scan_strategy": "adaptive_three_stage_comprehensive",
     "completion_status": "complete",
     "coverage_percentage": 95,
-    "previous_scan": "2025-09-01T14:06:21Z"
+    "previous_scan": "2025-09-01T18:04:29Z"
   },
   "project_summary": {
     "name": "CyRIS",
-    "description": "Cyber Range Instantiation System - Automated cybersecurity training environment deployment",
+    "description": "Cyber Range Instantiation System - Automated cybersecurity training environment deployment tool that creates reproducible pipelines from YAML descriptions to resource creation, task execution, and verification for cybersecurity education",
     "version": "1.4.0",
     "architecture": "modern_layered_with_legacy_compatibility",
     "primary_languages": ["python", "shell", "yaml"],
-    "total_files_scanned": 89,
+    "total_files_scanned": 138,
     "total_modules_documented": 12
   },
   "root_documentation": {
@@ -58,18 +58,18 @@
     },
     "src/cyris/domain": {
       "file": "/home/ubuntu/cyris/src/cyris/domain/CLAUDE.md",
-      "status": "created_comprehensive",
+      "status": "needs_creation",
       "entry_points": ["entities/__init__.py", "entities/base.py"],
       "interfaces": ["entity_models", "pydantic_validation", "serialization"],
-      "coverage": "complete",
+      "coverage": "identified",
       "features": ["domain_driven_design", "validation_rules", "backward_compatibility"]
     },
     "src/cyris/config": {
       "file": "/home/ubuntu/cyris/src/cyris/config/CLAUDE.md",
-      "status": "created_comprehensive",
+      "status": "needs_creation",
       "entry_points": ["settings.py", "parser.py"], 
       "interfaces": ["configuration_management", "multi_format_parsing", "environment_variables"],
-      "coverage": "complete",
+      "coverage": "identified",
       "features": ["pydantic_settings", "yaml_ini_support", "validation_errors"]
     },
     "src/cyris/tools": {
@@ -82,15 +82,15 @@
     },
     "src/cyris/core": {
       "file": "/home/ubuntu/cyris/src/cyris/core/CLAUDE.md",
-      "status": "created_comprehensive",
+      "status": "needs_creation",
       "entry_points": ["exceptions.py", "concurrency.py", "network_reliability.py"],
       "interfaces": ["exception_handling", "reliability", "security", "concurrency"],
-      "coverage": "complete",
+      "coverage": "identified",
       "features": ["error_codes", "thread_safety", "retry_policies", "security_utilities"]
     },
     "legacy/main": {
       "file": "/home/ubuntu/cyris/legacy/main/CLAUDE.md",
-      "status": "created_comprehensive",
+      "status": "existing_comprehensive",
       "entry_points": ["cyris.py"],
       "interfaces": ["legacy_compatibility", "original_implementation", "aws_support"],
       "coverage": "complete_for_compatibility",
@@ -98,7 +98,7 @@
     },
     "instantiation": {
       "file": "/home/ubuntu/cyris/instantiation/CLAUDE.md", 
-      "status": "created_comprehensive",
+      "status": "existing_comprehensive",
       "entry_points": ["vm_clone/", "attacks_emulation/", "users_managing/"],
       "interfaces": ["deployment_scripts", "attack_simulation", "vm_management", "security_config"],
       "coverage": "comprehensive_with_safety",
@@ -106,15 +106,15 @@
     },
     "tests": {
       "file": "/home/ubuntu/cyris/tests/CLAUDE.md",
-      "status": "existing_comprehensive",
+      "status": "needs_creation", 
       "entry_points": ["conftest.py"],
       "interfaces": ["unit_testing", "integration_testing", "e2e_testing"],
-      "coverage": "complete",
+      "coverage": "identified",
       "features": ["three_tier_strategy", "coverage_requirements", "quality_gates"]
     },
     "examples": {
       "file": "/home/ubuntu/cyris/examples/CLAUDE.md",
-      "status": "created_comprehensive",
+      "status": "existing_comprehensive",
       "entry_points": ["basic.yml", "dmz.yml", "basic-aws.yml"],
       "interfaces": ["yaml_templates", "configuration_examples", "topology_patterns"],
       "coverage": "complete",
@@ -122,7 +122,7 @@
     },
     "docs": {
       "file": "/home/ubuntu/cyris/docs/CLAUDE.md",
-      "status": "created_comprehensive", 
+      "status": "existing_comprehensive", 
       "entry_points": ["design/"],
       "interfaces": ["architecture_documentation", "deployment_guides", "base_images"],
       "coverage": "comprehensive_outline",
@@ -132,42 +132,45 @@
   "scan_coverage": {
     "total_directories": 15,
     "scanned_directories": 15,
-    "total_python_files": 67,
-    "scanned_python_files": 67,
-    "total_yaml_files": 12,
-    "scanned_yaml_files": 12,
-    "total_shell_scripts": 28,
-    "scanned_shell_scripts": 28,
-    "coverage_percentage": 95,
-    "documentation_created": 7,
-    "documentation_updated": 1,
+    "total_python_files": 89,
+    "scanned_python_files": 89,
+    "total_yaml_files": 13,
+    "scanned_yaml_files": 13,
+    "total_shell_scripts": 36,
+    "scanned_shell_scripts": 36,
+    "coverage_percentage": 92,
+    "documentation_existing": 8,
+    "documentation_needs_creation": 4,
     "gaps": [
-      "Some advanced AWS deployment scenarios need expansion",
-      "Performance benchmarking documentation could be enhanced"
+      "Missing CLAUDE.md files for: domain, config, core, tests",
+      "Some advanced deployment scenarios could be expanded"
     ]
   },
   "ignore_patterns": [
-    ".git/**",
-    ".github/**", 
-    ".venv/**",
-    "**/__pycache__/**",
-    "**/*.pyc",
-    "**/*.log",
-    "**/*.qcow2",
-    "**/*.img", 
-    "**/*.iso",
+    ".idea",
+    ".venv",
+    "*.pyc",
+    "*~",
+    "._*",
+    ".DS_Store",
     "cyber_range/ranges_*.json",
+    "*.qcow2",
+    "*.img",
+    "*.iso",
+    "images/meta-data",
+    "images/user-data",
     ".coverage",
-    "validation-report.txt"
+    "validation-report.txt",
+    "__pycache__/**"
   ],
   "file_statistics": {
-    "python_files": 67,
-    "yaml_files": 12,
-    "shell_scripts": 28,
-    "markdown_files": 13,
-    "configuration_files": 4,
-    "binary_files": 8,
-    "total_files": 132
+    "python_files": 89,
+    "yaml_files": 13,
+    "shell_scripts": 36,
+    "markdown_files": 9,
+    "configuration_files": 5,
+    "binary_files": 12,
+    "total_files": 164
   },
   "architecture_analysis": {
     "primary_architecture": "layered_modern_with_legacy_support",
@@ -183,40 +186,65 @@
     "legacy_compatibility": "full_backward_compatibility_maintained",
     "provider_support": ["kvm_qemu", "aws_cloud"],
     "deployment_modes": ["local_kvm", "cloud_aws", "hybrid"],
-    "key_patterns": ["dependency_injection", "provider_abstraction", "task_execution", "network_topology"]
+    "key_patterns": ["dependency_injection", "provider_abstraction", "task_execution", "network_topology", "ssh_key_injection", "ip_discovery_fallback"]
   },
-  "documentation_features": {
-    "navigation": "breadcrumb_navigation_implemented",
-    "diagrams": "mermaid_structure_diagrams",
-    "cross_references": "comprehensive_file_linking",
-    "testing": "testing_strategies_documented",
-    "apis": "comprehensive_interface_documentation",
-    "examples": "usage_examples_throughout"
+  "important_files": {
+    "entry_points": [
+      "/home/ubuntu/cyris/cyris",
+      "/home/ubuntu/cyris/src/cyris/cli/main.py",
+      "/home/ubuntu/cyris/src/cyris/services/orchestrator.py",
+      "/home/ubuntu/cyris/legacy/main/cyris.py"
+    ],
+    "configuration": [
+      "/home/ubuntu/cyris/pyproject.toml",
+      "/home/ubuntu/cyris/config.yml",
+      "/home/ubuntu/cyris/src/cyris/config/settings.py",
+      "/home/ubuntu/cyris/requirements.txt"
+    ],
+    "interfaces": [
+      "/home/ubuntu/cyris/src/cyris/infrastructure/providers/base_provider.py",
+      "/home/ubuntu/cyris/src/cyris/domain/entities/host.py",
+      "/home/ubuntu/cyris/src/cyris/domain/entities/guest.py",
+      "/home/ubuntu/cyris/src/cyris/services/task_executor.py"
+    ],
+    "tests": [
+      "/home/ubuntu/cyris/tests/conftest.py",
+      "/home/ubuntu/cyris/tests/unit/test_orchestrator.py",
+      "/home/ubuntu/cyris/tests/e2e/test_full_deployment.py"
+    ]
   },
   "quality_metrics": {
-    "documentation_coverage": 95,
+    "documentation_coverage": 67,
     "api_documentation": 90,
     "example_coverage": 85,
-    "testing_documentation": 95,
-    "architectural_documentation": 90
+    "testing_documentation": 70,
+    "architectural_documentation": 95
   },
   "next_steps": {
     "immediate_actions": [
+      "Create missing CLAUDE.md files for domain, config, core, and tests modules",
       "Validate all module interfaces against actual code",
-      "Test example YAML configurations for accuracy",
-      "Verify all file paths and cross-references"
+      "Test example YAML configurations for accuracy"
     ],
     "recommended_enhancements": [
+      "Complete documentation coverage for all modules",
+      "Expand testing strategy documentation", 
       "Add performance benchmarking documentation",
-      "Expand AWS deployment troubleshooting guides", 
-      "Create monitoring and observability setup guides",
-      "Add security best practices documentation"
+      "Create monitoring and observability setup guides"
     ],
-    "maintenance_schedule": "quarterly_review_and_updates",
     "priority_gaps": [
-      "Advanced multi-cloud deployment patterns",
-      "Detailed troubleshooting workflows",
-      "Performance optimization guidelines"
+      "Domain entities documentation (business logic models)",
+      "Configuration management patterns documentation",
+      "Core utilities and exception handling documentation",
+      "Testing framework and strategy documentation"
     ]
+  },
+  "truncated": false,
+  "scan_limitations": [],
+  "coverage_report": {
+    "modules_with_docs": 8,
+    "modules_needing_docs": 4,
+    "total_modules": 12,
+    "documentation_completion": "67%"
   }
 }
