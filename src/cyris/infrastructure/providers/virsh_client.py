@@ -1,216 +1,97 @@
 """
-Virsh Command Line Client
+LibVirt Client - Compatibility Bridge
 
-A simple libvirt client that uses the virsh command-line tool
-to perform KVM operations when Python libvirt bindings are not available.
+This module provides a compatibility bridge for the enhanced libvirt-python
+implementation while maintaining backward compatibility with existing code
+that imports from virsh_client.
+
+The new implementation is in libvirt_provider.py with significant performance
+improvements and enhanced functionality.
 """
 
-import subprocess
-import tempfile
-import uuid
-import os
-import logging
-from typing import Dict, List, Optional, Any
-from pathlib import Path
+# Import everything from the new enhanced implementation
+from .libvirt_provider import (
+    LibvirtProvider,
+    LibvirtProviderError,
+    DomainOperationResult,
+    DomainLifecycleState,
+    NetworkInfo,
+    StoragePoolInfo,
+    create_libvirt_provider,
+    quick_domain_operation,
+    get_domain_summary
+)
 
-logger = logging.getLogger(__name__)
+from .libvirt_domain_wrapper import (
+    LibvirtDomainWrapper,
+    DomainState,
+    DomainStateInfo,
+    NetworkInterface
+)
 
+# Backward compatibility aliases
+VirshError = LibvirtProviderError
+VirshDomain = LibvirtDomainWrapper
+VirshConnection = LibvirtProvider
+VirshLibvirt = LibvirtProvider
 
-class VirshError(Exception):
-    """Exception raised for virsh command errors"""
-    pass
-
-
-class VirshDomain:
-    """Represents a domain managed via virsh"""
-    
-    def __init__(self, name: str, uri: str = "qemu:///session"):
-        self.name = name
-        self.uri = uri
-    
-    def create(self) -> int:
-        """Start the domain"""
-        try:
-            result = subprocess.run(
-                ["virsh", "--connect", self.uri, "start", self.name],
-                capture_output=True, text=True, check=True, encoding='utf-8', errors='replace'
-            )
-            logger.info(f"Started domain {self.name}")
-            return 0
-        except subprocess.CalledProcessError as e:
-            logger.error(f"Failed to start domain {self.name}: {e.stderr}")
-            raise VirshError(f"Failed to start domain: {e.stderr}")
-    
-    def destroy(self) -> int:
-        """Forcibly stop the domain"""
-        try:
-            result = subprocess.run(
-                ["virsh", "--connect", self.uri, "destroy", self.name],
-                capture_output=True, text=True, check=True, encoding='utf-8', errors='replace'
-            )
-            logger.info(f"Destroyed domain {self.name}")
-            return 0
-        except subprocess.CalledProcessError as e:
-            if "domain is not running" in e.stderr.lower():
-                return 0  # Already stopped
-            logger.error(f"Failed to destroy domain {self.name}: {e.stderr}")
-            raise VirshError(f"Failed to destroy domain: {e.stderr}")
-    
-    def undefine(self) -> int:
-        """Undefine the domain"""
-        try:
-            result = subprocess.run(
-                ["virsh", "--connect", self.uri, "undefine", self.name],
-                capture_output=True, text=True, check=True, encoding='utf-8', errors='replace'
-            )
-            logger.info(f"Undefined domain {self.name}")
-            return 0
-        except subprocess.CalledProcessError as e:
-            logger.error(f"Failed to undefine domain {self.name}: {e.stderr}")
-            raise VirshError(f"Failed to undefine domain: {e.stderr}")
-    
-    def state(self) -> List[int]:
-        """Get domain state"""
-        try:
-            result = subprocess.run(
-                ["virsh", "--connect", self.uri, "domstate", self.name],
-                capture_output=True, text=True, check=True, encoding='utf-8', errors='replace'
-            )
-            state_str = result.stdout.strip()
-            # Map virsh states to libvirt constants
-            if "running" in state_str:
-                return [1, 0]  # VIR_DOMAIN_RUNNING
-            elif "shut off" in state_str:
-                return [5, 0]  # VIR_DOMAIN_SHUTOFF
-            elif "paused" in state_str:
-                return [3, 0]  # VIR_DOMAIN_PAUSED
-            else:
-                return [0, 0]  # Unknown state
-        except subprocess.CalledProcessError:
-            return [0, 0]  # Domain doesn't exist or error
-    
-    def info(self) -> List[Any]:
-        """Get domain info"""
-        try:
-            result = subprocess.run(
-                ["virsh", "--connect", self.uri, "dominfo", self.name],
-                capture_output=True, text=True, check=True, encoding='utf-8', errors='replace'
-            )
-            # Parse basic info from output
-            lines = result.stdout.strip().split('\n')
-            state = 1 if any("running" in line.lower() for line in lines) else 5
-            return [state, 1048576, 1048576, 2, 0]  # state, max_mem, memory, vcpus, cpu_time
-        except subprocess.CalledProcessError:
-            return [0, 0, 0, 0, 0]
-    
-    def isActive(self) -> int:
-        """Check if domain is active"""
-        state, _ = self.state()
-        return 1 if state == 1 else 0
-
-
-class VirshConnection:
-    """Manages virsh connections"""
+# Legacy classes and functions for full backward compatibility
+class VirshClient:
+    """Legacy VirshClient compatibility class"""
     
     def __init__(self, uri: str = "qemu:///session"):
+        self.provider = LibvirtProvider(uri)
         self.uri = uri
-        self._test_connection()
     
-    def _test_connection(self):
-        """Test the virsh connection"""
-        try:
-            result = subprocess.run(
-                ["virsh", "--connect", self.uri, "version"],
-                capture_output=True, text=True, check=True, encoding='utf-8', errors='replace'
-            )
-            logger.info(f"Connected to hypervisor via virsh: {self.uri}")
-        except subprocess.CalledProcessError as e:
-            raise VirshError(f"Failed to connect to hypervisor: {e.stderr}")
+    def open(self, uri: str = None):
+        """Open connection - returns provider for compatibility"""
+        if uri:
+            return LibvirtProvider(uri)
+        return self.provider
     
-    def isAlive(self) -> bool:
-        """Check if connection is alive"""
-        try:
-            subprocess.run(
-                ["virsh", "--connect", self.uri, "version"],
-                capture_output=True, text=True, check=True, encoding='utf-8', errors='replace'
-            )
-            return True
-        except subprocess.CalledProcessError:
-            return False
+    def list_all_domains(self):
+        """List all domains"""
+        return self.provider.list_domains(active_only=False, include_state=False)
     
-    def getHostname(self) -> str:
-        """Get hypervisor hostname"""
-        try:
-            result = subprocess.run(
-                ["virsh", "--connect", self.uri, "hostname"],
-                capture_output=True, text=True, check=True, encoding='utf-8', errors='replace'
-            )
-            return result.stdout.strip()
-        except subprocess.CalledProcessError:
-            return "unknown-host"
+    def destroy_domain(self, domain_name: str):
+        """Destroy domain"""
+        result = self.provider.destroy_domain(domain_name)
+        return result.success
     
-    def close(self):
-        """Close connection (no-op for virsh)"""
-        pass
-    
-    def lookupByName(self, name: str) -> VirshDomain:
-        """Look up domain by name"""
-        return VirshDomain(name, self.uri)
-    
-    def defineXML(self, xml: str) -> VirshDomain:
-        """Define a domain from XML"""
-        # Write XML to temporary file
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.xml', delete=False) as f:
-            f.write(xml)
-            xml_file = f.name
-        
-        try:
-            # Parse domain name from XML to return proper domain object
-            import xml.etree.ElementTree as ET
-            root = ET.fromstring(xml)
-            domain_name = root.find('name').text
-            
-            # Define domain
-            result = subprocess.run(
-                ["virsh", "--connect", self.uri, "define", xml_file],
-                capture_output=True, text=True, check=True, encoding='utf-8', errors='replace'
-            )
-            logger.info(f"Defined domain {domain_name}")
-            return VirshDomain(domain_name, self.uri)
-            
-        except subprocess.CalledProcessError as e:
-            raise VirshError(f"Failed to define domain: {e.stderr}")
-        except ET.ParseError as e:
-            raise VirshError(f"Invalid XML: {e}")
-        finally:
-            # Clean up temporary file
-            try:
-                os.unlink(xml_file)
-            except OSError:
-                pass
-    
-    def networkLookupByName(self, name: str):
-        """Look up network by name (placeholder)"""
-        return None
-    
-    def networkDefineXML(self, xml: str):
-        """Define network from XML (placeholder)"""
-        return None
+    def undefine_domain(self, domain_name: str):
+        """Undefine domain"""
+        result = self.provider.destroy_domain(domain_name, undefine=True)
+        return result.success
 
 
-class VirshLibvirt:
-    """Virsh-based libvirt implementation"""
-    
-    VIR_DOMAIN_RUNNING = 1
-    VIR_DOMAIN_SHUTOFF = 5
-    VIR_DOMAIN_PAUSED = 3
-    
-    virDomain = VirshDomain
-    libvirtError = VirshError
-    
-    @staticmethod
-    def open(uri: str = None) -> VirshConnection:
-        """Open connection to hypervisor"""
-        if uri is None:
-            uri = "qemu:///session"  # Default to user session
-        return VirshConnection(uri)
+def virsh_command_compatibility_warning():
+    """Issue deprecation warning for direct virsh usage"""
+    import warnings
+    warnings.warn(
+        "Direct virsh command usage is deprecated. Please use the enhanced "
+        "libvirt-python implementation in libvirt_provider.py for better "
+        "performance and reliability.",
+        DeprecationWarning,
+        stacklevel=2
+    )
+
+
+# Module-level compatibility functions
+def open_libvirt_connection(uri: str = "qemu:///system"):
+    """Open libvirt connection with enhanced provider"""
+    return LibvirtProvider(uri)
+
+
+# Export the main classes for backward compatibility
+__all__ = [
+    'LibvirtProvider',
+    'LibvirtProviderError',
+    'LibvirtDomainWrapper',
+    'VirshError',
+    'VirshDomain', 
+    'VirshConnection',
+    'VirshLibvirt',
+    'VirshClient',
+    'create_libvirt_provider',
+    'open_libvirt_connection'
+]
