@@ -7,6 +7,8 @@ from typing import Optional
 
 from .base_command import BaseCommandHandler, ServiceMixin
 from cyris.cli.presentation import RangeDisplayManager
+from ..diagnostic_messages import DiagnosticMessageFormatter
+from ...tools.vm_diagnostics import quick_vm_health_check
 
 
 class ListCommandHandler(BaseCommandHandler, ServiceMixin):
@@ -79,7 +81,7 @@ class ListCommandHandler(BaseCommandHandler, ServiceMixin):
         self.display_manager.display_range_list(ranges, list_all)
         
         if verbose:
-            self._show_verbose_info(orchestrator, ranges)
+            self._show_verbose_info(orchestrator, ranges, verbose)
         
         return True
     
@@ -95,7 +97,7 @@ class ListCommandHandler(BaseCommandHandler, ServiceMixin):
         else:
             self.error_console.print(f"[bold red]Cyber range directory does not exist: {ranges_dir}[/bold red]")
     
-    def _show_verbose_info(self, orchestrator, ranges) -> None:
+    def _show_verbose_info(self, orchestrator, ranges, verbose: bool = True) -> None:
         """显示详细信息，包括VM IP地址"""
         for range_meta in ranges:
             if range_meta.status.value in ['active', 'creating']:
@@ -115,7 +117,7 @@ class ListCommandHandler(BaseCommandHandler, ServiceMixin):
                         for guest in resources['guests']:
                             try:
                                 health_info = ip_manager.get_vm_health_info(guest)
-                                self._display_vm_summary(guest, health_info)
+                                self._display_vm_summary(guest, health_info, verbose)
                             except Exception as e:
                                 self.console.print(f"  [red]{guest}[/red]: [dim]Status check failed - {str(e)}[/dim]")
                         
@@ -126,7 +128,7 @@ class ListCommandHandler(BaseCommandHandler, ServiceMixin):
                     except Exception as e:
                         self.console.print(f"[red]  Error getting VM details: {str(e)}[/red]")
     
-    def _display_vm_summary(self, guest: str, health_info) -> None:
+    def _display_vm_summary(self, guest: str, health_info, verbose: bool = False) -> None:
         """显示VM简要信息（用于list -v）"""
         status_icon = ":green_heart:" if getattr(health_info, 'is_healthy', False) else ":cross_mark:"
         libvirt_status = getattr(health_info, 'libvirt_status', 'unknown')
@@ -144,7 +146,31 @@ class ListCommandHandler(BaseCommandHandler, ServiceMixin):
             ip_text = "[dim]No IP assigned[/dim]"
             network_status = "[dim]-[/dim]"
         
-        self.console.print(f"  {status_icon} [cyan]{guest}[/cyan] ({libvirt_status}) - {ip_text} {network_status}")
+        # Run smart diagnostics if VM appears unhealthy
+        health_indicator = ""
+        if not getattr(health_info, 'is_healthy', False):
+            try:
+                # Quick diagnostic check
+                diagnostic_results = quick_vm_health_check(guest)
+                if diagnostic_results:
+                    formatter = DiagnosticMessageFormatter()
+                    health_summary = formatter.format_diagnostic_summary(guest, diagnostic_results)
+                    
+                    # Get health indicator emoji
+                    health_emoji = formatter.get_health_indicator(diagnostic_results)
+                    health_indicator = f" {health_emoji}"
+                    
+                    # In verbose mode, show brief diagnostic summary
+                    if verbose:
+                        self.console.print(f"  {health_emoji} [cyan]{guest}[/cyan] ({libvirt_status}) - {ip_text} {network_status}")
+                        self.console.print(f"    [dim]Health: {health_summary}[/dim]")
+                        return
+                        
+            except Exception:
+                # If diagnostics fail, don't break the display
+                health_indicator = " ❓"
+        
+        self.console.print(f"  {status_icon} [cyan]{guest}[/cyan] ({libvirt_status}) - {ip_text} {network_status}{health_indicator}")
     
     def _check_running_vms(self, provider) -> None:
         """检查运行中的VM（复用原有逻辑）"""

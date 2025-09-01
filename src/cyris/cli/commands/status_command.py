@@ -12,6 +12,8 @@ from rich.text import Text
 from rich.markup import escape
 
 from .base_command import BaseCommandHandler, ServiceMixin
+from ..diagnostic_messages import DiagnosticMessageFormatter
+from ...tools.vm_diagnostics import quick_vm_health_check
 
 
 class StatusCommandHandler(BaseCommandHandler, ServiceMixin):
@@ -198,6 +200,9 @@ class StatusCommandHandler(BaseCommandHandler, ServiceMixin):
         
         if summary_parts:
             self.console.print(f"\n[dim]Summary: {', '.join(summary_parts)}[/dim]")
+        
+        # Smart diagnostics - run health checks on problematic VMs
+        self._run_smart_diagnostics(vms, verbose)
     
     def _display_topology_info(self, topology_metadata: Dict[str, Any]) -> None:
         """Display network topology information in verbose mode"""
@@ -347,3 +352,59 @@ class StatusCommandHandler(BaseCommandHandler, ServiceMixin):
                 ("Could not list directory contents: ", "red"),
                 (str(e), "red")
             ))
+    
+    def _run_smart_diagnostics(self, vms: List[Dict[str, Any]], verbose: bool) -> None:
+        """Run smart diagnostics on VMs with issues"""
+        formatter = DiagnosticMessageFormatter(self.console)
+        
+        # Identify VMs that need diagnostics
+        problematic_vms = []
+        for vm in vms:
+            vm_name = vm.get('name', '')
+            
+            # Check for common issues that warrant diagnostics
+            needs_diagnostics = (
+                not vm.get('ip') or                           # No IP address
+                vm.get('status') == 'error' or                # Error status  
+                not vm.get('ssh_accessible', False) or        # SSH not accessible
+                vm.get('error_details')                       # Has error details
+            )
+            
+            if needs_diagnostics:
+                problematic_vms.append(vm_name)
+        
+        if not problematic_vms:
+            return
+        
+        # Run diagnostics on problematic VMs
+        self.console.print("\n[bold blue]🔍 Smart Diagnostics[/bold blue]")
+        
+        for vm_name in problematic_vms:
+            try:
+                # Run quick health check
+                diagnostic_results = quick_vm_health_check(vm_name)
+                
+                if not diagnostic_results:
+                    continue
+                
+                # Show summary for all VMs, details only in verbose mode
+                summary = formatter.format_diagnostic_summary(vm_name, diagnostic_results)
+                self.console.print(f"  • [cyan]{vm_name}[/cyan]: {summary}")
+                
+                # Show detailed diagnostics in verbose mode
+                if verbose:
+                    details = formatter.format_diagnostic_details(vm_name, diagnostic_results)
+                    for detail in details:
+                        self.console.print(detail)
+                
+                # Show quick fixes for critical issues (always show these)
+                quick_fixes = formatter.format_quick_fix_suggestions(diagnostic_results)
+                if quick_fixes:
+                    for fix in quick_fixes[:2]:  # Limit to 2 most important fixes
+                        self.console.print(f"    {fix}")
+                        
+            except Exception as e:
+                self.console.print(f"  • [cyan]{vm_name}[/cyan]: [red]Diagnostics failed: {str(e)}[/red]")
+        
+        if not verbose and problematic_vms:
+            self.console.print(f"[dim]\n💡 Tip: Use --verbose flag for detailed diagnostic information[/dim]")
