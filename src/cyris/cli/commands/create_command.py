@@ -56,19 +56,57 @@ class CreateCommandHandler(BaseCommandHandler, ValidationMixin):
             if not orchestrator:
                 return False
             
-            result = orchestrator.create_range_from_yaml(
-                description_file=description_file,
-                range_id=range_id,
-                dry_run=True
-            )
+            # For dry run, we'll validate YAML and show what would be created
+            import yaml
             
-            if result:
-                self.console.print(MessageFormatter.success(
-                    f"Validation successful. Would create range: {result}"
-                ))
+            try:
+                with open(description_file, 'r') as f:
+                    yaml_data = yaml.safe_load(f)
+                
+                self.console.print(f"[green]✓[/green] YAML syntax valid")
+                
+                # Extract information from range description
+                hosts = []
+                guests = []
+                range_name = description_file.stem
+                
+                # Parse the YAML structure (supports both list and dict formats)
+                if isinstance(yaml_data, list):
+                    for section in yaml_data:
+                        if isinstance(section, dict):
+                            if 'host_settings' in section:
+                                hosts.extend(section['host_settings'])
+                            if 'guest_settings' in section:
+                                guests.extend(section['guest_settings'])
+                            if 'clone_settings' in section:
+                                for clone in section['clone_settings']:
+                                    if clone.get('range_id'):
+                                        range_name = clone['range_id']
+                elif isinstance(yaml_data, dict):
+                    if 'host_settings' in yaml_data:
+                        hosts.extend(yaml_data['host_settings'])
+                    if 'guest_settings' in yaml_data:
+                        guests.extend(yaml_data['guest_settings'])
+                    if 'clone_settings' in yaml_data:
+                        for clone in yaml_data['clone_settings']:
+                            if clone.get('range_id'):
+                                range_name = clone['range_id']
+                
+                self.console.print(f"[cyan]Range Name:[/cyan] {range_name}")
+                self.console.print(f"[cyan]Hosts:[/cyan] {len(hosts)}")
+                self.console.print(f"[cyan]Guests:[/cyan] {len(guests)}")
+                
+                # Show guest details
+                for i, guest in enumerate(guests):
+                    guest_id = guest.get('id', f'guest-{i+1}')
+                    self.console.print(f"  {i+1}. {guest_id}")
+                    
                 return True
-            else:
-                self.console.print(MessageFormatter.error("Validation failed"))
+            except yaml.YAMLError as e:
+                self.error_display.display_error(f"YAML parsing failed: {e}")
+                return False
+            except Exception as e:
+                self.error_display.display_error(f"YAML validation failed: {e}")
                 return False
                 
         except Exception as e:
@@ -88,16 +126,30 @@ class CreateCommandHandler(BaseCommandHandler, ValidationMixin):
             
             self.console.print("[bold blue]Initializing cyber range creation...[/bold blue]")
             
-            result = orchestrator.create_range_from_yaml(
-                description_file=description_file,
-                range_id=range_id,
-                dry_run=False
-            )
+            # Use the working create_range_from_yaml method
+            with self.console.status("[bold green]Creating cyber range...") as status:
+                result_range_id = orchestrator.create_range_from_yaml(
+                    description_file,
+                    range_id
+                )
             
-            if result:
-                self.console.print(MessageFormatter.success(
-                    f"Cyber range created successfully: {result}"
-                ))
+            if result_range_id:
+                # Get the created range details for display
+                range_metadata = orchestrator.get_range(result_range_id)
+                
+                if range_metadata:
+                    self.console.print(MessageFormatter.success(
+                        f"✅ Cyber range '{range_metadata.name}' created successfully!"
+                    ))
+                    self.console.print(f"[cyan]Range ID:[/cyan] {result_range_id}")
+                    self.console.print(f"[cyan]Status:[/cyan] {range_metadata.status.value}")
+                    self.console.print(f"[cyan]Created:[/cyan] {range_metadata.created_at}")
+                else:
+                    self.console.print(MessageFormatter.success(
+                        f"✅ Cyber range '{result_range_id}' created successfully!"
+                    ))
+                    self.console.print(f"[cyan]Range ID:[/cyan] {result_range_id}")
+                
                 return True
             else:
                 self.console.print(MessageFormatter.error("Cyber range creation failed"))

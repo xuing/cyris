@@ -4,6 +4,7 @@ Status命令处理器
 """
 
 import sys
+from typing import List, Dict, Any
 from rich.table import Table
 from rich.panel import Panel
 from rich.console import Group
@@ -28,26 +29,26 @@ class StatusCommandHandler(BaseCommandHandler, ServiceMixin):
             if not orchestrator:
                 return False
             
-            # Check orchestrator first
-            range_metadata = orchestrator.get_range(range_id)
+            # Get detailed status using our enhanced method
+            detailed_status = orchestrator.get_range_status_detailed(range_id)
             
-            if range_metadata:
-                # Display basic range information
-                self._display_range_info(range_metadata)
-                
-                # Get and display resource information with verbose details
-                resources = orchestrator.get_range_resources(range_id)
-                if resources:
-                    self._display_resources_info(resources, range_metadata, verbose)
-                
-                # Check filesystem status
-                self._check_filesystem_status(range_id, range_metadata, verbose)
-                
+            if detailed_status:
+                # Display comprehensive range status
+                self._display_detailed_status(detailed_status, verbose)
                 return True
             else:
-                self.error_console.print(Text("  [ERROR] Range not found in orchestrator", style="bold red"))
-                self._check_filesystem_status(range_id, None, verbose)
-                return False
+                # Fallback to basic range check
+                range_metadata = orchestrator.get_range(range_id) if hasattr(orchestrator, 'get_range') else None
+                
+                if range_metadata:
+                    self.console.print("[yellow]⚠️ Range exists but detailed status unavailable[/yellow]")
+                    self._display_basic_range_info(range_metadata)
+                    return True
+                else:
+                    self.error_console.print(Text("  [ERROR] Range not found", style="bold red"))
+                    # Check filesystem status
+                    self._check_filesystem_status(range_id, None, verbose)
+                    return False
                 
         except Exception as e:
             self.error_console.print(Text.assemble(
@@ -59,8 +60,160 @@ class StatusCommandHandler(BaseCommandHandler, ServiceMixin):
                 traceback.print_exc()
             return False
     
-    def _display_range_info(self, range_metadata) -> None:
-        """显示基本靶场信息"""
+    def _display_detailed_status(self, detailed_status: Dict[str, Any], verbose: bool) -> None:
+        """Display comprehensive range status with VM information"""
+        
+        # Basic range information
+        self.console.print("\n[bold blue]Range Overview[/bold blue]")
+        
+        # Create overview table
+        overview_table = Table(show_header=False, show_edge=False, padding=(0, 1))
+        overview_table.add_column("Field", style="dim", width=15)
+        overview_table.add_column("Value")
+        
+        # Status with proper styling
+        status_text = self._get_status_text(detailed_status['status'], detailed_status['status'].upper())
+        overview_table.add_row("Status", status_text)
+        overview_table.add_row("Name", Text(escape(detailed_status['name']), style="bold cyan"))
+        overview_table.add_row("Description", escape(detailed_status['description']))
+        overview_table.add_row("Created", detailed_status['created_at'][:19].replace('T', ' '))
+        overview_table.add_row("VMs", Text(str(detailed_status['vm_count']), style="green"))
+        overview_table.add_row("Provider", Text(detailed_status['provider'].upper(), style="cyan"))
+        
+        self.console.print(overview_table)
+        
+        # VM Status Information
+        vms = detailed_status.get('vms', [])
+        if vms:
+            self.console.print(f"\n[bold blue]Virtual Machines ({len(vms)})[/bold blue]")
+            self._display_vm_status_table(vms, verbose)
+        
+        # Topology information if available and verbose
+        if verbose and detailed_status.get('topology_metadata'):
+            self._display_topology_info(detailed_status['topology_metadata'])
+    
+    def _display_vm_status_table(self, vms: List[Dict[str, Any]], verbose: bool) -> None:
+        """Display VM status in a formatted table"""
+        # Create VM status table
+        vm_table = Table(show_header=True, show_edge=True, padding=(0, 1))
+        vm_table.add_column("VM Name", style="cyan", width=20)
+        vm_table.add_column("Status", width=12)
+        vm_table.add_column("IP Address", style="green", width=15)
+        vm_table.add_column("SSH", width=8)
+        if verbose:
+            vm_table.add_column("Last Check", style="dim", width=16)
+        
+        for vm in vms:
+            # Status with emoji
+            vm_status = vm.get('status', 'unknown')
+            if vm_status == 'running':
+                status_display = Text.assemble(
+                    (":green_circle: ", "green"),
+                    ("Running", "green")
+                )
+            elif vm_status == 'shutoff':
+                status_display = Text.assemble(
+                    (":red_circle: ", "red"),
+                    ("Stopped", "red")
+                )
+            elif vm_status == 'error':
+                status_display = Text.assemble(
+                    (":cross_mark: ", "red"),
+                    ("Error", "red")
+                )
+            else:
+                status_display = Text(vm_status.capitalize(), style="yellow")
+            
+            # IP Address
+            ip_addr = vm.get('ip', 'N/A')
+            ip_display = Text(ip_addr, style="green") if ip_addr and ip_addr != 'N/A' else Text("N/A", style="dim")
+            
+            # SSH Status
+            ssh_accessible = vm.get('ssh_accessible', False)
+            ssh_display = Text.assemble(
+                (":check_mark: ", "green"),
+                ("Yes", "green")
+            ) if ssh_accessible else Text.assemble(
+                (":cross_mark: ", "red"),
+                ("No", "red")
+            )
+            
+            # Build row data
+            row_data = [
+                Text(escape(vm['name']), style="bold"),
+                status_display,
+                ip_display,
+                ssh_display
+            ]
+            
+            if verbose:
+                last_check = vm.get('last_checked', '')
+                if last_check:
+                    # Format timestamp nicely
+                    try:
+                        from datetime import datetime
+                        dt = datetime.fromisoformat(last_check.replace('Z', '+00:00'))
+                        formatted_time = dt.strftime('%H:%M:%S')
+                        row_data.append(Text(formatted_time, style="dim"))
+                    except:
+                        row_data.append(Text("--:--:--", style="dim"))
+                else:
+                    row_data.append(Text("--:--:--", style="dim"))
+            
+            vm_table.add_row(*row_data)
+            
+            # Show error details if any
+            if verbose and vm.get('error'):
+                error_text = Text(f"Error: {vm['error']}", style="red")
+                if verbose:
+                    vm_table.add_row("", error_text, "", "", "" if verbose else "")
+        
+        self.console.print(vm_table)
+        
+        # Summary information
+        running_count = sum(1 for vm in vms if vm.get('status') == 'running')
+        ssh_count = sum(1 for vm in vms if vm.get('ssh_accessible', False))
+        
+        summary_parts = []
+        if running_count > 0:
+            summary_parts.append(f"[green]{running_count} running[/green]")
+        if ssh_count > 0:
+            summary_parts.append(f"[green]{ssh_count} SSH accessible[/green]")
+        
+        if summary_parts:
+            self.console.print(f"\n[dim]Summary: {', '.join(summary_parts)}[/dim]")
+    
+    def _display_topology_info(self, topology_metadata: Dict[str, Any]) -> None:
+        """Display network topology information in verbose mode"""
+        if not topology_metadata:
+            return
+            
+        self.console.print(f"\n[bold blue]Network Topology[/bold blue]")
+        
+        # IP assignments
+        ip_assignments = topology_metadata.get('ip_assignments', {})
+        if ip_assignments:
+            topology_table = Table(show_header=True, show_edge=False, padding=(0, 1))
+            topology_table.add_column("VM", style="cyan")
+            topology_table.add_column("Assigned IP", style="green")
+            topology_table.add_column("Status", style="dim")
+            
+            for vm_name, assigned_ip in ip_assignments.items():
+                topology_table.add_row(
+                    escape(vm_name), 
+                    assigned_ip,
+                    "Configured"
+                )
+            
+            self.console.print(topology_table)
+        
+        # Network information
+        networks = topology_metadata.get('networks', [])
+        if networks:
+            self.console.print(f"\n[dim]Networks: {len(networks)} configured[/dim]")
+    
+    def _display_basic_range_info(self, range_metadata) -> None:
+        """Display basic range information when detailed status unavailable"""
         # Create a beautiful info table using Rich
         table = Table(show_header=False, show_edge=False, padding=(0, 1))
         table.add_column("Field", style="dim", width=15)
@@ -92,7 +245,7 @@ class StatusCommandHandler(BaseCommandHandler, ServiceMixin):
             table.add_row("Tags", tags_text)
 
         self.console.print(table)
-    
+
     def _get_status_text(self, status: str, label: str = None) -> Text:
         """Get Rich Text object with appropriate styling for status"""
         status_lower = status.lower()
@@ -119,148 +272,6 @@ class StatusCommandHandler(BaseCommandHandler, ServiceMixin):
             )
         else:
             return Text(label_text, style="white")
-    
-    def _display_resources_info(self, resources, range_metadata, verbose: bool) -> None:
-        """显示资源信息"""
-        self.console.print(f"\n[bold]Resources:[/bold]")
-        if resources.get('hosts'):
-            self.console.print(f"  Hosts: [green]{len(resources['hosts'])}[/green]")
-        if resources.get('guests'):
-            self.console.print(f"  Guests: [green]{len(resources['guests'])}[/green]")
-
-            # Show VM health information using Rich Panel
-            if resources.get('guests') and verbose:
-                # Get libvirt URI from range metadata
-                libvirt_uri = "qemu:///system"
-                if range_metadata.provider_config:
-                    libvirt_uri = range_metadata.provider_config.get('libvirt_uri', libvirt_uri)
-
-                try:
-                    from cyris.tools.vm_ip_manager import VMIPManager
-                    ip_manager = VMIPManager(libvirt_uri=libvirt_uri)
-
-                    for guest in resources['guests']:
-                        try:
-                            health_info = ip_manager.get_vm_health_info(guest)
-                            self._display_vm_health_panel(guest, health_info)
-                        except Exception as e:
-                            # Use escape to prevent Rich markup errors and show basic VM info
-                            self._display_vm_error_panel(guest, str(e))
-
-                    ip_manager.close()
-
-                except ImportError:
-                    self.console.print(Text("WARNING: VM health checking not available", style="yellow"))
-                except Exception as e:
-                    self.error_console.print(Text.assemble(
-                        ("[ERROR] Health check error: ", "bold red"),
-                        (str(e), "red")
-                    ))
-
-            elif resources.get('guests'):
-                self.console.print(Text("💡 Use --verbose to see detailed VM health status", style="blue"))
-    
-    def _display_vm_health_panel(self, guest: str, health_info) -> None:
-        """显示单个VM的健康状态面板"""
-        # Create VM info table using Rich best practices
-        vm_table = Table(show_header=False, show_edge=False, padding=(0, 1), width=80)
-        vm_table.add_column("Field", style="dim", width=12)
-        vm_table.add_column("Value")
-
-        # Use Text.assemble for complex content
-        if hasattr(health_info, 'libvirt_status') and health_info.libvirt_status:
-            libvirt_text = Text(escape(str(health_info.libvirt_status)), style="cyan")
-            vm_table.add_row("Libvirt", libvirt_text)
-
-        if hasattr(health_info, 'is_healthy'):
-            healthy_text = Text("Yes", style="green") if health_info.is_healthy else Text("No", style="red")
-            vm_table.add_row("Healthy", healthy_text)
-
-        if hasattr(health_info, 'ip_addresses') and health_info.ip_addresses:
-            # Use Text.assemble for IP addresses properly
-            ip_parts = []
-            for i, ip in enumerate(health_info.ip_addresses):
-                if i > 0:
-                    ip_parts.append((", ", "dim"))
-                ip_parts.append((ip, "green"))
-            ip_text = Text.assemble(*ip_parts)
-            vm_table.add_row("IP Address", ip_text)
-
-            if hasattr(health_info, 'network_reachable'):
-                network_text = Text.assemble(
-                    (":check_mark: ", "green"),
-                    ("Reachable", "green")
-                ) if health_info.network_reachable else Text.assemble(
-                    (":warning: ", "yellow"),
-                    ("Not reachable", "yellow")
-                )
-                vm_table.add_row("Network", network_text)
-        else:
-            vm_table.add_row("IP Address", Text("Not assigned", style="dim"))
-
-        if hasattr(health_info, 'uptime') and health_info.uptime:
-            vm_table.add_row("Uptime", Text(escape(str(health_info.uptime)), style="white"))
-
-        if hasattr(health_info, 'disk_path') and health_info.disk_path:
-            vm_table.add_row("Disk", Text(escape(health_info.disk_path), style="dim"))
-
-        # Create VM Panel with status indicator using Rich Text.assemble
-        is_healthy = hasattr(health_info, 'is_healthy') and health_info.is_healthy
-        vm_status_icon = ":green_heart:" if is_healthy else ":cross_mark:"
-        panel_title_text = Text.assemble(
-            (vm_status_icon, "green" if is_healthy else "red"),
-            (" ", ""),
-            (escape(guest), "bold")
-        )
-
-        # Create error details if any
-        panel_content = [vm_table]
-        if hasattr(health_info, 'error_details') and health_info.error_details:
-            # Create error details table with automatic text wrapping
-            error_table = Table(show_header=False, show_edge=False, padding=(0, 0, 0, 1))
-            error_table.add_column("", style="red", width=3, no_wrap=True)
-            error_table.add_column("Error Details", overflow="fold")
-
-            error_table.add_row("", Text("Error Details:", style="bold red"))
-
-            for i, error in enumerate(health_info.error_details, 1):
-                error_table.add_row(f"{i}.", Text(escape(str(error)), style="red"))
-
-            panel_content.append(error_table)
-
-        # Create Panel for this VM with auto-wrapping support
-        vm_panel = Panel(
-            Group(*panel_content),
-            title=panel_title_text,
-            expand=False,
-            border_style="red" if not is_healthy else "green"
-        )
-        self.console.print(vm_panel)
-    
-    def _display_vm_error_panel(self, guest: str, error_msg: str) -> None:
-        """显示VM错误信息面板"""
-        # Create simple error table
-        error_table = Table(show_header=False, show_edge=False, padding=(0, 1))
-        error_table.add_column("Field", style="dim", width=12)
-        error_table.add_column("Value")
-        
-        error_table.add_row("Status", Text("Health check failed", style="red"))
-        error_table.add_row("Error", Text(escape(error_msg), style="red"))
-        
-        # Create error panel
-        panel_title_text = Text.assemble(
-            (":cross_mark:", "red"),
-            (" ", ""),
-            (escape(guest), "bold")
-        )
-        
-        error_panel = Panel(
-            error_table,
-            title=panel_title_text,
-            expand=False,
-            border_style="red"
-        )
-        self.console.print(error_panel)
     
     def _check_filesystem_status(self, range_id: str, range_metadata, verbose: bool) -> None:
         """检查文件系统状态"""
