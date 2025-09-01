@@ -456,17 +456,9 @@ class KVMProvider(InfrastructureProvider):
         
         for resource_id in resource_ids:
             try:
-                resource = self._resources.get(resource_id)
-                if not resource:
-                    status_map[resource_id] = "not_found"
-                    continue
-                
-                if resource.resource_type == "host":
-                    # For hosts, we just return active if registered
-                    status_map[resource_id] = "active"
-                
-                elif resource.resource_type == "guest":
-                    # For guests, check actual VM status
+                # Check if this looks like a VM name (starts with "cyris-") 
+                # If so, query libvirt directly instead of relying on internal registry
+                if resource_id.startswith("cyris-"):
                     try:
                         domain = self._connection.lookupByName(resource_id)
                         state, _ = domain.state()
@@ -481,10 +473,37 @@ class KVMProvider(InfrastructureProvider):
                             status_map[resource_id] = "unknown"
                     
                     except libvirt.libvirtError:
-                        status_map[resource_id] = "error"
-                
+                        # VM not found in libvirt
+                        status_map[resource_id] = "not_found"
                 else:
-                    status_map[resource_id] = "unknown"
+                    # For other resources (hosts, etc.), check internal registry
+                    resource = self._resources.get(resource_id)
+                    if not resource:
+                        status_map[resource_id] = "not_found"
+                        continue
+                    
+                    if resource.resource_type == "host":
+                        # For hosts, we just return active if registered
+                        status_map[resource_id] = "active"
+                    elif resource.resource_type == "guest":
+                        # For guests in registry, also check libvirt
+                        try:
+                            domain = self._connection.lookupByName(resource_id)
+                            state, _ = domain.state()
+                            
+                            if state == libvirt.VIR_DOMAIN_RUNNING:
+                                status_map[resource_id] = "active"
+                            elif state == libvirt.VIR_DOMAIN_SHUTOFF:
+                                status_map[resource_id] = "stopped"
+                            elif state == libvirt.VIR_DOMAIN_PAUSED:
+                                status_map[resource_id] = "paused"
+                            else:
+                                status_map[resource_id] = "unknown"
+                        
+                        except libvirt.libvirtError:
+                            status_map[resource_id] = "not_found"
+                    else:
+                        status_map[resource_id] = "unknown"
             
             except Exception as e:
                 self.logger.error(f"Failed to get status for {resource_id}: {e}")
