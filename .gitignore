@@ -23,5 +23,4 @@ images/user-data
 
 # Test and temporary files
 .coverage
-test_*.py
 validation-report.txt
