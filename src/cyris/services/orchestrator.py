@@ -9,6 +9,9 @@ monitoring services.
 import logging
 import time
 import json
+import fcntl
+import os
+import shutil
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Protocol
@@ -65,9 +68,6 @@ class RangeMetadata:
     last_modified: datetime = field(default_factory=datetime.now)
     owner: Optional[str] = None
     tags: Dict[str, str] = field(default_factory=dict)
-    config_path: Optional[str] = None
-    logs_path: Optional[str] = None
-    provider_config: Optional[Dict[str, Any]] = None  # Store provider configuration
     
     def update_status(self, status: RangeStatus) -> None:
         """Update range status and last modified time"""
@@ -116,15 +116,41 @@ class InfrastructureProvider(Protocol):
         ...
 
 
+class CyRISSingleton:
+    """CyRIS singleton lock manager"""
+    def __init__(self, lock_path: Path):
+        self.lock_path = lock_path
+        self.lock_file = None
+        
+    def __enter__(self):
+        self.lock_file = open(self.lock_path, 'w')
+        try:
+            fcntl.flock(self.lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            self.lock_file.write(str(os.getpid()))
+            self.lock_file.flush()
+            return self
+        except IOError:
+            self.lock_file.close()
+            raise RuntimeError("Another CyRIS instance is running, please wait for it to complete")
+    
+    def __exit__(self, *args):
+        if self.lock_file:
+            fcntl.flock(self.lock_file.fileno(), fcntl.LOCK_UN)
+            self.lock_file.close()
+            try:
+                os.unlink(self.lock_path)
+            except FileNotFoundError:
+                pass
+
+
 class RangeOrchestrator:
     """
     Main orchestrator service for cyber range operations.
     
-    This service coordinates the entire lifecycle of cyber ranges:
-    - Creation and configuration
-    - Status monitoring
-    - Resource management
-    - Cleanup and destruction
+    NEW: Distributed storage architecture + singleton pattern
+    - Each range directory manages its own metadata
+    - Auto-discover and register ranges at startup
+    - Singleton pattern prevents concurrency issues
     
     Follows SOLID principles:
     - Single Responsibility: Orchestrates range operations
@@ -168,7 +194,7 @@ class RangeOrchestrator:
             self.tunnel_manager = TunnelManager(settings)
             self.gateway_service = GatewayService(settings, self.tunnel_manager)
             
-            # Persistent range registry
+            # In-memory range registry (loaded from distributed storage)
             self._ranges: Dict[str, RangeMetadata] = {}
             self._range_resources: Dict[str, Dict[str, List[str]]] = {}
             
@@ -176,14 +202,13 @@ class RangeOrchestrator:
             self.ranges_dir = Path(self.settings.cyber_range_dir)
             self.ranges_dir.mkdir(exist_ok=True)
             
-            # Persistent storage files
-            self._metadata_file = self.ranges_dir / "ranges_metadata.json"
-            self._resources_file = self.ranges_dir / "ranges_resources.json"
+            # Singleton lock file
+            self._lock_file = self.ranges_dir / ".cyris.lock"
             
-            # Load existing data from disk
-            self._load_persistent_data()
+            # Auto-discover and register all ranges at startup
+            self._discover_and_register_ranges()
             
-            self.logger.info("RangeOrchestrator initialized with unified exception handling")
+            self.logger.info(f"RangeOrchestrator initialized with distributed storage, found {len(self._ranges)} ranges")
             
             # Initialize SSH manager for VM operations
             from ..tools.ssh_manager import SSHManager
@@ -243,7 +268,7 @@ class RangeOrchestrator:
             created_at=datetime.now(),
             owner=owner,
             tags=tags or {},
-            provider_config={"libvirt_uri": self.provider.libvirt_uri}  # Store libvirt connection info
+            # Removed provider_config - unnecessary complexity
         )
         
         try:
@@ -254,8 +279,11 @@ class RangeOrchestrator:
             # Create range directory
             range_dir = self.ranges_dir / range_id
             range_dir.mkdir(exist_ok=True)
-            metadata.logs_path = str(range_dir / "logs")
-            Path(metadata.logs_path).mkdir(exist_ok=True)
+            # Create subdirectories in range directory
+            logs_dir = range_dir / "logs"
+            logs_dir.mkdir(exist_ok=True)
+            disks_dir = range_dir / "disks"
+            disks_dir.mkdir(exist_ok=True)
             
             # Create infrastructure resources
             self.logger.info(f"Creating {len(hosts)} hosts for range {range_id}")
@@ -394,8 +422,8 @@ class RangeOrchestrator:
             # Update status to active
             metadata.update_status(RangeStatus.ACTIVE)
             
-            # Save persistent data
-            self._save_persistent_data()
+            # Save distributed metadata
+            self._save_range_metadata(range_id, yaml_config_path=None)
             
             self.logger.info(f"Successfully created range {range_id} with {len(task_results)} tasks executed")
             return metadata
@@ -426,7 +454,7 @@ class RangeOrchestrator:
             )
             
             # Save state even on error
-            self._save_persistent_data()
+            self._save_range_metadata(range_id)
             
             raise CyRISVirtualizationError(
                 f"Range creation failed: {e}",
@@ -509,7 +537,7 @@ class RangeOrchestrator:
             
             if new_status != metadata.status:
                 metadata.update_status(new_status)
-                self._save_persistent_data()
+                self._save_range_metadata(range_id)
                 self.logger.info(f"Range {range_id} status updated to {new_status.value}")
             
             return new_status
@@ -517,7 +545,7 @@ class RangeOrchestrator:
         except Exception as e:
             self.logger.error(f"Failed to update status for range {range_id}: {e}")
             metadata.update_status(RangeStatus.ERROR)
-            self._save_persistent_data()
+            self._save_range_metadata(range_id)
             return RangeStatus.ERROR
     
     def destroy_range(self, range_id: str) -> bool:
@@ -547,8 +575,8 @@ class RangeOrchestrator:
             # Update final status
             metadata.update_status(RangeStatus.DESTROYED)
             
-            # Save persistent data
-            self._save_persistent_data()
+            # Save distributed metadata
+            self._save_range_metadata(range_id)
             
             self.logger.info(f"Successfully destroyed range {range_id}")
             return True
@@ -557,7 +585,7 @@ class RangeOrchestrator:
             self.logger.error(f"Failed to destroy range {range_id}: {e}")
             metadata.update_status(RangeStatus.ERROR)
             # Save error state
-            self._save_persistent_data()
+            self._save_range_metadata(range_id)
             return False
     
     def remove_range(self, range_id: str, force: bool = False) -> bool:
@@ -682,8 +710,8 @@ class RangeOrchestrator:
                 except Exception as e:
                     self.logger.warning(f"Failed to remove log file {Path(log_file).name}: {e}")
             
-            # Save updated persistent data
-            self._save_persistent_data()
+            # Remove from memory (metadata files already deleted)
+            pass
             
             self.logger.info(f"Successfully removed range {range_id}")
             return True
@@ -859,6 +887,9 @@ class RangeOrchestrator:
                 tags={"source_file": str(description_file)}
             )
             
+            # Save YAML config to range directory after creation
+            self._save_range_metadata(range_id_str, yaml_config_path=description_file)
+            
             return result.range_id
             
         except Exception as e:
@@ -910,48 +941,79 @@ class RangeOrchestrator:
                             self.logger.info(f"Merged {len(guest_tasks)} task configurations for guest {guest_id}")
                             break
     
-    def _load_persistent_data(self) -> None:
-        """Load persistent data from disk"""
-        try:
-            # Load range metadata
-            if self._metadata_file.exists():
-                with open(self._metadata_file, 'r') as f:
-                    metadata_data = json.load(f)
-                    for range_id, data in metadata_data.items():
-                        self._ranges[range_id] = RangeMetadata.from_dict(data)
-                self.logger.info(f"Loaded {len(self._ranges)} ranges from persistent storage")
-            
-            # Load range resources
-            if self._resources_file.exists():
-                with open(self._resources_file, 'r') as f:
-                    self._range_resources = json.load(f)
-                self.logger.info(f"Loaded resources for {len(self._range_resources)} ranges")
+    def _discover_and_register_ranges(self) -> None:
+        """Discover and auto-register all valid ranges from filesystem"""
+        discovered_count = 0
+        
+        for range_dir in self.ranges_dir.iterdir():
+            if (range_dir.is_dir() and 
+                not range_dir.name.startswith('.') and 
+                range_dir.name not in self._ranges):
                 
-        except Exception as e:
-            self.logger.error(f"Failed to load persistent data: {e}")
-            # Continue with empty registry if loading fails
-            self._ranges = {}
-            self._range_resources = {}
+                metadata_file = range_dir / 'metadata.json'
+                
+                if metadata_file.exists():
+                    try:
+                        # Load range metadata
+                        with open(metadata_file) as f:
+                            metadata_dict = json.load(f)
+                            metadata = RangeMetadata.from_dict(metadata_dict)
+                            self._ranges[range_dir.name] = metadata
+                        
+                        # Load range resources
+                        resources_file = range_dir / 'resources.json'
+                        if resources_file.exists():
+                            with open(resources_file) as f:
+                                self._range_resources[range_dir.name] = json.load(f)
+                        else:
+                            self._range_resources[range_dir.name] = {"hosts": [], "guests": []}
+                        
+                        discovered_count += 1
+                        self.logger.info(f"Auto-registered range: {range_dir.name}")
+                        
+                    except Exception as e:
+                        self.logger.warning(f"Failed to register range {range_dir.name}: {e}")
+        
+        if discovered_count > 0:
+            self.logger.info(f"Auto-discovery completed: {discovered_count} ranges registered")
     
-    def _save_persistent_data(self) -> None:
-        """Save persistent data to disk"""
+    def _save_range_metadata(self, range_id: str, yaml_config_path: Optional[Path] = None) -> None:
+        """Save range metadata and resources to its directory"""
+        range_dir = self.ranges_dir / range_id
+        range_dir.mkdir(exist_ok=True)
+        
         try:
-            # Save range metadata
-            metadata_data = {
-                range_id: metadata.to_dict()
-                for range_id, metadata in self._ranges.items()
-            }
-            with open(self._metadata_file, 'w') as f:
-                json.dump(metadata_data, f, indent=2)
+            # Save metadata.json
+            with open(range_dir / 'metadata.json', 'w') as f:
+                json.dump(self._ranges[range_id].to_dict(), f, indent=2)
             
-            # Save range resources
-            with open(self._resources_file, 'w') as f:
-                json.dump(self._range_resources, f, indent=2)
+            # Save resources.json
+            resources = self._range_resources.get(range_id, {"hosts": [], "guests": []})
+            with open(range_dir / 'resources.json', 'w') as f:
+                json.dump(resources, f, indent=2)
+            
+            # Copy YAML config file if provided
+            if yaml_config_path and yaml_config_path.exists():
+                config_backup = range_dir / 'config.yml'
+                shutil.copy2(yaml_config_path, config_backup)
+                self.logger.debug(f"Backed up YAML config to {config_backup}")
                 
-            self.logger.debug("Persistent data saved successfully")
+            self.logger.debug(f"Saved distributed metadata for range {range_id}")
             
         except Exception as e:
-            self.logger.error(f"Failed to save persistent data: {e}")
+            self.logger.error(f"Failed to save metadata for range {range_id}: {e}")
+            raise
+    
+    def _load_range_resources(self, range_id: str) -> Dict[str, List[str]]:
+        """Load resources for a specific range from its directory"""
+        resources_file = self.ranges_dir / range_id / 'resources.json'
+        if resources_file.exists():
+            try:
+                with open(resources_file) as f:
+                    return json.load(f)
+            except Exception as e:
+                self.logger.warning(f"Failed to load resources for range {range_id}: {e}")
+        return {"hosts": [], "guests": []}
     
     def _create_entry_point(
         self, 
@@ -1490,7 +1552,7 @@ class RangeOrchestrator:
                 name=config.name or config_path.stem,
                 description=config.description or f"Range created from {config_path.name}",
                 created_at=datetime.now(),
-                provider_config={"source_yaml": str(yaml_config_path)}
+                tags={"source_yaml": str(yaml_config_path)}
             )
             
             # Register range
