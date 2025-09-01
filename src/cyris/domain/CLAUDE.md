@@ -65,19 +65,49 @@ class Host(Entity):
 
 ### Guest Entity API
 ```python
+class BaseVMType(str, Enum):
+    KVM = "kvm"
+    AWS = "aws" 
+    DOCKER = "docker"
+
+class OSType(str, Enum):
+    UBUNTU = "ubuntu"
+    UBUNTU_16 = "ubuntu_16"
+    UBUNTU_18 = "ubuntu_18"
+    UBUNTU_20 = "ubuntu_20"
+    CENTOS = "centos"
+    WINDOWS_7 = "windows.7"
+    WINDOWS_8_1 = "windows.8.1"
+    WINDOWS_10 = "windows.10"
+    AMAZON_LINUX = "amazon_linux"
+    AMAZON_LINUX2 = "amazon_linux2"
+    RED_HAT = "red_hat"
+
 class Guest(Entity):
     """Virtual machine configuration and state"""
     guest_id: str = Field(..., description="VM unique identifier")
-    ip_addr: Optional[str] = Field(default=None, description="VM IP address")
+    ip_addr: Optional[str] = Field(default=None, description="IP address for the VM")
+    basevm_addr: Optional[str] = Field(default=None, description="Base virtual machine address")
+    root_passwd: Optional[str] = Field(default=None, description="Root password")
     basevm_host: str = Field(..., description="Host where base VM is located")
     basevm_config_file: str = Field(..., description="Base VM configuration file path")
     basevm_os_type: OSType = Field(..., description="Operating system type")
     basevm_type: BaseVMType = Field(..., description="Virtualization platform type")
+    basevm_name: Optional[str] = Field(default=None, description="Base virtual machine name")
     tasks: List[Dict[str, Any]] = Field(default_factory=list, description="Task list")
     
-    # Validation and utility methods
+    # Properties and utility methods
+    @property
+    def id(self) -> str  # Alias for guest_id
     def get_guest_id(self) -> str
-    def get_ip_addr(self) -> Optional[str]
+    def get_basevm_addr(self) -> Optional[str]
+    def set_basevm_addr(self, addr: str) -> None
+    def get_root_passwd(self) -> Optional[str]
+    def set_root_passwd(self, passwd: str) -> None
+    def get_basevm_host(self) -> str
+    def get_basevm_config_file(self) -> str
+    def get_basevm_type(self) -> BaseVMType
+    def get_tasks(self) -> List[Dict[str, Any]]
     def add_task(self, task: Dict[str, Any]) -> None
 ```
 
