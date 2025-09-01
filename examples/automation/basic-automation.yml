@@ -1,0 +1,206 @@
+# CyRIS Basic Automation Example
+# Demonstrates automated VM provisioning with Packer image building
+
+# Automation configuration (NEW)
+automation:
+  enabled: true
+  providers:
+    - packer      # For image building
+    - terraform   # For infrastructure
+  
+  # Image building settings
+  images:
+    build_method: "packer"
+    base_images:
+      ubuntu: "ubuntu-22.04"
+      centos: "centos-8" 
+    output_formats: ["qcow2", "vmdk"]
+    
+  # Infrastructure settings  
+  infrastructure:
+    provider: "terraform"  # or "direct" for legacy
+    template_dir: "templates/terraform"
+    state_backend: "local"
+
+# Traditional CyRIS configuration (ENHANCED)
+host_settings:
+  - name: "cyris-host"
+    automation:
+      # Automated host provisioning (if applicable)
+      enabled: false
+
+guest_settings:
+  - name: "web-server"
+    automation:
+      # NEW: Automated image building
+      build_image: true
+      base_template: "ubuntu-22.04"
+      custom_packages:
+        - nginx
+        - php8.1-fpm
+        - mysql-client
+      
+      # NEW: SSH key management
+      ssh_keys:
+        - type: "rsa"
+          public_key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQ..."
+        - type: "ed25519" 
+          public_key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI..."
+    
+    # Traditional settings
+    vcpus: 2
+    memory: 2048
+    disk_size: "20G"
+    
+    # Network configuration
+    interfaces:
+      - name: "eth0"
+        network: "web-network"
+        ip_address: "192.168.100.10"
+        
+  - name: "database-server"
+    automation:
+      build_image: true
+      base_template: "ubuntu-22.04"
+      custom_packages:
+        - mysql-server-8.0
+        - mysql-client
+      
+      ssh_keys:
+        - type: "rsa"
+          public_key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQ..."
+    
+    vcpus: 4
+    memory: 4096
+    disk_size: "50G"
+    
+    interfaces:
+      - name: "eth0"
+        network: "database-network" 
+        ip_address: "192.168.101.10"
+
+# Network topology (ENHANCED with automation)
+networks:
+  - name: "web-network"
+    type: "nat"
+    subnet: "192.168.100.0/24"
+    gateway: "192.168.100.1"
+    automation:
+      # NEW: Automated network creation
+      provider: "terraform"
+      dhcp_enabled: true
+      dns_enabled: true
+      
+  - name: "database-network"
+    type: "isolated"
+    subnet: "192.168.101.0/24" 
+    automation:
+      provider: "terraform"
+      dhcp_enabled: true
+
+# Clone settings with automation
+clone_settings:
+  - name: "web-server-clone"
+    guest: "web-server"
+    automation:
+      # NEW: Automated cloning and customization
+      method: "terraform"
+      customize:
+        hostname: "web-{{ clone_id }}"
+        ip_address: "192.168.100.{{ 10 + clone_id }}"
+    
+    tasks:
+      - name: "configure-nginx"
+        type: "shell"
+        automation:
+          # NEW: Automated task execution
+          method: "ssh"
+          retry_count: 3
+          timeout: 300
+        commands:
+          - "sudo systemctl enable nginx"
+          - "sudo systemctl start nginx"
+          - "sudo ufw allow 'Nginx Full'"
+          
+      - name: "setup-php"
+        type: "shell"
+        automation:
+          method: "ssh"
+        commands:
+          - "sudo systemctl enable php8.1-fpm"
+          - "sudo systemctl start php8.1-fpm"
+
+  - name: "database-server-clone"
+    guest: "database-server" 
+    automation:
+      method: "terraform"
+      customize:
+        hostname: "db-{{ clone_id }}"
+        ip_address: "192.168.101.{{ 10 + clone_id }}"
+    
+    tasks:
+      - name: "secure-mysql"
+        type: "shell"
+        automation:
+          method: "ssh"
+          sensitive: true  # Handle secrets securely
+        commands:
+          - "sudo mysql_secure_installation"
+          - "sudo systemctl enable mysql"
+          - "sudo systemctl start mysql"
+
+# NEW: Automation workflows
+workflows:
+  - name: "full-deployment"
+    description: "Complete automated deployment"
+    steps:
+      - name: "build-images"
+        provider: "packer"
+        parallel: true
+        targets:
+          - "web-server"
+          - "database-server"
+          
+      - name: "create-infrastructure"
+        provider: "terraform"  
+        depends_on: ["build-images"]
+        targets:
+          - "networks"
+          - "guests"
+          
+      - name: "configure-systems"
+        provider: "ssh"
+        depends_on: ["create-infrastructure"]
+        targets:
+          - "all-clones"
+          
+  - name: "quick-deployment"
+    description: "Fast deployment using cached images"
+    steps:
+      - name: "deploy-cached"
+        provider: "terraform"
+        use_cache: true
+        targets: ["all"]
+
+# Validation and testing
+validation:
+  automation:
+    enabled: true
+    timeout: 1800  # 30 minutes
+    
+  tests:
+    - name: "connectivity-test"
+      type: "ping"
+      automation:
+        method: "ssh" 
+      targets:
+        - "192.168.100.10"
+        - "192.168.101.10"
+        
+    - name: "service-test"
+      type: "http"
+      automation:
+        method: "curl"
+      targets:
+        - "http://192.168.100.10"
+        - "http://192.168.100.10/phpinfo.php"
