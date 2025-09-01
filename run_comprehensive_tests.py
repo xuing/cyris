@@ -2,6 +2,7 @@
 """
 Comprehensive test runner for CyRIS TDD test suite.
 Runs all test categories with coverage reporting and provides summary.
+Updated to use properly organized tests in tests/ directory structure.
 """
 
 import subprocess
