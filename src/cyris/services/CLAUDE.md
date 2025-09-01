@@ -30,40 +30,127 @@ services/
 ### Orchestrator Service API
 ```python
 class RangeOrchestrator:
-    def create_range(self, config_path: Path, range_id: Optional[str]) -> RangeResult
-    def destroy_range(self, range_id: str, force: bool = False) -> bool
-    def get_range_status(self, range_id: str) -> RangeStatus
-    def list_ranges(self) -> List[RangeInfo]
-    def execute_tasks(self, range_id: str, tasks: List[Dict]) -> List[TaskResult]
+    def create_range(
+        self,
+        range_id: str,
+        name: str,
+        description: str,
+        hosts: List[Host],
+        guests: List[Guest],
+        topology_config: Optional[Dict[str, Any]] = None,
+        owner: Optional[str] = None,
+        tags: Optional[Dict[str, str]] = None
+    ) -> RangeMetadata
+    
+    def get_range(self, range_id: str) -> Optional[RangeMetadata]
+    def list_ranges(
+        self,
+        owner: Optional[str] = None,
+        status: Optional[RangeStatus] = None,
+        tags: Optional[Dict[str, str]] = None
+    ) -> List[RangeMetadata]
+    
+    def update_range_status(self, range_id: str) -> Optional[RangeStatus]
+    def destroy_range(self, range_id: str) -> bool
+    def remove_range(self, range_id: str, force: bool = False) -> bool
+    
+    def create_range_from_yaml(
+        self,
+        description_file: Path,
+        range_id: Optional[int] = None,
+        dry_run: bool = False
+    ) -> Optional[str]
+    
+    def create_range_from_yaml_enhanced(
+        self,
+        yaml_config_path: str,
+        range_id: Optional[str] = None
+    ) -> RangeMetadata
+    
+    def get_range_status_detailed(self, range_id: str) -> Optional[Dict[str, Any]]
+    def get_range_resources(self, range_id: str) -> Optional[Dict[str, List[str]]]
+    def get_statistics(self) -> Dict[str, Any]
 ```
 
 ### Task Executor API
 ```python
 class TaskExecutor:
-    def execute_task(self, vm_info: VMInfo, task: Dict) -> TaskResult
-    def verify_task_result(self, vm_info: VMInfo, task_result: TaskResult) -> bool
+    def execute_guest_tasks(
+        self, 
+        guest: Any, 
+        guest_ip: str,
+        tasks: List[Dict[str, Any]]
+    ) -> List[TaskResult]
     
-# Supported Task Types:
-# - add_account, modify_account
-# - install_package, copy_content, execute_program  
-# - emulate_attack, emulate_malware, emulate_traffic_capture_file
-# - firewall_rules
+    def get_task_status(self, task_id: str) -> Optional[TaskResult]
+
+class TaskType(Enum):
+    ADD_ACCOUNT = "add_account"
+    MODIFY_ACCOUNT = "modify_account"
+    INSTALL_PACKAGE = "install_package" 
+    COPY_CONTENT = "copy_content"
+    EXECUTE_PROGRAM = "execute_program"
+    EMULATE_ATTACK = "emulate_attack"
+    EMULATE_MALWARE = "emulate_malware"
+    EMULATE_TRAFFIC_CAPTURE = "emulate_traffic_capture_file"
+    FIREWALL_RULES = "firewall_rules"
 ```
 
 ### Network Service API
 ```python
 class NetworkService:
-    def create_topology(self, topology_config: Dict) -> NetworkTopology
-    def assign_ips(self, guests: List[Guest]) -> Dict[str, str]
-    def validate_connectivity(self, range_id: str) -> ConnectivityReport
+    def validate_network_configuration(self, config: Dict[str, Any]) -> NetworkValidationResult
+    def test_ssh_connectivity(
+        self, 
+        hostname: str, 
+        port: int = 22, 
+        timeout: float = 5.0
+    ) -> NetworkTestResult
+    def create_ssh_connection(
+        self,
+        hostname: str,
+        username: str,
+        password: Optional[str] = None,
+        private_key_path: Optional[str] = None,
+        timeout: float = 30.0
+    ) -> bool
+    def get_ssh_connection(self, hostname: str) -> Optional[Any]
+    def check_ssh_health(self, hostname: str) -> bool
+    def cleanup_ssh_connections(self) -> None
+    def get_network_statistics(self) -> Dict[str, Any]
 ```
 
 ### Gateway Service API  
 ```python
+@dataclass
+class EntryPointInfo:
+    range_id: int
+    instance_id: int
+    guest_id: str
+    port: int
+    target_host: str
+    target_port: int
+    account: str
+    password: str
+    tunnel_id: Optional[str] = None
+    created_at: datetime = field(default_factory=datetime.now)
+
 class GatewayService:
-    def setup_entry_points(self, range_config: Dict) -> List[EntryPointInfo]
-    def create_tunnels(self, gateway_config: Dict) -> TunnelManager
-    def get_connection_info(self, range_id: str) -> Dict[str, ConnectionInfo]
+    def validate_gateway_settings(self) -> None
+    def create_entry_point(
+        self, 
+        entry_point: EntryPointInfo, 
+        local_user: str, 
+        host_address: str
+    ) -> Dict[str, Any]
+    def destroy_entry_point(self, range_id: int, instance_id: int) -> None
+    def get_entry_points_for_range(self, range_id: int) -> List[EntryPointInfo]
+    def generate_access_notification(self, range_id: int) -> str
+    def generate_random_credentials(self, length: int = 12) -> str
+    def get_available_port(self, start_port: int = 60000, end_port: int = 65000) -> int
+    def get_service_status(self) -> Dict[str, Any]
+    def cleanup_range(self, range_id: int) -> None
+    def cleanup_all(self) -> None
 ```
 
 ## Key Dependencies and Configuration
@@ -101,19 +188,29 @@ class ServiceConfig(BaseSettings):
 ### Range Management
 ```python
 @dataclass
-class RangeInfo:
+class RangeMetadata:
     range_id: str
-    status: RangeStatus
+    name: str
+    description: str
     created_at: datetime
-    hosts: List[HostInfo]
-    guests: List[GuestInfo]
-    network_topology: Optional[NetworkTopology]
+    status: RangeStatus = RangeStatus.CREATING
+    last_modified: datetime = field(default_factory=datetime.now)
+    owner: Optional[str] = None
+    tags: Dict[str, str] = field(default_factory=dict)
+    config_path: Optional[str] = None
+    logs_path: Optional[str] = None
+    provider_config: Optional[Dict[str, Any]] = None
+    
+    def update_status(self, status: RangeStatus) -> None
+    def to_dict(self) -> Dict[str, Any]
+    def from_dict(cls, data: Dict[str, Any]) -> 'RangeMetadata'
 
 class RangeStatus(Enum):
     CREATING = "creating"
     ACTIVE = "active"
-    FAILED = "failed"
-    DESTROYING = "destroying"
+    STOPPING = "stopping"
+    STOPPED = "stopped"
+    ERROR = "error"
     DESTROYED = "destroyed"
 ```
 
@@ -123,22 +220,40 @@ class RangeStatus(Enum):
 class TaskResult:
     task_id: str
     task_type: TaskType
-    vm_name: str
-    vm_ip: str
     success: bool
     message: str
-    evidence: Optional[str]  # Verification evidence
-    execution_time: float
-    timestamp: datetime
+    execution_time: float = 0.0
+    output: Optional[str] = None
+    error: Optional[str] = None
+    # Enhanced fields for verification
+    vm_name: Optional[str] = None
+    vm_ip: Optional[str] = None
+    evidence: Optional[str] = None  # Verification evidence
+    verification_passed: bool = False
+    timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
 ```
 
 ### Network Services
 ```python
 @dataclass
-class NetworkTopology:
-    networks: List[NetworkInfo]
-    ip_assignments: Dict[str, str]  # vm_name -> ip_address
-    gateway_info: Optional[GatewayInfo]
+class NetworkValidationResult:
+    is_valid: bool
+    errors: List[str] = field(default_factory=list)
+    warnings: List[str] = field(default_factory=list)
+
+@dataclass
+class NetworkTestResult:
+    success: bool
+    response_time: Optional[float] = None
+    error_message: Optional[str] = None
+    timestamp: datetime = field(default_factory=datetime.now)
+
+@dataclass
+class NetworkServiceConfig:
+    max_ssh_connections: int = 10
+    default_ssh_timeout: int = 30
+    health_check_interval: int = 60
+    enable_connection_pooling: bool = True
 ```
 
 ## Testing and Quality
