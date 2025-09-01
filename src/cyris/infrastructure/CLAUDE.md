@@ -33,31 +33,76 @@ infrastructure/
 
 ### Provider Interface
 ```python
+class ResourceStatus(Enum):
+    CREATING = "creating"
+    ACTIVE = "active"
+    STARTING = "starting"
+    STOPPING = "stopping"
+    STOPPED = "stopped"
+    ERROR = "error"
+    TERMINATED = "terminated"
+
+@dataclass
+class ResourceInfo:
+    resource_id: str
+    resource_type: str  # "host", "guest", "network", "storage"
+    name: str
+    status: ResourceStatus
+    metadata: Dict[str, Any]
+    created_at: Optional[str] = None
+    ip_addresses: Optional[List[str]] = None
+    tags: Optional[Dict[str, str]] = None
+
 class InfrastructureProvider(ABC):
     @abstractmethod
-    def create_vm(self, vm_config: Dict) -> VMInfo
-    
-    @abstractmethod  
-    def destroy_vm(self, vm_id: str) -> bool
+    def connect(self) -> None
     
     @abstractmethod
-    def list_vms(self, range_id: Optional[str] = None) -> List[VMInfo]
+    def disconnect(self) -> None
     
     @abstractmethod
-    def get_vm_status(self, vm_id: str) -> VMStatus
+    def is_connected(self) -> bool
     
     @abstractmethod
-    def get_vm_ip(self, vm_id: str) -> Optional[str]
+    def create_hosts(self, hosts: List[Host]) -> List[str]
+    
+    @abstractmethod
+    def create_guests(self, guests: List[Guest], host_mapping: Dict[str, str]) -> List[str]
+    
+    @abstractmethod
+    def destroy_hosts(self, host_ids: List[str]) -> None
+    
+    @abstractmethod
+    def destroy_guests(self, guest_ids: List[str]) -> None
+    
+    @abstractmethod
+    def get_status(self, resource_ids: List[str]) -> Dict[str, str]
+    
+    def get_resource_info(self, resource_id: str) -> Optional[ResourceInfo]
+    def list_resources(self, resource_type: Optional[str] = None, status_filter: Optional[ResourceStatus] = None) -> List[ResourceInfo]
+    def validate_configuration(self) -> List[str]
+    def get_provider_info(self) -> Dict[str, Any]
 ```
 
 ### KVM Provider API
 ```python
 class KVMProvider(InfrastructureProvider):
-    def create_vm(self, vm_config: Dict) -> VMInfo
-    def destroy_vm(self, vm_id: str) -> bool
-    def clone_vm(self, base_vm: str, new_name: str) -> VMInfo
+    # Inherited from InfrastructureProvider
+    def connect(self) -> None
+    def disconnect(self) -> None
+    def is_connected(self) -> bool
+    def create_hosts(self, hosts: List[Host]) -> List[str]
+    def create_guests(self, guests: List[Guest], host_mapping: Dict[str, str]) -> List[str]
+    def destroy_hosts(self, host_ids: List[str]) -> None
+    def destroy_guests(self, guest_ids: List[str]) -> None
+    def get_status(self, resource_ids: List[str]) -> Dict[str, str]
+    def get_resource_info(self, resource_id: str) -> Optional[ResourceInfo]
+    
+    # KVM-specific methods
+    def clone_vm(self, base_vm_config: str, new_name: str, ssh_keys: Optional[List[str]] = None) -> str
+    def get_vm_ip(self, vm_id: str) -> Optional[str]
     def inject_ssh_keys(self, vm_id: str, public_keys: List[str]) -> bool
-    def create_cloud_init_iso(self, vm_id: str, user_data: str) -> Path
+    def get_vm_ssh_info(self, vm_id: str) -> Optional[Dict[str, Any]]
 ```
 
 ### AWS Provider API  
@@ -72,15 +117,22 @@ class AWSProvider(InfrastructureProvider):
 ### Network Management API
 ```python
 class NetworkTopologyManager:
-    def create_topology(self, topology_config: Dict) -> NetworkTopology
-    def assign_ip_addresses(self, guests: List[Guest]) -> Dict[str, str]
-    def discover_vm_ips(self, vm_names: List[str]) -> Dict[str, str]
-    def synchronize_metadata(self, range_id: str, ip_mappings: Dict) -> None
-
-class BridgeManager:
-    def create_bridge(self, bridge_name: str, subnet: str) -> bool
-    def destroy_bridge(self, bridge_name: str) -> bool  
-    def add_vm_to_bridge(self, vm_name: str, bridge_name: str) -> bool
+    def create_topology(
+        self, 
+        topology_config: Dict[str, Any],
+        guests: List[Any],
+        range_id: str
+    ) -> Dict[str, str]
+    
+    def destroy_topology(self, range_id: str) -> None
+    def get_guest_ip(self, guest_id: str) -> Optional[str]
+    def get_network_info(self, network_name: str) -> Optional[Dict[str, Any]]
+    def apply_forwarding_rules(self) -> None
+    
+    def discover_vm_ips(self, vm_names: List[str], kvm_provider=None) -> Dict[str, str]
+    def sync_metadata(self, range_id: str, ip_mappings: Dict[str, str]) -> None
+    def get_range_metadata(self, range_id: str) -> Optional[Dict[str, Any]]
+    def assign_ips(self, guests: List[Any]) -> Dict[str, str]
 ```
 
 ## Key Dependencies and Configuration
