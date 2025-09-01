@@ -8,8 +8,12 @@ for cyber ranges based on YAML specifications.
 import logging
 import ipaddress
 import subprocess
+import json
+import time
 from typing import Dict, List, Optional, Any, Tuple
 from pathlib import Path
+from dataclasses import dataclass, asdict
+from datetime import datetime
 
 try:
     import libvirt
@@ -45,6 +49,8 @@ class NetworkTopologyManager:
         self.logger = logging.getLogger(__name__)
         self.networks = {}  # network_name -> network_info
         self.ip_assignments = {}  # guest_id -> ip_address
+        self.discovered_ips = {}  # vm_name -> discovered_ip
+        self.metadata_path = Path('/home/ubuntu/cyris/cyber_range/ranges_metadata.json')
     
     def create_topology(
         self, 
@@ -340,3 +346,261 @@ class NetworkTopologyManager:
                     self.logger.debug(f"Applied rule: {rule}")
                 except Exception as e:
                     self.logger.warning(f"Failed to apply rule {rule}: {e}")
+    
+    def discover_vm_ips(self, vm_names: List[str], kvm_provider=None) -> Dict[str, str]:
+        """
+        Discover actual IP addresses of running VMs.
+        
+        Args:
+            vm_names: List of VM names to discover IPs for
+            kvm_provider: KVM provider instance for IP discovery
+            
+        Returns:
+            Dictionary mapping VM name to discovered IP address
+        """
+        self.logger.info(f"Discovering IPs for {len(vm_names)} VMs")
+        
+        discovered = {}
+        
+        for vm_name in vm_names:
+            try:
+                # Method 1: Use KVM provider's IP discovery if available
+                if kvm_provider:
+                    ip = kvm_provider.get_vm_ip(vm_name)
+                    if ip:
+                        discovered[vm_name] = ip
+                        self.discovered_ips[vm_name] = ip
+                        self.logger.info(f"Discovered IP via KVM provider: {vm_name} -> {ip}")
+                        continue
+                
+                # Method 2: Try virsh domifaddr
+                ip = self._discover_ip_virsh(vm_name)
+                if ip:
+                    discovered[vm_name] = ip
+                    self.discovered_ips[vm_name] = ip
+                    self.logger.info(f"Discovered IP via virsh: {vm_name} -> {ip}")
+                    continue
+                    
+                # Method 3: Try DHCP lease scan
+                ip = self._discover_ip_dhcp_leases(vm_name)
+                if ip:
+                    discovered[vm_name] = ip
+                    self.discovered_ips[vm_name] = ip
+                    self.logger.info(f"Discovered IP via DHCP leases: {vm_name} -> {ip}")
+                    continue
+                    
+                # Method 4: Try network scanning
+                ip = self._discover_ip_network_scan(vm_name)
+                if ip:
+                    discovered[vm_name] = ip
+                    self.discovered_ips[vm_name] = ip
+                    self.logger.info(f"Discovered IP via network scan: {vm_name} -> {ip}")
+                    continue
+                    
+                self.logger.warning(f"Could not discover IP for VM: {vm_name}")
+                
+            except Exception as e:
+                self.logger.error(f"Error discovering IP for VM {vm_name}: {e}")
+        
+        return discovered
+    
+    def sync_metadata(self, range_id: str, ip_mappings: Dict[str, str]) -> None:
+        """
+        Synchronize IP mappings to persistent metadata storage.
+        
+        Args:
+            range_id: Range identifier
+            ip_mappings: Dictionary of VM name to IP address mappings
+        """
+        try:
+            # Load existing metadata
+            metadata = {}
+            if self.metadata_path.exists():
+                with open(self.metadata_path, 'r') as f:
+                    metadata = json.load(f)
+            
+            # Update range metadata
+            if range_id not in metadata:
+                metadata[range_id] = {
+                    'created_at': datetime.now().isoformat(),
+                    'vm_ips': {},
+                    'networks': {},
+                    'last_updated': datetime.now().isoformat()
+                }
+            
+            # Update IP mappings
+            metadata[range_id]['vm_ips'].update(ip_mappings)
+            metadata[range_id]['last_updated'] = datetime.now().isoformat()
+            
+            # Add network topology info
+            metadata[range_id]['networks'] = {
+                name: {
+                    'cidr': info['cidr'],
+                    'gateway': info['gateway'],
+                    'full_name': info['full_name']
+                }
+                for name, info in self.networks.items()
+            }
+            
+            # Write back to file
+            self.metadata_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(self.metadata_path, 'w') as f:
+                json.dump(metadata, f, indent=2)
+                
+            self.logger.info(f"Synchronized metadata for range {range_id}: {len(ip_mappings)} IP mappings")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to sync metadata for range {range_id}: {e}")
+    
+    def get_range_metadata(self, range_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get metadata for a specific range.
+        
+        Args:
+            range_id: Range identifier
+            
+        Returns:
+            Range metadata dictionary or None if not found
+        """
+        try:
+            if self.metadata_path.exists():
+                with open(self.metadata_path, 'r') as f:
+                    metadata = json.load(f)
+                return metadata.get(range_id)
+        except Exception as e:
+            self.logger.error(f"Failed to get metadata for range {range_id}: {e}")
+        return None
+    
+    def assign_ips(self, guests: List[Any]) -> Dict[str, str]:
+        """
+        Assign IP addresses to guests based on topology configuration.
+        
+        Args:
+            guests: List of guest configurations
+            
+        Returns:
+            Dictionary mapping guest ID to assigned IP address
+        """
+        self.logger.info(f"Assigning IPs to {len(guests)} guests")
+        
+        assignments = {}
+        
+        for guest in guests:
+            # Get guest ID with backward compatibility
+            if hasattr(guest, 'guest_id'):
+                guest_id = guest.guest_id
+            elif hasattr(guest, 'id') and not isinstance(guest.id, property):
+                guest_id = guest.id
+            else:
+                guest_id = getattr(guest, 'guest_id', 'unknown')
+            
+            # Check if guest has predefined IP address
+            if hasattr(guest, 'ip_addr') and guest.ip_addr:
+                assignments[guest_id] = guest.ip_addr
+                self.ip_assignments[guest_id] = guest.ip_addr
+                self.logger.info(f"Using predefined IP {guest.ip_addr} for guest {guest_id}")
+            else:
+                # Assign from available range
+                default_network = ipaddress.ip_network('192.168.122.0/24', strict=False)
+                host_offset = hash(guest_id) % 200 + 50
+                assigned_ip = str(list(default_network.hosts())[host_offset])
+                assignments[guest_id] = assigned_ip
+                self.ip_assignments[guest_id] = assigned_ip
+                self.logger.info(f"Assigned generated IP {assigned_ip} to guest {guest_id}")
+        
+        return assignments
+    
+    def _discover_ip_virsh(self, vm_name: str) -> Optional[str]:
+        """Discover IP using virsh domifaddr command"""
+        try:
+            result = subprocess.run([
+                'virsh', 'domifaddr', vm_name
+            ], capture_output=True, text=True, timeout=10)
+            
+            if result.returncode == 0:
+                for line in result.stdout.split('\n'):
+                    if 'ipv4' in line.lower():
+                        # Parse line like: vnet0      52:54:00:xx:xx:xx    ipv4         192.168.122.xxx/24
+                        parts = line.split()
+                        for part in parts:
+                            if '/' in part and self._is_valid_ip(part.split('/')[0]):
+                                return part.split('/')[0]
+                                
+        except Exception as e:
+            self.logger.debug(f"virsh domifaddr failed for {vm_name}: {e}")
+            
+        return None
+    
+    def _discover_ip_dhcp_leases(self, vm_name: str) -> Optional[str]:
+        """Discover IP from DHCP lease files"""
+        lease_files = [
+            '/var/lib/libvirt/dnsmasq/virbr0.status',
+            '/var/lib/libvirt/dnsmasq/default.leases',
+            '/var/lib/dhcp/dhcpd.leases'
+        ]
+        
+        for lease_file in lease_files:
+            try:
+                if Path(lease_file).exists():
+                    with open(lease_file, 'r') as f:
+                        content = f.read()
+                        
+                        # Look for VM name in lease content
+                        if vm_name in content:
+                            # Try to extract IP addresses from the content
+                            import re
+                            ip_pattern = r'\b(?:\d{1,3}\.){3}\d{1,3}\b'
+                            ips = re.findall(ip_pattern, content)
+                            
+                            for ip in ips:
+                                if self._is_valid_ip(ip):
+                                    return ip
+                                    
+            except Exception as e:
+                self.logger.debug(f"DHCP lease scan failed for {lease_file}: {e}")
+                
+        return None
+    
+    def _discover_ip_network_scan(self, vm_name: str) -> Optional[str]:
+        """Discover IP by scanning common network ranges"""
+        common_ranges = [
+            '192.168.122.0/24',  # Default libvirt
+            '192.168.100.0/24',  # Office network
+            '192.168.200.0/24'   # Server network
+        ]
+        
+        for cidr in common_ranges:
+            try:
+                network = ipaddress.ip_network(cidr, strict=False)
+                
+                # Test a few likely IPs
+                for host_offset in [50, 51, 52, 100, 101, 102]:
+                    try:
+                        if host_offset < network.num_addresses - 2:
+                            test_ip = str(list(network.hosts())[host_offset])
+                            
+                            # Quick ping test
+                            ping_result = subprocess.run([
+                                'ping', '-c', '1', '-W', '1', test_ip
+                            ], capture_output=True, timeout=2)
+                            
+                            if ping_result.returncode == 0:
+                                # Additional verification could be added here
+                                return test_ip
+                                
+                    except (IndexError, subprocess.TimeoutExpired):
+                        continue
+                        
+            except Exception as e:
+                self.logger.debug(f"Network scan failed for {cidr}: {e}")
+                
+        return None
+    
+    def _is_valid_ip(self, ip_str: str) -> bool:
+        """Check if string is a valid IP address"""
+        try:
+            ip = ipaddress.ip_address(ip_str)
+            # Exclude localhost and link-local
+            return not ip_str.startswith(('127.', '169.254.', '0.'))
+        except ValueError:
+            return False
