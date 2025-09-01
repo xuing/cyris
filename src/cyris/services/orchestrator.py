@@ -1620,8 +1620,9 @@ class RangeOrchestrator:
         
         for vm_name in guest_vms:
             try:
-                # Get current IP
-                vm_ip = self.provider.get_vm_ip(vm_name)
+                # Use simplified IP discovery with error diagnostics
+                from ..tools.vm_ip_manager import get_vm_ip_simple
+                vm_ip, error_details = get_vm_ip_simple(vm_name)
                 
                 # Get VM status from provider
                 vm_status = self.provider.get_status([vm_name]).get(vm_name, "unknown")
@@ -1639,6 +1640,7 @@ class RangeOrchestrator:
                     "ip": vm_ip,
                     "status": vm_status,
                     "ssh_accessible": ssh_accessible,
+                    "error_details": error_details,
                     "last_checked": datetime.now().isoformat()
                 })
                 
@@ -1649,6 +1651,7 @@ class RangeOrchestrator:
                     "status": "error",
                     "ssh_accessible": False,
                     "error": str(e),
+                    "error_details": None,
                     "last_checked": datetime.now().isoformat()
                 })
         

@@ -621,14 +621,11 @@ class KVMProvider(InfrastructureProvider):
                     break
         
         if not base_image_path:
-            # Fallback: create minimal base image
+            # Fallback: ensure bootable base image
             base_image_path = vm_disk_dir / "base.qcow2"
             if not base_image_path.exists():
-                self.logger.info(f"Creating minimal base image: {base_image_path}")
-                subprocess.run([
-                    "qemu-img", "create", "-f", "qcow2", 
-                    str(base_image_path), "10G"
-                ], check=True)
+                self.logger.info(f"Setting up bootable base image: {base_image_path}")
+                self._ensure_bootable_base_image(base_image_path)
         
         # Create VM disk as copy-on-write overlay
         vm_disk_path = vm_disk_dir / f"{vm_name}.qcow2"
@@ -662,6 +659,86 @@ class KVMProvider(InfrastructureProvider):
                 self.logger.debug(f"Successfully set up libvirt access for {vm_disk_path}")
         
         return str(vm_disk_path)
+    
+    def _ensure_bootable_base_image(self, base_image_path: Path) -> None:
+        """
+        Ensure a bootable base image exists. Downloads Ubuntu cloud image if needed.
+        Creates simple cloud-init configuration for networking.
+        """
+        import urllib.request
+        import tempfile
+        import shutil
+        
+        # Ubuntu 22.04 LTS cloud image (minimal, ~600MB)
+        cloud_image_url = "https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img"
+        
+        try:
+            with tempfile.NamedTemporaryFile(suffix='.img', delete=False) as tmp_file:
+                self.logger.info("Downloading Ubuntu cloud image (first time setup, ~600MB)...")
+                urllib.request.urlretrieve(cloud_image_url, tmp_file.name)
+                
+                # Convert to qcow2 and resize
+                self.logger.info("Converting and resizing image...")
+                subprocess.run([
+                    "qemu-img", "convert", "-f", "qcow2", "-O", "qcow2",
+                    tmp_file.name, str(base_image_path)
+                ], check=True)
+                
+                # Resize to 10GB
+                subprocess.run([
+                    "qemu-img", "resize", str(base_image_path), "10G"
+                ], check=True)
+                
+                # Create simple cloud-init configuration
+                self._create_cloud_init_config(base_image_path.parent)
+                
+                self.logger.info(f"Bootable base image ready: {base_image_path}")
+                
+        except Exception as e:
+            self.logger.error(f"Failed to setup bootable base image: {e}")
+            # Fallback to empty image with warning
+            self.logger.warning("Creating empty base image - VMs will not boot properly")
+            subprocess.run([
+                "qemu-img", "create", "-f", "qcow2", 
+                str(base_image_path), "10G"
+            ], check=True)
+    
+    def _create_cloud_init_config(self, disk_dir: Path) -> None:
+        """Create minimal cloud-init configuration for networking"""
+        cloud_init_dir = disk_dir / "cloud-init"
+        cloud_init_dir.mkdir(exist_ok=True)
+        
+        # User data for cloud-init (simple networking setup)
+        user_data = """#cloud-config
+users:
+  - name: ubuntu
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    lock_passwd: false
+    passwd: $6$rounds=4096$saltsalt$L9uC/LkBaztjP6HnQBnmFEWFPfPq1XN2yRh8PxN9z1GvOzKqQ1q1/KdL5sP3q1q1q1q1q1q1q1q1q1q1q1q1q1
+# Password is "ubuntu"
+package_update: true
+packages:
+  - cloud-init
+runcmd:
+  - systemctl enable systemd-networkd
+  - systemctl start systemd-networkd
+"""
+        
+        # Network configuration
+        network_config = """version: 2
+ethernets:
+  eth0:
+    dhcp4: true
+    dhcp-identifier: mac
+"""
+        
+        # Write cloud-init files
+        (cloud_init_dir / "user-data").write_text(user_data)
+        (cloud_init_dir / "network-config").write_text(network_config)
+        
+        # Create empty meta-data
+        (cloud_init_dir / "meta-data").write_text("instance-id: cyris-vm\n")
     
     def _generate_vm_xml(
         self, 

@@ -1418,6 +1418,133 @@ class VMIPManager:
                 pass
 
 
+def get_vm_ip_simple(vm_name: str) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Simple, reliable VM IP discovery with error details.
+    
+    Args:
+        vm_name: Name of the VM to query
+        
+    Returns:
+        Tuple of (IP address, error details)
+        - If successful: (ip_string, None)
+        - If failed: (None, error_details_string)
+    """
+    logger = logging.getLogger(__name__)
+    
+    try:
+        # Method 1: Check libvirt DHCP leases (most reliable)
+        ip = _get_ip_from_dhcp_leases(vm_name)
+        if ip:
+            logger.debug(f"Found IP for {vm_name} via DHCP leases: {ip}")
+            return ip, None
+            
+        # Method 2: Use virsh domifaddr (fallback)
+        ip = _get_ip_from_virsh(vm_name)
+        if ip:
+            logger.debug(f"Found IP for {vm_name} via virsh: {ip}")
+            return ip, None
+            
+        # No IP found - gather diagnostic info
+        error_details = _get_ip_discovery_diagnostics(vm_name)
+        return None, error_details
+        
+    except Exception as e:
+        logger.error(f"IP discovery error for {vm_name}: {e}")
+        return None, f"IP Discovery Error: {str(e)}"
+
+
+def _get_ip_from_dhcp_leases(vm_name: str) -> Optional[str]:
+    """Get IP from libvirt DHCP leases"""
+    try:
+        result = subprocess.run(
+            ['virsh', 'net-dhcp-leases', 'default'],
+            capture_output=True, text=True, timeout=10
+        )
+        
+        if result.returncode != 0:
+            return None
+            
+        # Parse DHCP leases output
+        for line in result.stdout.split('\n'):
+            if vm_name in line and 'ipv4' in line:
+                # Extract IP from lease line format
+                parts = line.split()
+                for part in parts:
+                    if '/' in part and '.' in part:  # IP/netmask format
+                        return part.split('/')[0]
+        
+        return None
+        
+    except Exception as e:
+        logging.getLogger(__name__).debug(f"DHCP lease check failed: {e}")
+        return None
+
+
+def _get_ip_from_virsh(vm_name: str) -> Optional[str]:
+    """Get IP using virsh domifaddr"""
+    try:
+        result = subprocess.run(
+            ['virsh', 'domifaddr', vm_name],
+            capture_output=True, text=True, timeout=10
+        )
+        
+        if result.returncode != 0:
+            return None
+            
+        # Parse domifaddr output  
+        for line in result.stdout.split('\n'):
+            if 'ipv4' in line:
+                parts = line.split()
+                for part in parts:
+                    if '/' in part and '.' in part:  # IP/netmask format
+                        return part.split('/')[0]
+        
+        return None
+        
+    except Exception as e:
+        logging.getLogger(__name__).debug(f"Virsh domifaddr check failed: {e}")
+        return None
+
+
+def _get_ip_discovery_diagnostics(vm_name: str) -> str:
+    """Get diagnostic information when IP discovery fails"""
+    diagnostics = []
+    
+    try:
+        # Check VM status
+        result = subprocess.run(
+            ['virsh', 'domstate', vm_name],
+            capture_output=True, text=True, timeout=5
+        )
+        vm_status = result.stdout.strip() if result.returncode == 0 else "unknown"
+        diagnostics.append(f"VM Status: {vm_status}")
+        
+        # Check if VM has network interfaces
+        result = subprocess.run(
+            ['virsh', 'dumpxml', vm_name],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0 and 'interface' in result.stdout:
+            diagnostics.append("Network Interface: present")
+        else:
+            diagnostics.append("Network Interface: missing or misconfigured")
+        
+        # Check DHCP lease count
+        result = subprocess.run(
+            ['virsh', 'net-dhcp-leases', 'default'],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0:
+            lease_count = len([l for l in result.stdout.split('\n') if 'ipv4' in l])
+            diagnostics.append(f"Active DHCP Leases: {lease_count}")
+        
+        return "; ".join(diagnostics)
+        
+    except Exception as e:
+        return f"Diagnostic Error: {str(e)}"
+
+
 def get_vm_ips_cli(vm_name: str, libvirt_uri: str = "qemu:///system") -> Optional[VMIPInfo]:
     """
     Convenience function for CLI usage to get VM IP addresses.

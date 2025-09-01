@@ -124,9 +124,16 @@ class StatusCommandHandler(BaseCommandHandler, ServiceMixin):
             else:
                 status_display = Text(vm_status.capitalize(), style="yellow")
             
-            # IP Address
+            # IP Address with error details
             ip_addr = vm.get('ip', 'N/A')
-            ip_display = Text(ip_addr, style="green") if ip_addr and ip_addr != 'N/A' else Text("N/A", style="dim")
+            if ip_addr and ip_addr != 'N/A':
+                ip_display = Text(ip_addr, style="green")
+            else:
+                ip_display = Text("N/A", style="dim")
+                # Show error details if available
+                error_details = vm.get('error_details')
+                if error_details and verbose:
+                    ip_display = Text(f"N/A ({error_details})", style="dim")
             
             # SSH Status
             ssh_accessible = vm.get('ssh_accessible', False)
@@ -169,6 +176,15 @@ class StatusCommandHandler(BaseCommandHandler, ServiceMixin):
                     vm_table.add_row("", error_text, "", "", "" if verbose else "")
         
         self.console.print(vm_table)
+        
+        # Display error details for VMs without IPs (if verbose or any errors)
+        vms_with_errors = [vm for vm in vms if not vm.get('ip') and vm.get('error_details')]
+        if vms_with_errors:
+            self.console.print("\n[bold yellow]IP Discovery Details:[/bold yellow]")
+            for vm in vms_with_errors:
+                vm_name = vm['name']
+                error_details = vm.get('error_details', 'No details available')
+                self.console.print(f"  • [cyan]{vm_name}[/cyan]: {error_details}", style="dim")
         
         # Summary information
         running_count = sum(1 for vm in vms if vm.get('status') == 'running')
