@@ -1572,11 +1572,11 @@ class RangeOrchestrator:
                     vm_name = f"cyris-{guest.guest_id}-{range_id[:8]}"
                     
                     # Check if VM creation or cloning is needed
-                    if hasattr(guest, 'base_vm_config') and guest.base_vm_config:
+                    if hasattr(guest, 'basevm_config_file') and guest.basevm_config_file:
                         # Clone from base VM
                         public_keys = self._get_ssh_public_keys()
                         actual_vm_name = self.provider.clone_vm(
-                            guest.base_vm_config, 
+                            guest.basevm_config_file, 
                             vm_name,
                             public_keys
                         )
