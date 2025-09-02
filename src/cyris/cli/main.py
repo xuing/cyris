@@ -247,6 +247,27 @@ def validate(ctx):
     else:
         click.echo(f"[OK] Cyber range directory: {config.cyber_range_dir}")
     
+    # Check libvirt availability
+    try:
+        import libvirt
+        click.echo(f"[OK] libvirt Python bindings available")
+    except ImportError:
+        click.echo(f"[WARNING] libvirt Python bindings not available - VM operations may fail", err=True)
+        click.echo("  Install with: pip install libvirt-python", err=True)
+    
+    # Check virsh command availability (fallback)
+    try:
+        import subprocess
+        result = subprocess.run(['virsh', '--version'], capture_output=True, text=True, timeout=5)
+        if result.returncode == 0:
+            click.echo(f"[OK] virsh command available")
+        else:
+            click.echo(f"[WARNING] virsh command not working properly", err=True)
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        click.echo(f"[WARNING] virsh command not found - install libvirt-clients", err=True)
+    except Exception as e:
+        click.echo(f"[WARNING] Error checking virsh: {e}", err=True)
+    
     if errors == 0:
         click.echo("🎉 Environment validation passed!")
     else:

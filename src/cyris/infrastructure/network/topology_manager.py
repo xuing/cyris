@@ -112,7 +112,7 @@ class NetworkTopologyManager:
         )
         
         # Create network in libvirt if available
-        if self.libvirt_connection and LIBVIRT_AVAILABLE:
+        if self.libvirt_connection:
             try:
                 # Check if network already exists
                 try:
@@ -305,7 +305,7 @@ class NetworkTopologyManager:
         self.logger.info(f"Destroying network topology for range {range_id}")
         
         # Destroy libvirt networks
-        if self.libvirt_connection and LIBVIRT_AVAILABLE:
+        if self.libvirt_connection:
             for network_info in self.networks.values():
                 network_name = network_info['full_name']
                 try:
