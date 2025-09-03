@@ -114,6 +114,9 @@ class SSHManager:
         self._executor = ThreadPoolExecutor(max_workers=max_connections)
         
         self.logger.info("SSHManager initialized")
+        
+        # Initialize parallel-ssh support (legacy compatibility)
+        self.temp_host_files: Dict[str, Path] = {}  # Track temporary host files
     
     def generate_ssh_keypair(
         self, 
@@ -868,3 +871,199 @@ class SSHManager:
         error_text = (result.stderr + (result.error_message or "")).lower()
         
         return any(indicator in error_text for indicator in retryable_indicators)
+    
+    def execute_parallel_ssh_command(
+        self,
+        hosts: List[str],
+        username: str,
+        command: str,
+        timeout: int = 300,
+        temp_file_prefix: str = "cyris_hosts"
+    ) -> Dict[str, SSHResult]:
+        """
+        Execute command on multiple hosts using parallel-ssh approach (legacy compatibility).
+        
+        This method provides legacy-style parallel SSH execution similar to the original
+        CyRIS system's parallel-ssh integration. It creates temporary host files and
+        uses either system parallel-ssh or internal parallel execution.
+        
+        Args:
+            hosts: List of hostnames/IPs to execute command on
+            username: SSH username for all hosts
+            command: Command to execute on all hosts
+            timeout: Command execution timeout
+            temp_file_prefix: Prefix for temporary host files
+        
+        Returns:
+            Dictionary mapping hostname to SSH execution result
+        """
+        if not hosts:
+            return {}
+        
+        # Log start in legacy style  
+        self.logger.info(f"Execute parallel SSH command on {len(hosts)} hosts")
+        
+        try:
+            # Method 1: Try system parallel-ssh if available
+            if self._has_parallel_ssh():
+                return self._execute_system_parallel_ssh(hosts, username, command, timeout, temp_file_prefix)
+            else:
+                # Method 2: Fallback to internal parallel execution
+                return self._execute_internal_parallel_ssh(hosts, username, command, timeout)
+                
+        except Exception as e:
+            error_msg = f"Parallel SSH execution failed: {e}"
+            self.logger.error(error_msg)
+            
+            # Return error results for all hosts
+            return {
+                host: SSHResult(
+                    hostname=host,
+                    command=command,
+                    return_code=-1,
+                    stdout="",
+                    stderr=str(e),
+                    execution_time=0.0,
+                    success=False,
+                    error_message=str(e)
+                ) for host in hosts
+            }
+    
+    def _has_parallel_ssh(self) -> bool:
+        """Check if parallel-ssh is available on system"""
+        try:
+            result = subprocess.run(
+                ["which", "parallel-ssh"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            return result.returncode == 0
+        except:
+            return False
+    
+    def _execute_system_parallel_ssh(
+        self,
+        hosts: List[str],
+        username: str,
+        command: str,
+        timeout: int,
+        temp_file_prefix: str
+    ) -> Dict[str, SSHResult]:
+        """Execute using system parallel-ssh command (legacy approach)"""
+        import tempfile
+        import os
+        
+        # Create temporary host file (legacy pattern)
+        host_file = Path(tempfile.mkdtemp()) / f"{temp_file_prefix}_{len(hosts)}.txt"
+        
+        try:
+            # Write hosts to file
+            with open(host_file, 'w') as f:
+                for host in hosts:
+                    f.write(f"{host}\n")
+            
+            # Store temp file for cleanup
+            self.temp_host_files[f"{temp_file_prefix}_{len(hosts)}"] = host_file
+            
+            # Execute parallel-ssh command (legacy format)
+            parallel_ssh_cmd = [
+                "parallel-ssh",
+                "-h", str(host_file),
+                "-l", username,
+                "-t", str(timeout),
+                "-p", str(min(len(hosts), 50)),  # Max 50 concurrent (legacy PSSH_CONCURRENCY)
+                command
+            ]
+            
+            self.logger.info(f"Running parallel-ssh with {len(hosts)} hosts")
+            
+            start_time = time.time()
+            result = subprocess.run(
+                parallel_ssh_cmd,
+                capture_output=True,
+                text=True,
+                timeout=timeout + 30  # Add buffer time
+            )
+            execution_time = time.time() - start_time
+            
+            # Parse parallel-ssh output and create results
+            return self._parse_parallel_ssh_output(hosts, command, result, execution_time)
+            
+        finally:
+            # Cleanup temporary files
+            self._cleanup_temp_files()
+    
+    def _execute_internal_parallel_ssh(
+        self,
+        hosts: List[str],
+        username: str,
+        command: str,
+        timeout: int
+    ) -> Dict[str, SSHResult]:
+        """Execute using internal parallel execution (fallback)"""
+        # Use existing parallel execution capability
+        host_commands = {}
+        
+        for host in hosts:
+            credentials = SSHCredentials(hostname=host, username=username, timeout=timeout)
+            host_commands[credentials] = [command]
+        
+        # Execute in parallel using existing method
+        parallel_results = self.execute_commands_parallel(host_commands)
+        
+        # Convert to expected format
+        results = {}
+        for hostname, result_list in parallel_results.items():
+            if result_list:
+                results[hostname] = result_list[0]  # Take first result
+        
+        return results
+    
+    def _parse_parallel_ssh_output(
+        self,
+        hosts: List[str],
+        command: str,
+        subprocess_result: subprocess.CompletedProcess,
+        execution_time: float
+    ) -> Dict[str, SSHResult]:
+        """Parse parallel-ssh output into SSHResult objects"""
+        results = {}
+        
+        # Basic parsing - parallel-ssh output format is complex
+        # For now, create results based on overall success
+        overall_success = subprocess_result.returncode == 0
+        
+        for host in hosts:
+            results[host] = SSHResult(
+                hostname=host,
+                command=command,
+                return_code=subprocess_result.returncode,
+                stdout=subprocess_result.stdout,
+                stderr=subprocess_result.stderr,
+                execution_time=execution_time / len(hosts),  # Approximate per-host time
+                success=overall_success,
+                error_message=subprocess_result.stderr if not overall_success else None
+            )
+        
+        return results
+    
+    def _cleanup_temp_files(self) -> None:
+        """Cleanup temporary host files"""
+        for file_key, file_path in list(self.temp_host_files.items()):
+            try:
+                if file_path.exists():
+                    file_path.unlink()
+                    # Also remove parent temp directory if empty
+                    parent = file_path.parent
+                    if parent != Path.cwd() and not any(parent.iterdir()):
+                        parent.rmdir()
+                del self.temp_host_files[file_key]
+            except Exception as e:
+                self.logger.warning(f"Failed to cleanup temp file {file_path}: {e}")
+    
+    def cleanup_parallel_resources(self) -> None:
+        """Cleanup all parallel SSH resources"""
+        self._cleanup_temp_files()
+        if hasattr(self, '_executor'):
+            self._executor.shutdown(wait=False)
