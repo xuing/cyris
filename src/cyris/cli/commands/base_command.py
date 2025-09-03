@@ -79,10 +79,10 @@ class BaseCommandHandler(ABC):
             
         except ImportError as e:
             self.error_display.display_error(f"Failed to import required modules: {e}")
-            return None, None
+            return None, None, None
         except Exception as e:
             self.handle_error(e, "create_orchestrator")
-            return None, None
+            return None, None, None
     
     def log_verbose(self, message: str) -> None:
         """Verbose logging output"""
