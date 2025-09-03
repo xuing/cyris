@@ -4,7 +4,7 @@ Uses Pydantic for configuration validation and management
 """
 from pathlib import Path
 from typing import Optional
-from pydantic import Field, field_validator
+from pydantic import Field, validator
 from pydantic_settings import BaseSettings
 
 
@@ -48,7 +48,7 @@ class CyRISSettings(BaseSettings):
         description="User email address"
     )
     
-    @field_validator('cyris_path', 'cyber_range_dir')
+    @validator('cyris_path', 'cyber_range_dir')
     @classmethod
     def ensure_absolute_path(cls, v):
         """Ensure path is absolute"""
@@ -56,7 +56,7 @@ class CyRISSettings(BaseSettings):
             v = v.resolve()
         return v
     
-    @field_validator('cyber_range_dir')
+    @validator('cyber_range_dir')
     @classmethod
     def ensure_cyber_range_dir_exists(cls, v):
         """Ensure cyber range directory exists"""

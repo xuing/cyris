@@ -7,7 +7,7 @@ and other infrastructure automation providers.
 
 from pathlib import Path
 from typing import Dict, List, Optional, Any
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, validator, root_validator
 from pydantic_settings import BaseSettings
 
 from .settings import CyRISSettings
@@ -280,7 +280,7 @@ class CyRISAutomationSettings(CyRISSettings):
     # Global automation settings
     automation: AutomationGlobalSettings = Field(default_factory=AutomationGlobalSettings)
     
-    @field_validator('terraform', 'packer', 'vagrant', 'aws')
+    @validator('terraform', 'packer', 'vagrant', 'aws')
     @classmethod
     def ensure_automation_dirs(cls, v):
         """Ensure automation directories exist"""
