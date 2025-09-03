@@ -25,7 +25,7 @@ class DestroyCommandHandler(BaseCommandHandler):
             self.console.print(f"[bold blue]Destroying cyber range:[/bold blue] {range_id}")
             
             # Get range metadata first to determine correct connection
-            basic_orchestrator, _ = self.create_orchestrator()
+            basic_orchestrator, _, _ = self.create_orchestrator()
             if not basic_orchestrator:
                 return False
             
@@ -40,7 +40,7 @@ class DestroyCommandHandler(BaseCommandHandler):
             
             # Create orchestrator with correct connection
             network_mode = 'bridge' if 'system' in libvirt_uri else 'user'
-            orchestrator, _ = self.create_orchestrator(network_mode)
+            orchestrator, _, _ = self.create_orchestrator(network_mode)
             if not orchestrator:
                 return False
             
@@ -88,7 +88,7 @@ class DestroyCommandHandler(BaseCommandHandler):
             
             self.console.print(f"[bold blue]Removing cyber range:[/bold blue] {range_id}")
             
-            orchestrator, _ = self.create_orchestrator()
+            orchestrator, _, _ = self.create_orchestrator()
             if not orchestrator:
                 return False
             
@@ -122,9 +122,14 @@ class DestroyCommandHandler(BaseCommandHandler):
     def _get_libvirt_uri(self, range_metadata) -> str:
         """获取libvirt连接URI"""
         libvirt_uri = 'qemu:///system'  # Default
-        if (range_metadata.provider_config and 
-            'libvirt_uri' in range_metadata.provider_config):
-            libvirt_uri = range_metadata.provider_config['libvirt_uri']
+        
+        # Check if provider_config exists and has libvirt_uri
+        if hasattr(range_metadata, 'provider_config') and range_metadata.provider_config:
+            if 'libvirt_uri' in range_metadata.provider_config:
+                libvirt_uri = range_metadata.provider_config['libvirt_uri']
+        # Check tags for provider info as fallback
+        elif range_metadata.tags and 'libvirt_uri' in range_metadata.tags:
+            libvirt_uri = range_metadata.tags['libvirt_uri']
             
         if self.verbose:
             self.log_verbose(f"Using libvirt URI: {libvirt_uri}")

@@ -38,10 +38,14 @@ class CreateCommandHandler(BaseCommandHandler, ValidationMixin):
                 pre_check_passed = self._run_pre_creation_checks(description_file)
                 if not pre_check_passed:
                     self.console.print("[yellow]⚠️ Pre-checks failed. Creation may encounter issues.[/yellow]")
-                    user_input = input("Continue anyway? (y/N): ").lower()
-                    if user_input not in ['y', 'yes']:
-                        self.console.print("[blue]Creation cancelled by user.[/blue]")
-                        return False
+                    try:
+                        user_input = input("Continue anyway? (y/N): ").lower()
+                        if user_input not in ['y', 'yes']:
+                            self.console.print("[blue]Creation cancelled by user.[/blue]")
+                            return False
+                    except EOFError:
+                        # Non-interactive mode - proceed automatically
+                        self.console.print("[yellow]Non-interactive mode detected. Proceeding with creation...[/yellow]")
             
             # Display creation info
             self.console.print(f"[bold blue]Creating cyber range:[/bold blue] [cyan]{description_file}[/cyan]")
@@ -186,31 +190,49 @@ class CreateCommandHandler(BaseCommandHandler, ValidationMixin):
         all_checks_passed = True
         
         try:
-            # Check base image availability
-            base_image_paths = [
-                "/home/ubuntu/cyris/docs/images/basevm.qcow2",
-                "/home/ubuntu/cyris/images/basevm.qcow2"
-            ]
+            # Parse YAML to determine guest types
+            from ...config.parser import CyRISConfigParser
+            from ...domain.entities.guest import BaseVMType
             
-            base_image_found = False
-            for base_path in base_image_paths:
-                if Path(base_path).exists():
-                    # Validate base image
-                    diagnostics = VMDiagnostics()
-                    result = diagnostics._validate_image_with_qemu(base_path)
-                    if not result:  # No error means image is valid
-                        self.console.print(f"  ✅ Base image found and valid: {base_path}")
-                        base_image_found = True
-                        break
-                    else:
-                        self.console.print(f"  ❌ Base image invalid: {base_path}")
-                        self.console.print(f"     {result.message}")
-                        all_checks_passed = False
+            parser = CyRISConfigParser()
+            config = parser.parse_file(description_file)
             
-            if not base_image_found:
-                self.console.print("  ❌ No valid base image found")
-                self.console.print("     💡 Ensure basevm.qcow2 exists and is valid")
-                all_checks_passed = False
+            # Check if we have traditional KVM guests (need base images)
+            traditional_kvm_guests = [g for g in config.guests if g.basevm_type == BaseVMType.KVM]
+            kvm_auto_guests = [g for g in config.guests if g.basevm_type == BaseVMType.KVM_AUTO]
+            
+            # Only check base images if we have traditional KVM guests
+            if traditional_kvm_guests:
+                base_image_paths = [
+                    "/home/ubuntu/cyris/docs/images/basevm.qcow2",
+                    "/home/ubuntu/cyris/images/basevm.qcow2"
+                ]
+                
+                base_image_found = False
+                for base_path in base_image_paths:
+                    if Path(base_path).exists():
+                        # Validate base image
+                        diagnostics = VMDiagnostics()
+                        result = diagnostics._validate_image_with_qemu(base_path)
+                        if not result:  # No error means image is valid
+                            self.console.print(f"  ✅ Base image found and valid: {base_path}")
+                            base_image_found = True
+                            break
+                        else:
+                            self.console.print(f"  ❌ Base image invalid: {base_path}")
+                            self.console.print(f"     {result.message}")
+                            all_checks_passed = False
+                
+                if not base_image_found:
+                    self.console.print("  ❌ No valid base image found")
+                    self.console.print("     💡 Ensure basevm.qcow2 exists and is valid")
+                    all_checks_passed = False
+            else:
+                # No traditional KVM guests, skip base image check
+                if kvm_auto_guests:
+                    self.console.print("  ✅ Using kvm-auto guests (no base image required)")
+                else:
+                    self.console.print("  ⚠️ No KVM guests found in configuration")
             
             # Check cloud-init.iso availability
             cloud_init_paths = [

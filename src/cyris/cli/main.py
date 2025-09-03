@@ -82,8 +82,12 @@ def cli(ctx, config: Optional[str], verbose: bool, version: bool):
         
         ctx.obj['config'] = settings
         
-    except ConfigurationError as e:
-        click.echo(f"Configuration error: {e}", err=True)
+    except Exception as e:
+        from ..config.parser import ConfigurationError
+        if isinstance(e, ConfigurationError):
+            click.echo(f"Configuration error: {e}", err=True)
+        else:
+            click.echo(f"Unexpected error: {e}", err=True)
         sys.exit(1)
 
 
