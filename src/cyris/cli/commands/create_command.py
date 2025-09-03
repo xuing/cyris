@@ -252,6 +252,11 @@ class CreateCommandHandler(BaseCommandHandler, ValidationMixin):
                 self.console.print("  ⚠️ Network configuration check failed")
                 all_checks_passed = False
             
+            # Check for kvm-auto requirements
+            kvm_auto_check_passed = self._check_kvm_auto_requirements(description_file)
+            if not kvm_auto_check_passed:
+                all_checks_passed = False
+            
         except Exception as e:
             self.console.print(f"  ❌ Pre-check failed: {str(e)}")
             all_checks_passed = False
@@ -260,6 +265,88 @@ class CreateCommandHandler(BaseCommandHandler, ValidationMixin):
             self.console.print("  🎉 All pre-checks passed!")
         
         return all_checks_passed
+    
+    def _check_kvm_auto_requirements(self, description_file: Path) -> bool:
+        """Check kvm-auto specific requirements"""
+        try:
+            # Parse YAML to check for kvm-auto guests
+            from ...config.parser import CyRISConfigParser
+            from ...domain.entities.guest import BaseVMType
+            from ...infrastructure.image_builder import LocalImageBuilder
+            
+            parser = CyRISConfigParser()
+            config = parser.parse_file(description_file)
+            
+            kvm_auto_guests = [g for g in config.guests if g.basevm_type == BaseVMType.KVM_AUTO]
+            
+            if not kvm_auto_guests:
+                # No kvm-auto guests, skip checks
+                return True
+            
+            self.console.print(f"  🔧 Checking kvm-auto requirements for {len(kvm_auto_guests)} guests...")
+            
+            image_builder = LocalImageBuilder()
+            deps = image_builder.check_local_dependencies()
+            
+            all_passed = True
+            
+            # Check virt-builder availability
+            if not deps.get('virt-builder', False):
+                self.console.print("  ❌ virt-builder not available (required for kvm-auto)")
+                self.console.print("     💡 Install with: sudo apt install libguestfs-tools")
+                all_passed = False
+            else:
+                self.console.print("  ✅ virt-builder available")
+            
+            # Check virt-customize availability
+            if not deps.get('virt-customize', False):
+                self.console.print("  ❌ virt-customize not available (required for kvm-auto tasks)")
+                self.console.print("     💡 Install with: sudo apt install libguestfs-tools")
+                all_passed = False
+            else:
+                self.console.print("  ✅ virt-customize available")
+            
+            # Check virt-install availability
+            if not deps.get('virt-install', False):
+                self.console.print("  ❌ virt-install not available (required for kvm-auto)")
+                self.console.print("     💡 Install with: sudo apt install virtinst")
+                all_passed = False
+            else:
+                self.console.print("  ✅ virt-install available")
+            
+            # Validate image names against available images
+            if deps.get('virt-builder', False):
+                available_images = image_builder.get_available_images()
+                
+                for guest in kvm_auto_guests:
+                    if guest.image_name not in available_images:
+                        self.console.print(f"  ❌ Image '{guest.image_name}' not available")
+                        self.console.print(f"     💡 Available images: {', '.join(available_images[:5])}...")
+                        self.console.print("     💡 Run: virt-builder --list for full list")
+                        all_passed = False
+                    else:
+                        self.console.print(f"  ✅ Image '{guest.image_name}' available")
+            
+            # Show kvm-auto configuration example if there are issues
+            if not all_passed:
+                self.console.print("\n  📋 Example kvm-auto configuration:")
+                self.console.print("     [cyan]guest_settings:[/cyan]")
+                self.console.print("     [cyan]  - id: ubuntu-desktop[/cyan]")
+                self.console.print("     [cyan]    basevm_type: kvm-auto[/cyan]")
+                self.console.print("     [cyan]    image_name: ubuntu-20.04[/cyan]")
+                self.console.print("     [cyan]    vcpus: 2[/cyan]")
+                self.console.print("     [cyan]    memory: 2048[/cyan]")
+                self.console.print("     [cyan]    disk_size: 20G[/cyan]")
+                self.console.print("     [cyan]    tasks:[/cyan]")
+                self.console.print("     [cyan]    - add_account:[/cyan]")
+                self.console.print("     [cyan]      - account: trainee[/cyan]")
+                self.console.print("     [cyan]        passwd: training123[/cyan]")
+            
+            return all_passed
+            
+        except Exception as e:
+            self.console.print(f"  ❌ kvm-auto validation failed: {e}")
+            return False
     
     def _run_post_creation_validation(self, range_id: str, orchestrator) -> None:
         """Validate VM health after creation"""
