@@ -186,6 +186,95 @@ class TestNetworkTopologyIntegration:
         assert 'office' in str(topology_manager.networks)
         assert 'servers' in str(topology_manager.networks)
     
+    @patch('subprocess.run')
+    def test_layer3_network_service_integration(self, mock_subprocess, topology_manager, sample_guests):
+        """Test Layer3NetworkService integration with topology manager"""
+        # Mock subprocess for iptables commands
+        mock_result = Mock()
+        mock_result.returncode = 0
+        mock_result.stdout = "Chain created"
+        mock_subprocess.return_value = mock_result
+        
+        # Enhanced topology config with Layer 3 rules
+        topology_config = {
+            'type': 'custom',
+            'networks': [
+                {
+                    'name': 'office',
+                    'members': ['desktop.eth0'],
+                    'gateway': 'firewall.eth0'
+                },
+                {
+                    'name': 'servers', 
+                    'members': ['webserver.eth0'],
+                    'gateway': 'firewall.eth1'
+                }
+            ],
+            'forwarding_rules': [
+                {'rule': 'src=office dst=servers dport=80,443'},
+                {'rule': 'src=servers dst=office dport=53 proto=udp'}
+            ]
+        }
+        
+        range_id = "test_range_layer3"
+        
+        # This should trigger Layer3NetworkService if available
+        topology_manager.create_topology(topology_config, sample_guests, range_id)
+        
+        # Verify topology was created
+        assert len(topology_manager.networks) >= 2
+        assert 'office' in topology_manager.networks
+        assert 'servers' in topology_manager.networks
+        
+        # Verify forwarding rules were processed
+        assert hasattr(topology_manager, 'forwarding_rules')
+        assert len(topology_manager.forwarding_rules) > 0
+        
+        # Should contain proper iptables rules with stateful tracking
+        rules = topology_manager.forwarding_rules
+        stateful_rules = [rule for rule in rules if 'ESTABLISHED' in rule or 'NEW' in rule]
+        assert len(stateful_rules) > 0
+        
+        # Verify network CIDR assignments
+        office_network = topology_manager.get_network_info('office')
+        servers_network = topology_manager.get_network_info('servers')
+        
+        assert office_network is not None
+        assert servers_network is not None
+        assert office_network['cidr'] == '192.168.100.0/24'
+        assert servers_network['cidr'] == '192.168.200.0/24'
+    
+    @patch('subprocess.run')
+    def test_layer3_cleanup_on_destroy(self, mock_subprocess, topology_manager, sample_guests):
+        """Test Layer3NetworkService cleanup when topology is destroyed"""
+        # Mock subprocess for iptables commands
+        mock_result = Mock()
+        mock_result.returncode = 0
+        mock_result.stdout = "Success"
+        mock_subprocess.return_value = mock_result
+        
+        topology_config = {
+            'networks': [
+                {'name': 'office', 'members': ['desktop.eth0']}
+            ],
+            'forwarding_rules': [
+                {'rule': 'src=office dst=office dport=22'}
+            ]
+        }
+        
+        range_id = "test_range_cleanup"
+        
+        # Create topology
+        topology_manager.create_topology(topology_config, sample_guests, range_id)
+        assert len(topology_manager.networks) > 0
+        
+        # Destroy topology - should clean up Layer 3 policies
+        topology_manager.destroy_topology(range_id)
+        
+        # Verify cleanup
+        assert len(topology_manager.networks) == 0
+        assert len(topology_manager.ip_assignments) == 0
+    
     def test_network_xml_generation(self, topology_manager):
         """Test generation of libvirt network XML"""
         network_name = "test-network"
