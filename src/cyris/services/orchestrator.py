@@ -897,12 +897,27 @@ class RangeOrchestrator:
                             guest_id=g['id'],
                             basevm_addr=g.get('ip_addr', '192.168.1.100'),
                             root_passwd=g.get('root_passwd', 'password'),
-                            basevm_host=g['basevm_host'],
-                            basevm_config_file=g.get('basevm_config_file', ''),
+                            basevm_host=g.get('basevm_host'),  # Optional for kvm-auto
+                            basevm_config_file=g.get('basevm_config_file') or None,  # None for kvm-auto
                             basevm_os_type=g.get('basevm_os_type', 'ubuntu'),
                             basevm_type=g.get('basevm_type', 'kvm'),
                             basevm_name=g.get('basevm_name', g['id']),
-                            tasks=g.get('tasks', [])
+                            tasks=g.get('tasks', []),
+                            # kvm-auto specific fields
+                            image_name=g.get('image_name'),
+                            vcpus=g.get('vcpus'),
+                            memory=g.get('memory'),
+                            disk_size=g.get('disk_size'),
+                            # Enhanced kvm-auto configuration options
+                            graphics_type=g.get('graphics_type', 'vnc'),
+                            graphics_port=g.get('graphics_port'),
+                            graphics_listen=g.get('graphics_listen', '127.0.0.1'),
+                            console_type=g.get('console_type', 'pty'),
+                            network_model=g.get('network_model', 'virtio'),
+                            os_variant=g.get('os_variant'),
+                            boot_options=g.get('boot_options'),
+                            cpu_model=g.get('cpu_model'),
+                            extra_args=g.get('extra_args')
                         )
                         guests.append(guest)
                 
@@ -932,12 +947,27 @@ class RangeOrchestrator:
                                 guest_id=g['id'],
                                 basevm_addr=g.get('ip_addr', '192.168.1.100'),
                                 root_passwd=g.get('root_passwd', 'password'),
-                                basevm_host=g['basevm_host'],
-                                basevm_config_file=g.get('basevm_config_file', ''),
+                                basevm_host=g.get('basevm_host'),  # Optional for kvm-auto
+                                basevm_config_file=g.get('basevm_config_file') or None,  # None for kvm-auto
                                 basevm_os_type=g.get('basevm_os_type', 'ubuntu'),
                                 basevm_type=g.get('basevm_type', 'kvm'),
                                 basevm_name=g.get('basevm_name', g['id']),
-                                tasks=g.get('tasks', [])
+                                tasks=g.get('tasks', []),
+                                # kvm-auto specific fields
+                                image_name=g.get('image_name'),
+                                vcpus=g.get('vcpus'),
+                                memory=g.get('memory'),
+                                disk_size=g.get('disk_size'),
+                                # Enhanced kvm-auto configuration options
+                                graphics_type=g.get('graphics_type', 'vnc'),
+                                graphics_port=g.get('graphics_port'),
+                                graphics_listen=g.get('graphics_listen', '127.0.0.1'),
+                                console_type=g.get('console_type', 'pty'),
+                                network_model=g.get('network_model', 'virtio'),
+                                os_variant=g.get('os_variant'),
+                                boot_options=g.get('boot_options'),
+                                cpu_model=g.get('cpu_model'),
+                                extra_args=g.get('extra_args')
                             )
                             guests.append(guest)
                     
