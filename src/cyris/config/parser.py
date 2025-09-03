@@ -272,11 +272,12 @@ class CyRISConfigParser:
             os_type_str = guest_data.get('basevm_os_type', guest_data.get('os_type', 'ubuntu'))
             os_type = os_type_mapping.get(os_type_str, OSType.UBUNTU)
             
-            # Map basevm_type
+            # Map basevm_type including kvm-auto
             basevm_type_mapping = {
                 'kvm': BaseVMType.KVM,
                 'aws': BaseVMType.AWS,
-                'docker': BaseVMType.DOCKER
+                'docker': BaseVMType.DOCKER,
+                'kvm-auto': BaseVMType.KVM_AUTO
             }
             basevm_type_str = guest_data.get('basevm_type', 'kvm')
             basevm_type = basevm_type_mapping.get(basevm_type_str, BaseVMType.KVM)
@@ -288,15 +289,34 @@ class CyRISConfigParser:
                     if isinstance(task_item, dict):
                         tasks.append(task_item)
             
-            return Guest(
-                guest_id=guest_data.get('name', guest_data.get('id', 'unknown')),
-                basevm_host=guest_data.get('basevm_host', 'localhost'),
-                basevm_config_file=guest_data.get('basevm_config_file', '/tmp/base.xml'),
-                basevm_os_type=os_type,
-                basevm_type=basevm_type,
-                ip_addr=guest_data.get('ip_addr'),
-                tasks=tasks
-            )
+            # For kvm-auto, some fields are optional, for others they are required
+            if basevm_type == BaseVMType.KVM_AUTO:
+                # kvm-auto specific validation will be done by Guest model validators
+                return Guest(
+                    guest_id=guest_data.get('name', guest_data.get('id', 'unknown')),
+                    basevm_host=guest_data.get('basevm_host'),  # Optional for kvm-auto
+                    basevm_config_file=guest_data.get('basevm_config_file'),  # Optional for kvm-auto  
+                    basevm_os_type=os_type,  # Will be auto-derived if not provided
+                    basevm_type=basevm_type,
+                    ip_addr=guest_data.get('ip_addr'),
+                    tasks=tasks,
+                    # kvm-auto specific fields
+                    image_name=guest_data.get('image_name'),
+                    vcpus=guest_data.get('vcpus'),
+                    memory=guest_data.get('memory'),
+                    disk_size=guest_data.get('disk_size')
+                )
+            else:
+                # Regular guest types - use defaults for missing required fields
+                return Guest(
+                    guest_id=guest_data.get('name', guest_data.get('id', 'unknown')),
+                    basevm_host=guest_data.get('basevm_host', 'localhost'),
+                    basevm_config_file=guest_data.get('basevm_config_file', '/tmp/base.xml'),
+                    basevm_os_type=os_type,
+                    basevm_type=basevm_type,
+                    ip_addr=guest_data.get('ip_addr'),
+                    tasks=tasks
+                )
         except Exception as e:
             logger.warning(f"Failed to parse guest: {e}")
             return None
