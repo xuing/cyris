@@ -66,7 +66,7 @@ class LocalImageBuilder:
                 # Parse virt-builder --list output
                 lines = result.stdout.strip().split('\n')
                 images = []
-                for line in lines[1:]:  # Skip header
+                for line in lines:  # Don't skip any lines - no header in virt-builder --list
                     if line.strip() and not line.startswith(' '):
                         # Get the first word which is the image name
                         image_name = line.split()[0]
@@ -84,6 +84,9 @@ class LocalImageBuilder:
         """Build VM image locally using virt-builder"""
         start_time = time.time()
         
+        self.logger.info(f"🔧 Starting image build for guest '{guest.guest_id}'")
+        self.logger.info(f"📋 Build parameters: image={guest.image_name}, vcpus={guest.vcpus}, memory={guest.memory}, disk={guest.disk_size}")
+        
         if not self._validate_build_requirements(guest):
             return BuildResult(
                 success=False,
@@ -92,6 +95,7 @@ class LocalImageBuilder:
             )
         
         image_path = self.work_dir / f"{guest.guest_id}-{guest.image_name}.qcow2"
+        self.logger.info(f"📁 Output image path: {image_path}")
         
         try:
             # Build base image with virt-builder
@@ -102,36 +106,66 @@ class LocalImageBuilder:
                 '--output', str(image_path)
             ]
             
-            self.logger.info(f"Building image: {' '.join(build_cmd)}")
+            self.logger.info(f"🚀 Executing virt-builder command:")
+            self.logger.info(f"    {' '.join(build_cmd)}")
+            self.logger.info(f"⏳ This may take several minutes for image download and creation...")
+            
             result = subprocess.run(build_cmd, capture_output=True, text=True, timeout=600)
+            
+            # Log command output for debugging
+            if result.stdout:
+                self.logger.debug(f"virt-builder stdout: {result.stdout}")
+            if result.stderr:
+                if result.returncode == 0:
+                    # virt-builder often outputs progress to stderr even on success
+                    self.logger.debug(f"virt-builder stderr (non-error): {result.stderr}")
+                else:
+                    self.logger.error(f"virt-builder stderr: {result.stderr}")
             
             if result.returncode != 0:
                 return BuildResult(
                     success=False,
-                    error_message=f"virt-builder failed: {result.stderr}",
+                    error_message=f"virt-builder failed (exit code {result.returncode}): {result.stderr}",
                     build_time=time.time() - start_time
                 )
             
-            self.logger.info(f"Base image built successfully: {image_path}")
+            # Check if output file was created
+            if not image_path.exists():
+                return BuildResult(
+                    success=False,
+                    error_message=f"virt-builder succeeded but output file not found: {image_path}",
+                    build_time=time.time() - start_time
+                )
+            
+            image_size = image_path.stat().st_size
+            self.logger.info(f"✅ Base image built successfully: {image_path}")
+            self.logger.info(f"📏 Image size: {image_size / 1024 / 1024:.1f} MB")
             
             # Execute build-time tasks
             if guest.tasks:
-                self.logger.info(f"Executing {len(guest.tasks)} build-time tasks")
+                self.logger.info(f"📝 Executing {len(guest.tasks)} build-time tasks")
                 self._execute_build_time_tasks(image_path, guest.tasks)
+            else:
+                self.logger.info(f"📝 No build-time tasks to execute")
+            
+            build_time = time.time() - start_time
+            self.logger.info(f"🎉 Image build completed successfully in {build_time:.1f}s")
             
             return BuildResult(
                 success=True,
                 image_path=str(image_path),
-                build_time=time.time() - start_time
+                build_time=build_time
             )
             
         except subprocess.TimeoutExpired:
+            self.logger.error(f"⏰ virt-builder timed out after 10 minutes")
             return BuildResult(
                 success=False,
                 error_message="virt-builder timeout after 10 minutes",
                 build_time=time.time() - start_time
             )
         except Exception as e:
+            self.logger.error(f"💥 Build failed with exception: {str(e)}")
             return BuildResult(
                 success=False,
                 error_message=f"Build failed: {str(e)}",

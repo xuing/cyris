@@ -290,36 +290,52 @@ class KVMProvider(InfrastructureProvider):
     
     def _create_kvm_auto_guests(self, guests: List[Guest], host_mapping: Dict[str, str]) -> List[str]:
         """Create guests using kvm-auto workflow"""
+        self.logger.info(f"🤖 Starting kvm-auto workflow for {len(guests)} guests")
         guest_ids = []
         
         # Group guests by image configuration to avoid rebuilding same images
         image_groups = self._group_guests_by_image_config(guests)
         
-        for image_config, guest_list in image_groups.items():
-            self.logger.info(f"Building image for configuration: {image_config}")
+        self.logger.info(f"📦 Grouped guests into {len(image_groups)} image configurations")
+        for i, (image_config, guest_list) in enumerate(image_groups.items(), 1):
+            self.logger.info(f"🔨 Processing image group {i}/{len(image_groups)}: {image_config}")
+            self.logger.info(f"   📋 This group contains {len(guest_list)} guests: {[g.guest_id for g in guest_list]}")
             
             # Build image locally (use first guest as template)
             template_guest = guest_list[0]
-            build_result = self.image_builder.build_image_locally(template_guest)
-            
-            if not build_result.success:
-                self.logger.error(f"Failed to build image: {build_result.error_message}")
-                # Skip this group of guests
-                continue
-            
-            self.logger.info(f"Image built successfully in {build_result.build_time:.2f}s: {build_result.image_path}")
+            self.logger.info(f"🧩 Using guest '{template_guest.guest_id}' as template for image building")
             
             try:
+                build_result = self.image_builder.build_image_locally(template_guest)
+                
+                if not build_result.success:
+                    self.logger.error(f"❌ Image build failed: {build_result.error_message}")
+                    self.logger.error(f"   🚫 Skipping {len(guest_list)} guests in this group")
+                    continue
+                
+                self.logger.info(f"✅ Image built successfully in {build_result.build_time:.2f}s")
+                self.logger.info(f"   📁 Image path: {build_result.image_path}")
+                
                 # Create VMs from built image
-                for guest in guest_list:
+                self.logger.info(f"🚀 Creating {len(guest_list)} VMs from built image")
+                for j, guest in enumerate(guest_list, 1):
+                    self.logger.info(f"   📱 Creating VM {j}/{len(guest_list)}: {guest.guest_id}")
                     vm_id = self._create_vm_from_built_image(guest, build_result.image_path, host_mapping)
                     if vm_id:
                         guest_ids.append(vm_id)
+                        self.logger.info(f"   ✅ VM created successfully: {vm_id}")
+                    else:
+                        self.logger.error(f"   ❌ Failed to create VM for guest: {guest.guest_id}")
+                
+            except Exception as e:
+                self.logger.error(f"💥 Exception during image group processing: {e}")
             finally:
                 # Cleanup build image after VM creation
-                if build_result.image_path:
+                if 'build_result' in locals() and build_result.image_path:
+                    self.logger.info(f"🧹 Cleaning up temporary build image: {build_result.image_path}")
                     self.image_builder.cleanup_build_files(build_result.image_path)
         
+        self.logger.info(f"🏁 kvm-auto workflow completed: {len(guest_ids)} VMs created successfully")
         return guest_ids
     
     def _group_guests_by_image_config(self, guests: List[Guest]) -> Dict[str, List[Guest]]:
@@ -440,19 +456,34 @@ class KVMProvider(InfrastructureProvider):
             # Always no auto console for automation
             virt_install_cmd.append('--noautoconsole')
             
-            self.logger.debug(f"Running: {' '.join(virt_install_cmd)}")
+            self.logger.info(f"🖥️  Creating VM '{vm_name}' using virt-install:")
+            self.logger.info(f"    {' '.join(virt_install_cmd)}")
+            self.logger.info(f"⏳ VM creation may take 1-2 minutes...")
+            
             result = subprocess.run(virt_install_cmd, capture_output=True, text=True, timeout=300)
             
+            # Log command output for debugging
+            if result.stdout:
+                self.logger.debug(f"virt-install stdout: {result.stdout}")
+            if result.stderr:
+                if result.returncode == 0:
+                    # virt-install may output non-error info to stderr
+                    self.logger.debug(f"virt-install stderr (non-error): {result.stderr}")
+                else:
+                    self.logger.error(f"virt-install stderr: {result.stderr}")
+            
             if result.returncode == 0:
-                self.logger.info(f"Successfully created VM with enhanced virt-install: {vm_name}")
-                self.logger.debug(f"virt-install output: {result.stdout}")
+                self.logger.info(f"✅ VM '{vm_name}' created successfully with virt-install")
                 return vm_name
             else:
-                self.logger.error(f"virt-install failed: {result.stderr}")
+                self.logger.error(f"❌ virt-install failed (exit code {result.returncode}): {result.stderr}")
                 return None
                 
+        except subprocess.TimeoutExpired:
+            self.logger.error(f"⏰ virt-install timed out after 5 minutes for VM '{vm_name}'")
+            return None
         except subprocess.SubprocessError as e:
-            self.logger.error(f"Failed to run virt-install: {e}")
+            self.logger.error(f"💥 virt-install subprocess error for VM '{vm_name}': {e}")
             return None
     
     def _get_os_variant_from_os_type(self, os_type) -> Optional[str]:
