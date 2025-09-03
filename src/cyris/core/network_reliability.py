@@ -9,7 +9,6 @@ import socket
 import time
 import logging
 import threading
-import paramiko
 from typing import Dict, List, Optional, Any, Union
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -17,6 +16,13 @@ from concurrent.futures import ThreadPoolExecutor, Future
 from pathlib import Path
 import ipaddress
 import re
+
+try:
+    import paramiko
+    PARAMIKO_AVAILABLE = True
+except ImportError:
+    PARAMIKO_AVAILABLE = False
+    paramiko = None
 
 from .exceptions import CyRISNetworkError, handle_exception
 
@@ -372,6 +378,10 @@ class SSHConnectionManager:
         Returns:
             SSH client object or None if failed
         """
+        if not PARAMIKO_AVAILABLE:
+            self.logger.warning("paramiko not available - SSH connections disabled")
+            return None
+        
         # Check if connection already exists
         existing = self._connections.get_connection(hostname)
         if existing and self.health_checker.check_ssh_health(existing):

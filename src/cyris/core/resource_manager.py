@@ -7,9 +7,15 @@ to prevent resource leaks and ensure proper cleanup of cyber range components.
 
 import gc
 import logging
-import psutil
 import threading
 import weakref
+
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    PSUTIL_AVAILABLE = False
+    psutil = None
 from typing import Dict, List, Set, Optional, Any, Protocol, Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -400,6 +406,14 @@ class ResourceManager:
     def get_memory_usage(self) -> Dict[str, Any]:
         """Get current memory usage information"""
         try:
+            if not PSUTIL_AVAILABLE:
+                return {
+                    "rss_mb": 0.0,
+                    "vms_mb": 0.0,
+                    "available": False,
+                    "message": "psutil not available"
+                }
+            
             process = psutil.Process()
             memory_info = process.memory_info()
             

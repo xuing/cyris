@@ -6,7 +6,6 @@ capabilities for cyber range operations.
 """
 
 import logging
-import paramiko
 import socket
 from typing import Dict, List, Optional, Any, Union, Tuple
 from pathlib import Path
@@ -16,8 +15,21 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import subprocess
 
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
+try:
+    import paramiko
+    PARAMIKO_AVAILABLE = True
+except ImportError:
+    PARAMIKO_AVAILABLE = False
+    paramiko = None
+
+try:
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    CRYPTOGRAPHY_AVAILABLE = True
+except ImportError:
+    CRYPTOGRAPHY_AVAILABLE = False
+    serialization = None
+    rsa = None
 
 
 @dataclass
@@ -96,6 +108,9 @@ class SSHManager:
             key_dir: Directory to store SSH keys
             logger: Optional logger instance
         """
+        if not PARAMIKO_AVAILABLE:
+            raise ImportError("paramiko is not available - install with: pip install paramiko")
+        
         self.max_connections = max_connections
         self.connection_timeout = connection_timeout
         self.command_timeout = command_timeout
@@ -106,7 +121,7 @@ class SSHManager:
         self.key_dir.mkdir(parents=True, exist_ok=True)
         
         # Connection pool
-        self._connections: Dict[str, paramiko.SSHClient] = {}
+        self._connections: Dict[str, Any] = {}  # Use Any instead of paramiko.SSHClient for typing
         self._connection_locks: Dict[str, threading.Lock] = {}
         self._connection_stats: Dict[str, Dict[str, Any]] = {}
         
@@ -510,7 +525,7 @@ class SSHManager:
             "connection_hosts": list(self._connections.keys())
         }
     
-    def _get_connection(self, credentials: SSHCredentials) -> paramiko.SSHClient:
+    def _get_connection(self, credentials: SSHCredentials) -> Any:
         """Get or create SSH connection"""
         connection_key = f"{credentials.hostname}:{credentials.port}:{credentials.username}"
         
@@ -535,6 +550,9 @@ class SSHManager:
                     del self._connections[connection_key]
             
             # Create new connection
+            if not PARAMIKO_AVAILABLE:
+                raise ImportError("paramiko is not available - install with: pip install paramiko")
+            
             client = paramiko.SSHClient()
             client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             
@@ -701,6 +719,11 @@ class SSHManager:
             
             # Step 2: SSH service test
             try:
+                if not PARAMIKO_AVAILABLE:
+                    result["success"] = False
+                    result["error_message"] = "paramiko not available - SSH testing disabled"
+                    return result
+                
                 client = paramiko.SSHClient()
                 client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
                 

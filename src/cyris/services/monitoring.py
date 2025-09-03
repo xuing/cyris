@@ -7,8 +7,14 @@ including resource usage, health checks, and performance metrics.
 
 import logging
 import time
-import psutil
 from datetime import datetime, timedelta
+
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    PSUTIL_AVAILABLE = False
+    psutil = None
 from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, field
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -234,6 +240,20 @@ class MonitoringService:
             Current host metrics or None if collection fails
         """
         try:
+            if not PSUTIL_AVAILABLE:
+                # Return default metrics when psutil not available
+                return HostMetrics(
+                    timestamp=datetime.now(),
+                    cpu_percent=0.0,
+                    memory_total=0,
+                    memory_used=0,
+                    disk_total=0,
+                    disk_used=0,
+                    network_bytes_sent=0,
+                    network_bytes_recv=0,
+                    load_average=[0.0, 0.0, 0.0]
+                )
+            
             # In a real implementation, this would connect to the host
             # and collect actual metrics via SSH or monitoring agent
             # For now, we'll use local system metrics as simulation
