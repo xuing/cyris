@@ -5,7 +5,7 @@ from typing import Optional, List, Dict, Any
 from enum import Enum
 from pathlib import Path
 import re
-from pydantic import Field, validator, root_validator
+from pydantic import Field, field_validator, model_validator
 
 from .base import Entity
 
@@ -72,7 +72,7 @@ class Guest(Entity):
         """Alias for guest_id to support both old and new interfaces"""
         return self.guest_id
     
-    @validator('basevm_config_file')
+    @field_validator('basevm_config_file')
     @classmethod
     def validate_config_file_path(cls, v):
         """Validate configuration file path"""
@@ -84,7 +84,7 @@ class Guest(Entity):
             raise ValueError("Config file must be .xml or .json format")
         return str(path)
     
-    @validator('disk_size')
+    @field_validator('disk_size')
     @classmethod
     def validate_disk_size_format(cls, v):
         """Validate disk size format (e.g. '20G', '1024M')"""

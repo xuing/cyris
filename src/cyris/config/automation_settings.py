@@ -7,7 +7,7 @@ and other infrastructure automation providers.
 
 from pathlib import Path
 from typing import Dict, List, Optional, Any
-from pydantic import Field, validator, root_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 from .settings import CyRISSettings
@@ -118,41 +118,6 @@ class VagrantSettings(BaseSettings):
         env_prefix = "CYRIS_VAGRANT_"
 
 
-class TerraformSettings(BaseSettings):
-    """Configuration for Terraform automation provider"""
-    
-    enabled: bool = Field(True, description="Enable Terraform automation")
-    binary_path: Optional[Path] = Field(None, description="Path to terraform binary")
-    
-    # Working directories
-    working_dir: Path = Field(
-        Path("~/.cyris/terraform").expanduser(),
-        description="Terraform working directory"
-    )
-    templates_dir: Path = Field(
-        Path("~/.cyris/terraform/templates").expanduser(),
-        description="Terraform templates directory"
-    )
-    state_dir: Path = Field(
-        Path("~/.cyris/terraform/state").expanduser(),
-        description="Terraform state directory"
-    )
-    
-    # Operation settings
-    timeout: int = Field(1800, description="Operation timeout in seconds (30 minutes)")
-    retry_count: int = Field(2, description="Number of retries for failed operations")
-    auto_approve: bool = Field(False, description="Auto-approve terraform operations")
-    cleanup_workspaces: bool = Field(False, description="Cleanup workspaces after operations")
-    
-    # Provider settings
-    libvirt_uri: str = Field("qemu:///system", description="Libvirt connection URI")
-    state_backend: str = Field("local", description="Terraform state backend")
-    
-    # Parallelism settings
-    parallelism: int = Field(2, description="Number of parallel operations")
-    
-    class Config:
-        env_prefix = "CYRIS_TERRAFORM_"
 
 
 class AWSSettings(BaseSettings):
@@ -280,7 +245,7 @@ class CyRISAutomationSettings(CyRISSettings):
     # Global automation settings
     automation: AutomationGlobalSettings = Field(default_factory=AutomationGlobalSettings)
     
-    @validator('terraform', 'packer', 'vagrant', 'aws')
+    @field_validator('terraform', 'packer', 'vagrant', 'aws')
     @classmethod
     def ensure_automation_dirs(cls, v):
         """Ensure automation directories exist"""
