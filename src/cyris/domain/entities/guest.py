@@ -5,7 +5,7 @@ from typing import Optional, List, Dict, Any
 from enum import Enum
 from pathlib import Path
 import re
-from pydantic import Field, validator, root_validator
+from pydantic import Field, field_validator, model_validator
 
 from .base import Entity
 
@@ -72,7 +72,8 @@ class Guest(Entity):
         """Alias for guest_id to support both old and new interfaces"""
         return self.guest_id
     
-    @validator('basevm_config_file')
+    @field_validator('basevm_config_file')
+    @classmethod
     def validate_config_file_path(cls, v):
         """Validate configuration file path"""
         if v is None:
@@ -83,7 +84,8 @@ class Guest(Entity):
             raise ValueError("Config file must be .xml or .json format")
         return str(path)
     
-    @validator('disk_size')
+    @field_validator('disk_size')
+    @classmethod
     def validate_disk_size_format(cls, v):
         """Validate disk size format (e.g. '20G', '1024M')"""
         if v is None:
@@ -92,21 +94,21 @@ class Guest(Entity):
             raise ValueError("Disk size must be in format like '20G', '1024M', '512K'")
         return v
     
-    @root_validator
-    def validate_kvm_auto_requirements(cls, values):
+    @model_validator(mode='after')
+    def validate_kvm_auto_requirements(self):
         """Validate requirements based on basevm_type"""
-        basevm_type = values.get('basevm_type')
+        basevm_type = getattr(self, 'basevm_type', None)
         
         # For kvm-auto, certain fields are required
         if basevm_type == BaseVMType.KVM_AUTO:
             required_fields = ['image_name', 'vcpus', 'memory', 'disk_size']
-            missing = [f for f in required_fields if not values.get(f)]
+            missing = [f for f in required_fields if not getattr(self, f, None)]
             if missing:
                 raise ValueError(f"kvm-auto requires fields: {missing}")
             
             # Validate numeric ranges
-            vcpus = values.get('vcpus')
-            memory = values.get('memory')
+            vcpus = getattr(self, 'vcpus', None)
+            memory = getattr(self, 'memory', None)
             
             if vcpus and (vcpus <= 0 or vcpus > 32):
                 raise ValueError("vcpus must be between 1 and 32")
@@ -114,40 +116,40 @@ class Guest(Entity):
                 raise ValueError("memory must be between 256 MB and 32 GB")
             
             # Validate graphics options
-            graphics_type = values.get('graphics_type', 'vnc')
+            graphics_type = getattr(self, 'graphics_type', 'vnc')
             if graphics_type not in ['vnc', 'spice', 'sdl', 'none']:
                 raise ValueError("graphics_type must be one of: vnc, spice, sdl, none")
             
-            graphics_port = values.get('graphics_port')
+            graphics_port = getattr(self, 'graphics_port', None)
             if graphics_port and (graphics_port < 1024 or graphics_port > 65535):
                 raise ValueError("graphics_port must be between 1024 and 65535")
             
             # Validate network model
-            network_model = values.get('network_model', 'virtio')
+            network_model = getattr(self, 'network_model', 'virtio')
             if network_model not in ['virtio', 'e1000', 'rtl8139', 'ne2k_pci']:
                 raise ValueError("network_model must be one of: virtio, e1000, rtl8139, ne2k_pci")
             
             # Validate console type
-            console_type = values.get('console_type', 'pty')
+            console_type = getattr(self, 'console_type', 'pty')
             if console_type not in ['pty', 'file', 'tcp', 'udp', 'unix']:
                 raise ValueError("console_type must be one of: pty, file, tcp, udp, unix")
             
             # Auto-derive basevm_os_type from image_name if not provided
-            if not values.get('basevm_os_type'):
-                image_name = values.get('image_name')
+            if not getattr(self, 'basevm_os_type', None):
+                image_name = getattr(self, 'image_name', None)
                 if image_name:
-                    values['basevm_os_type'] = cls._derive_os_type_from_image_static(image_name)
+                    self.basevm_os_type = self._derive_os_type_from_image_static(image_name)
         
         # For non kvm-auto, traditional fields are required
         else:
-            if not values.get('basevm_host'):
+            if not getattr(self, 'basevm_host', None):
                 raise ValueError("basevm_host is required for non kvm-auto types")
-            if not values.get('basevm_config_file'):
+            if not getattr(self, 'basevm_config_file', None):
                 raise ValueError("basevm_config_file is required for non kvm-auto types")
-            if not values.get('basevm_os_type'):
+            if not getattr(self, 'basevm_os_type', None):
                 raise ValueError("basevm_os_type is required for non kvm-auto types")
         
-        return values
+        return self
     
     def _derive_os_type_from_image(self, image_name: str) -> OSType:
         """Derive OS type from virt-builder image name"""
