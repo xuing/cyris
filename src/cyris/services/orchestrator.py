@@ -27,6 +27,19 @@ from ..core.exceptions import (
     ExceptionHandler, CyRISException, CyRISVirtualizationError, 
     CyRISNetworkError, CyRISResourceError, GatewayError, handle_exception, safe_execute
 )
+from ..core.progress import create_progress_tracker, ProgressTracker
+from ..core.operation_tracker import (
+    start_operation, complete_operation, fail_operation, OperationType,
+    is_all_operations_successful, get_operation_summary, 
+    set_comprehensive_log_file, execute_command, get_comprehensive_status,
+    determine_creation_result, write_status_file
+)
+from ..core.log_aggregator import (
+    get_range_log_aggregator, log_to_range, finalize_range_logging, LogLevel
+)
+from ..core.command_executor import (
+    execute_command_safe, execute_command_with_retry, set_global_log_file
+)
 
 # Import both modern and legacy entities for compatibility
 from ..domain.entities.host import Host as ModernHost
@@ -233,7 +246,7 @@ class RangeOrchestrator:
         tags: Optional[Dict[str, str]] = None
     ) -> RangeMetadata:
         """
-        Create a new cyber range instance.
+        Create a new cyber range instance with legacy-style progress reporting.
         
         Args:
             range_id: Unique identifier for the range
@@ -258,7 +271,31 @@ class RangeOrchestrator:
                 range_id=range_id
             )
         
-        self.logger.info(f"Creating range {range_id}: {name}")
+        # Setup comprehensive logging system for this range
+        log_aggregator = get_range_log_aggregator(range_id, self.ranges_dir)
+        set_comprehensive_log_file(log_aggregator.creation_log_file)
+        set_global_log_file(log_aggregator.creation_log_file)
+        
+        # Create progress tracker for legacy-style reporting with comprehensive logging
+        progress = create_progress_tracker(range_id, f"Create range {range_id}: {name}")
+        progress.log_file = log_aggregator.creation_log_file
+        
+        # Log range creation start to comprehensive log
+        log_to_range(range_id, LogLevel.INFO, f"Starting range creation: {name}", "orchestrator")
+        
+        # Add workflow steps for progress tracking
+        progress.add_step("init", "Initialize range creation")
+        progress.add_step("hosts", f"Start the base VMs ({len(hosts)} hosts)")
+        progress.add_step("check_hosts", "Check that the base VMs are up")
+        progress.add_step("guests", f"Clone VMs and create the cyber range ({len(guests)} VMs)")
+        progress.add_step("network", "Setup network topology")
+        progress.add_step("tasks", "Execute guest tasks")
+        progress.add_step("complete", "Finalize range creation")
+        
+        progress.start_step("init")
+        
+        # Start operation context for comprehensive tracking
+        log_aggregator.start_operation_context("range_creation", "RANGE_CREATE", f"Create cyber range {range_id}")
         
         # Create range metadata
         metadata = RangeMetadata(
@@ -268,8 +305,8 @@ class RangeOrchestrator:
             created_at=datetime.now(),
             owner=owner,
             tags=tags or {},
-            # Removed provider_config - unnecessary complexity
         )
+        progress.complete_step("init")
         
         try:
             # Register range immediately
@@ -286,7 +323,7 @@ class RangeOrchestrator:
             disks_dir.mkdir(exist_ok=True)
             
             # Create infrastructure resources
-            self.logger.info(f"Creating {len(hosts)} hosts for range {range_id}")
+            progress.start_step("hosts")
             host_ids = safe_execute(
                 self.provider.create_hosts,
                 hosts,
@@ -300,6 +337,7 @@ class RangeOrchestrator:
             )
             
             if not host_ids:
+                progress.fail_step("hosts", f"Failed to create {len(hosts)} hosts")
                 raise CyRISVirtualizationError(
                     f"Failed to create hosts for range {range_id}",
                     operation="create_hosts",
@@ -307,6 +345,12 @@ class RangeOrchestrator:
                 )
             
             self._range_resources[range_id]["hosts"] = host_ids
+            progress.complete_step("hosts")
+            
+            # Check that hosts are up
+            progress.start_step("check_hosts")
+            # TODO: Add actual host health checking here
+            progress.complete_step("check_hosts")
             
             # Create host mapping for guest creation
             host_mapping = {}
@@ -316,7 +360,7 @@ class RangeOrchestrator:
                     host_id = getattr(host, 'host_id', None) or str(getattr(host, 'id', 'unknown'))
                     host_mapping[host_id] = host_ids[i]
             
-            self.logger.info(f"Creating {len(guests)} guests for range {range_id}")
+            progress.start_step("guests")
             
             # Set current range context in provider for file organization
             old_range_context = getattr(self.provider, '_current_range_id', None)
@@ -343,6 +387,7 @@ class RangeOrchestrator:
                         delattr(self.provider, '_current_range_id')
             
             if not guest_ids:
+                progress.fail_step("guests", f"Failed to create {len(guests)} guests")
                 raise CyRISVirtualizationError(
                     f"Failed to create guests for range {range_id}",
                     operation="create_guests",
@@ -350,10 +395,11 @@ class RangeOrchestrator:
                 )
             
             self._range_resources[range_id]["guests"] = guest_ids
+            progress.complete_step("guests")
             
             # Create network topology if specified
+            progress.start_step("network")
             if topology_config:
-                self.logger.info(f"Creating network topology for range {range_id}")
                 # Connect topology manager to provider's libvirt connection if available
                 if hasattr(self.provider, '_connection'):
                     self.topology_manager.libvirt_connection = self.provider._connection
@@ -365,8 +411,10 @@ class RangeOrchestrator:
                 
                 # Store IP assignments for later task execution
                 metadata.tags['ip_assignments'] = json.dumps(ip_assignments)
+            progress.complete_step("network")
             
             # Execute tasks on guests if they have task configurations
+            progress.start_step("tasks")
             task_results = []
             for i, guest in enumerate(guests):
                 guest_id = getattr(guest, 'id', None) or getattr(guest, 'guest_id', 'unknown')
@@ -408,6 +456,8 @@ class RangeOrchestrator:
                     self.logger.warning(f"Guest {guest_id} has tasks but is not ready for execution (no IP or not reachable)")
                     # For testing: skip task recording and continue
             
+            progress.complete_step("tasks")
+            
             # Store task results in metadata
             if task_results:
                 metadata.tags['task_results'] = json.dumps([
@@ -419,19 +469,52 @@ class RangeOrchestrator:
                     } for r in task_results
                 ])
             
-            # Update status to active
+            # Finalize range creation
+            progress.start_step("complete")
             metadata.update_status(RangeStatus.ACTIVE)
             
             # Save distributed metadata
             self._save_range_metadata(range_id, yaml_config_path=None)
             
+            progress.complete_step("complete")
+            
+            # Complete progress tracking with legacy-style success message
+            progress.complete()
+            
+            # Finalize comprehensive logging with success
+            log_aggregator.end_operation_context("range_creation", True, f"Range {range_id} created successfully")
+            
+            # Determine final creation status using comprehensive tracking
+            creation_status = get_comprehensive_status()
+            overall_success = creation_status['overall_success']
+            failure_count = creation_status['fail_count']
+            
+            # Write status file like legacy system
+            status_file = log_aggregator.status_file
+            write_status_file(status_file)
+            
+            # Finalize range logging
+            finalize_range_logging(range_id, overall_success, failure_count)
+            
             self.logger.info(f"Successfully created range {range_id} with {len(task_results)} tasks executed")
+            log_to_range(range_id, LogLevel.INFO, f"Range creation completed successfully: {len(task_results)} tasks executed", "orchestrator")
+            
             return metadata
             
         except CyRISException:
-            # Re-raise CyRIS exceptions as-is
+            # Log failure to comprehensive system before re-raising
+            if 'log_aggregator' in locals():
+                log_aggregator.end_operation_context("range_creation", False, "Range creation failed with CyRIS exception")
+                finalize_range_logging(range_id, False, 1)
+            progress.fail_step("complete", "Range creation failed")
             raise
         except Exception as e:
+            # Log failure to comprehensive system
+            if 'log_aggregator' in locals():
+                log_aggregator.end_operation_context("range_creation", False, f"Range creation failed with exception: {str(e)}")
+                finalize_range_logging(range_id, False, 1)
+            progress.fail_step("complete", f"Range creation failed: {str(e)}")
+            
             # Handle any other exceptions through unified handler
             self.exception_handler.handle_exception(
                 e, 
@@ -1542,6 +1625,15 @@ class RangeOrchestrator:
             
         self.logger.info(f"Creating range from YAML: {yaml_config_path} -> {range_id}")
         
+        # Setup comprehensive logging for YAML-based range creation
+        log_aggregator = get_range_log_aggregator(range_id, self.ranges_dir)
+        set_comprehensive_log_file(log_aggregator.creation_log_file)
+        set_global_log_file(log_aggregator.creation_log_file)
+        
+        # Log YAML range creation start
+        log_to_range(range_id, LogLevel.INFO, f"Starting YAML-based range creation from {yaml_config_path}", "orchestrator")
+        log_aggregator.start_operation_context("yaml_range_creation", "YAML_RANGE_CREATE", f"Create range {range_id} from YAML")
+        
         try:
             # 1. Parse YAML configuration
             config = parse_modern_config(yaml_config_path)
@@ -1648,10 +1740,23 @@ class RangeOrchestrator:
             # Save persistent data
             self._save_persistent_data()
             
+            # Finalize comprehensive logging for YAML creation
+            log_aggregator.end_operation_context("yaml_range_creation", True, f"YAML range {range_id} created successfully")
+            creation_status = get_comprehensive_status()
+            finalize_range_logging(range_id, creation_status['overall_success'], creation_status['fail_count'])
+            
+            log_to_range(range_id, LogLevel.INFO, f"YAML range creation completed: {len(created_vms)} VMs created", "orchestrator")
+            
             return metadata
             
         except Exception as e:
             self.logger.error(f"Range creation failed: {e}")
+            
+            # Log failure to comprehensive system
+            if 'log_aggregator' in locals():
+                log_aggregator.end_operation_context("yaml_range_creation", False, f"YAML range creation failed: {str(e)}")
+                finalize_range_logging(range_id, False, 1)
+            
             metadata.update_status(RangeStatus.FAILED)
             self._save_persistent_data()
             raise CyRISVirtualizationError(

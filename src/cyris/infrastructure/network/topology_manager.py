@@ -255,7 +255,59 @@ class NetworkTopologyManager:
         
         self.logger.info(f"Configuring {len(forwarding_rules)} forwarding rules for range {range_id}")
         
-        # Generate iptables rules for forwarding
+        # Use the new Layer3NetworkService if available
+        try:
+            from ...services.layer3_network_service import Layer3NetworkService
+            
+            layer3_service = Layer3NetworkService(
+                topology_manager=self,
+                logger=self.logger
+            )
+            
+            # Create topology configuration for Layer3NetworkService
+            topology_config = {
+                'forwarding_rules': forwarding_rules
+            }
+            
+            # Process rules using the new service
+            network_policy = layer3_service.process_topology_rules(
+                topology_config=topology_config,
+                range_id=range_id,
+                network_info=self.networks,
+                ip_assignments=self.ip_assignments
+            )
+            
+            # Apply the network policy
+            if network_policy.rules:
+                success = layer3_service.apply_network_policy(network_policy)
+                if success:
+                    self.logger.info(f"Successfully applied Layer 3 network policy for range {range_id}")
+                    # Store the generated iptables rules for compatibility
+                    self.forwarding_rules = network_policy.iptables_rules
+                else:
+                    self.logger.error(f"Failed to apply Layer 3 network policy for range {range_id}")
+                    # Fallback to legacy implementation
+                    self._configure_forwarding_rules_legacy(forwarding_rules, range_id)
+            else:
+                self.logger.info(f"No valid forwarding rules found for range {range_id}")
+                
+        except ImportError:
+            self.logger.warning("Layer3NetworkService not available, using legacy forwarding rules")
+            self._configure_forwarding_rules_legacy(forwarding_rules, range_id)
+        except Exception as e:
+            self.logger.error(f"Error with Layer3NetworkService: {e}, falling back to legacy")
+            self._configure_forwarding_rules_legacy(forwarding_rules, range_id)
+    
+    def _configure_forwarding_rules_legacy(
+        self, 
+        forwarding_rules: List[Dict[str, Any]],
+        range_id: str
+    ) -> None:
+        """Legacy firewall forwarding rules configuration (fallback)"""
+        
+        self.logger.info(f"Using legacy forwarding rules for range {range_id}")
+        
+        # Generate iptables rules for forwarding (legacy implementation)
         iptables_rules = []
         
         for rule in forwarding_rules:
@@ -303,6 +355,19 @@ class NetworkTopologyManager:
         """Destroy network topology for cyber range"""
         
         self.logger.info(f"Destroying network topology for range {range_id}")
+        
+        # Clean up Layer 3 network policies first
+        try:
+            from ...services.layer3_network_service import Layer3NetworkService
+            
+            layer3_service = Layer3NetworkService(logger=self.logger)
+            layer3_service.remove_network_policy(range_id)
+            self.logger.info(f"Removed Layer 3 network policy for range {range_id}")
+            
+        except ImportError:
+            self.logger.debug("Layer3NetworkService not available for cleanup")
+        except Exception as e:
+            self.logger.warning(f"Error cleaning up Layer 3 policy for range {range_id}: {e}")
         
         # Destroy libvirt networks
         if self.libvirt_connection:

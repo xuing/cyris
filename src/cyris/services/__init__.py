@@ -8,5 +8,6 @@ and orchestration of cyber range operations.
 from .orchestrator import RangeOrchestrator
 from .monitoring import MonitoringService
 from .cleanup_service import CleanupService
+from .layer3_network_service import Layer3NetworkService
 
-__all__ = ["RangeOrchestrator", "MonitoringService", "CleanupService"]
+__all__ = ["RangeOrchestrator", "MonitoringService", "CleanupService", "Layer3NetworkService"]
