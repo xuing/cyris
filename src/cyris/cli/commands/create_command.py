@@ -10,6 +10,8 @@ from .base_command import BaseCommandHandler, ValidationMixin
 from cyris.cli.presentation import MessageFormatter
 from ..diagnostic_messages import DiagnosticMessageFormatter, get_diagnostic_pattern_help
 from ...tools.vm_diagnostics import VMDiagnostics
+from ...core.progress import get_progress_tracker
+from ...core.operation_tracker import is_all_operations_successful
 
 
 class CreateCommandHandler(BaseCommandHandler, ValidationMixin):
@@ -138,10 +140,7 @@ class CreateCommandHandler(BaseCommandHandler, ValidationMixin):
                 return False
                 
             with singleton:
-                self.console.print("[bold blue]Initializing cyber range creation...[/bold blue]")
-            
-            # Use the working create_range_from_yaml method
-            with self.console.status("[bold green]Creating cyber range...") as status:
+                # Let the orchestrator handle progress reporting through the progress tracker
                 result_range_id = orchestrator.create_range_from_yaml(
                     description_file,
                     range_id

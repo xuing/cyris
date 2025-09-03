@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-CyRIS Modern Command Line Interface - Refactored Version
-遵循KISS原则：仅保留CLI路由，业务逻辑委托给命令处理器
+CyRIS Modern Command Line Interface - Performance Optimized
+Startup time optimized with lazy imports and minimal initialization overhead.
 """
 import sys
 import click
@@ -9,20 +9,36 @@ from pathlib import Path
 from typing import Optional
 import logging
 
-from ..config.parser import parse_modern_config, ConfigurationError
-from ..config.settings import CyRISSettings
+# Performance optimization: Use lazy imports for heavy modules
+# Only import configuration parsing when actually needed
 
 
-# Disable logging to prevent output mixing
+# Disable logging to prevent output mixing during startup
 logging.disable(logging.CRITICAL)
 
 
-def get_config(ctx) -> CyRISSettings:
-    """Get configuration from context with fallback"""
+def get_settings_lazy():
+    """Lazy import and create settings to improve startup time"""
+    from ..config.settings import CyRISSettings
+    return CyRISSettings()
+
+
+def parse_config_lazy(config_path: Path):
+    """Lazy import configuration parsing to improve startup time"""
+    from ..config.parser import parse_modern_config, ConfigurationError
+    try:
+        return parse_modern_config(config_path)
+    except ConfigurationError as e:
+        click.echo(f"Configuration error: {e}", err=True)
+        sys.exit(1)
+
+
+def get_config(ctx):
+    """Get configuration from context with fallback (lazy loading)"""
     if ctx.obj is None:
-        ctx.obj = {'config': CyRISSettings()}
+        ctx.obj = {'config': get_settings_lazy()}
     elif 'config' not in ctx.obj:
-        ctx.obj['config'] = CyRISSettings()
+        ctx.obj['config'] = get_settings_lazy()
     return ctx.obj['config']
 
 
@@ -42,13 +58,13 @@ def cli(ctx, config: Optional[str], verbose: bool, version: bool):
     ctx.ensure_object(dict)
     ctx.obj['verbose'] = verbose
     
-    # Load configuration
+    # Load configuration (optimized for fast startup)
     try:
         if config:
             config_path = Path(config)
-            settings = parse_modern_config(config_path)
+            settings = parse_config_lazy(config_path)
         else:
-            # Try default locations
+            # Try default locations (minimal filesystem access)
             default_configs = [
                 Path.cwd() / 'config.yml',
                 Path.cwd() / 'config.yaml', 
@@ -58,14 +74,11 @@ def cli(ctx, config: Optional[str], verbose: bool, version: bool):
             settings = None
             for config_path in default_configs:
                 if config_path.exists():
-                    try:
-                        settings = parse_modern_config(config_path)
-                        break
-                    except ConfigurationError:
-                        continue
+                    settings = parse_config_lazy(config_path)
+                    break
             
             if settings is None:
-                settings = CyRISSettings()
+                settings = get_settings_lazy()
         
         ctx.obj['config'] = settings
         
