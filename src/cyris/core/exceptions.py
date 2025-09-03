@@ -93,6 +93,12 @@ class ExceptionHandler:
         """Handle error with legacy-style logging"""
         self.logger.error(f"* ERROR: cyris: {operation}: {error}")
     
+    def handle_exception(self, error: Exception, operation: str = "", context: str = "", **kwargs) -> None:
+        """Handle exception with legacy-style logging (alias for handle_error)"""
+        # Combine operation and context for better error messages
+        full_operation = f"{operation} ({context})" if context and operation else (operation or context or "unknown")
+        self.handle_error(error, full_operation)
+    
     def safe_execute(self, func, *args, **kwargs):
         """Safe execution wrapper"""
         return safe_execute(func, *args, logger=self.logger, **kwargs)
