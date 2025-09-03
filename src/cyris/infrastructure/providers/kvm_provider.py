@@ -30,7 +30,8 @@ from .base_provider import (
     ResourceDestructionError, ResourceNotFoundError
 )
 from ...domain.entities.host import Host
-from ...domain.entities.guest import Guest
+from ...domain.entities.guest import Guest, BaseVMType
+from ..image_builder import LocalImageBuilder, BuildResult
 
 
 class KVMProvider(InfrastructureProvider):
@@ -81,6 +82,9 @@ class KVMProvider(InfrastructureProvider):
         
         # Initialize permission manager for automatic libvirt access
         self.permission_manager = PermissionManager()
+        
+        # Initialize image builder for kvm-auto support
+        self.image_builder = LocalImageBuilder()
         
         self.logger.info(f"KVMProvider initialized with URI: {self.libvirt_uri}")
         self.logger.info("Using native libvirt-python API")
@@ -188,7 +192,7 @@ class KVMProvider(InfrastructureProvider):
     
     def create_guests(self, guests: List[Guest], host_mapping: Dict[str, str]) -> List[str]:
         """
-        Create virtual machines.
+        Create virtual machines with support for kvm-auto type.
         
         Args:
             guests: List of guest configurations
@@ -203,6 +207,28 @@ class KVMProvider(InfrastructureProvider):
         if not self.is_connected():
             self.connect()
         
+        guest_ids = []
+        
+        # Separate guests by type
+        kvm_auto_guests = [g for g in guests if g.basevm_type == BaseVMType.KVM_AUTO]
+        regular_guests = [g for g in guests if g.basevm_type != BaseVMType.KVM_AUTO]
+        
+        # Handle kvm-auto guests
+        if kvm_auto_guests:
+            self.logger.info(f"Creating {len(kvm_auto_guests)} kvm-auto guests")
+            auto_guest_ids = self._create_kvm_auto_guests(kvm_auto_guests, host_mapping)
+            guest_ids.extend(auto_guest_ids)
+        
+        # Handle regular guests with existing logic
+        if regular_guests:
+            self.logger.info(f"Creating {len(regular_guests)} regular guests")
+            regular_guest_ids = self._create_regular_guests(regular_guests, host_mapping)
+            guest_ids.extend(regular_guest_ids)
+        
+        return guest_ids
+    
+    def _create_regular_guests(self, guests: List[Guest], host_mapping: Dict[str, str]) -> List[str]:
+        """Create regular guests using existing VM cloning logic"""
         guest_ids = []
         
         for guest in guests:
@@ -261,6 +287,129 @@ class KVMProvider(InfrastructureProvider):
                 raise ResourceCreationError(f"Guest creation failed: {e}", "kvm", guest_id)
         
         return guest_ids
+    
+    def _create_kvm_auto_guests(self, guests: List[Guest], host_mapping: Dict[str, str]) -> List[str]:
+        """Create guests using kvm-auto workflow"""
+        guest_ids = []
+        
+        # Group guests by image configuration to avoid rebuilding same images
+        image_groups = self._group_guests_by_image_config(guests)
+        
+        for image_config, guest_list in image_groups.items():
+            self.logger.info(f"Building image for configuration: {image_config}")
+            
+            # Build image locally (use first guest as template)
+            template_guest = guest_list[0]
+            build_result = self.image_builder.build_image_locally(template_guest)
+            
+            if not build_result.success:
+                self.logger.error(f"Failed to build image: {build_result.error_message}")
+                # Skip this group of guests
+                continue
+            
+            self.logger.info(f"Image built successfully in {build_result.build_time:.2f}s: {build_result.image_path}")
+            
+            try:
+                # Create VMs from built image
+                for guest in guest_list:
+                    vm_id = self._create_vm_from_built_image(guest, build_result.image_path, host_mapping)
+                    if vm_id:
+                        guest_ids.append(vm_id)
+            finally:
+                # Cleanup build image after VM creation
+                if build_result.image_path:
+                    self.image_builder.cleanup_build_files(build_result.image_path)
+        
+        return guest_ids
+    
+    def _group_guests_by_image_config(self, guests: List[Guest]) -> Dict[str, List[Guest]]:
+        """Group guests by their image configuration to avoid duplicate builds"""
+        groups = {}
+        for guest in guests:
+            key = f"{guest.image_name}_{guest.vcpus}_{guest.memory}_{guest.disk_size}"
+            if key not in groups:
+                groups[key] = []
+            groups[key].append(guest)
+        return groups
+    
+    def _create_vm_from_built_image(self, guest: Guest, local_image_path: str, 
+                                  host_mapping: Dict[str, str]) -> Optional[str]:
+        """Create VM from locally built image"""
+        try:
+            guest_id = guest.guest_id
+            self.logger.info(f"Creating VM from built image for guest {guest_id}")
+            
+            # Generate unique VM name
+            vm_name = f"{self.network_prefix}-{guest_id}-{str(uuid.uuid4())[:8]}"
+            
+            # Create final disk path for this VM
+            vm_disk_path = self.base_image_dir / f"{vm_name}.qcow2"
+            
+            # Copy the built image to final location
+            import shutil
+            shutil.copy2(local_image_path, vm_disk_path)
+            self.logger.debug(f"Copied image to: {vm_disk_path}")
+            
+            # Create VM using virt-install
+            vm_id = self._create_vm_with_virt_install(guest, vm_name, str(vm_disk_path))
+            
+            if vm_id:
+                # Register guest resource
+                guest_resource = ResourceInfo(
+                    resource_id=vm_id,
+                    resource_type="guest",
+                    name=guest_id,
+                    status=ResourceStatus.ACTIVE,
+                    metadata={
+                        "provider": "kvm-auto",
+                        "guest_id": guest_id,
+                        "vm_name": vm_name,
+                        "disk_path": str(vm_disk_path),
+                        "image_name": guest.image_name,
+                        "memory_mb": guest.memory,
+                        "vcpus": guest.vcpus,
+                        "build_method": "virt-builder"
+                    },
+                    created_at=time.strftime("%Y-%m-%d %H:%M:%S")
+                )
+                
+                self._register_resource(guest_resource)
+                self.logger.info(f"Successfully created kvm-auto VM {vm_name} for guest {guest_id}")
+                
+            return vm_id
+            
+        except Exception as e:
+            self.logger.error(f"Failed to create VM from built image for guest {guest.guest_id}: {e}")
+            return None
+    
+    def _create_vm_with_virt_install(self, guest: Guest, vm_name: str, disk_path: str) -> Optional[str]:
+        """Create VM using virt-install command"""
+        try:
+            virt_install_cmd = [
+                'virt-install',
+                '--name', vm_name,
+                '--vcpus', str(guest.vcpus),
+                '--memory', str(guest.memory),
+                '--disk', f'path={disk_path}',
+                '--import',  # Import existing disk
+                '--network', 'bridge=virbr0',
+                '--graphics', 'none',  # No graphics for headless operation
+                '--noautoconsole'
+            ]
+            
+            self.logger.debug(f"Running: {' '.join(virt_install_cmd)}")
+            result = subprocess.run(virt_install_cmd, capture_output=True, text=True, timeout=300)
+            
+            if result.returncode == 0:
+                self.logger.info(f"Successfully created VM with virt-install: {vm_name}")
+                return vm_name
+            else:
+                self.logger.error(f"virt-install failed: {result.stderr}")
+                return None
+                
+        except subprocess.SubprocessError as e:
+            self.logger.error(f"Failed to run virt-install: {e}")
+            return None
     
     def destroy_hosts(self, host_ids: List[str]) -> None:
         """
