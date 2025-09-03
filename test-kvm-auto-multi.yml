@@ -1,0 +1,55 @@
+---
+# Test Configuration 3: Multi-VM scenario with different configurations
+- host_settings:
+  - id: localhost
+    mgmt_addr: localhost
+    virbr_addr: 192.168.122.1
+    account: ubuntu
+
+- guest_settings:
+  - id: debian-web
+    basevm_type: kvm-auto
+    image_name: debian-11
+    vcpus: 2
+    memory: 1024
+    disk_size: 15G
+    tasks:
+    - add_account:
+      - account: webuser
+        passwd: web123
+      - account: developer
+        passwd: dev456
+    
+  - id: centos-db
+    basevm_type: kvm-auto
+    image_name: centosstream-9
+    vcpus: 1
+    memory: 1536
+    disk_size: 12G
+    tasks:
+    - add_account:
+      - account: dbadmin
+        passwd: db789
+    - modify_account:
+      - account: root
+        new_passwd: secure123
+
+- clone_settings:
+  - range_id: test-auto-multi
+    hosts:
+    - host_id: localhost
+      instance_number: 1
+      guests:
+      - guest_id: debian-web
+        number: 1
+        entry_point: yes
+      - guest_id: centos-db
+        number: 1
+        entry_point: no
+      topology:
+      - type: custom
+        networks:
+        - name: frontend
+          members: debian-web.eth0
+        - name: backend
+          members: debian-web.eth1, centos-db.eth0

@@ -1,0 +1,102 @@
+---
+# Test Configuration 5: Enhanced kvm-auto with new virt-install options
+- host_settings:
+  - id: localhost
+    mgmt_addr: localhost
+    virbr_addr: 192.168.122.1
+    account: ubuntu
+
+- guest_settings:
+  - id: debian-enhanced
+    basevm_type: kvm-auto
+    image_name: debian-11
+    vcpus: 2
+    memory: 2048
+    disk_size: 20G
+    # Enhanced graphics configuration
+    graphics_type: vnc
+    graphics_port: 5900
+    graphics_listen: 0.0.0.0
+    # Network configuration
+    network_model: virtio
+    # OS optimization
+    os_variant: debian11
+    # CPU configuration
+    cpu_model: host
+    # Console configuration
+    console_type: pty
+    # Boot configuration
+    boot_options: hd,menu=on
+    # Additional virt-install arguments
+    extra_args: "--features acpi,apic,pae --clock offset=utc"
+    tasks:
+    - add_account:
+      - account: developer
+        passwd: dev2023
+      - account: tester
+        passwd: test456
+    - modify_account:
+      - account: root
+        new_passwd: secure123
+
+  - id: centos-spice
+    basevm_type: kvm-auto
+    image_name: centosstream-9
+    vcpus: 1
+    memory: 1024
+    disk_size: 15G
+    # SPICE graphics for better performance
+    graphics_type: spice
+    graphics_listen: 127.0.0.1
+    # Different network model
+    network_model: e1000
+    # OS variant for CentOS
+    os_variant: centosstream9
+    # Console configuration
+    console_type: pty
+    tasks:
+    - add_account:
+      - account: sysadmin
+        passwd: admin789
+
+  - id: debian-headless
+    basevm_type: kvm-auto
+    image_name: debian-11
+    vcpus: 1
+    memory: 512
+    disk_size: 10G
+    # No graphics for headless server
+    graphics_type: none
+    # Network configuration
+    network_model: virtio
+    # Console only access
+    console_type: pty
+    # Boot directly to disk
+    boot_options: hd
+    tasks:
+    - add_account:
+      - account: service
+        passwd: service123
+
+- clone_settings:
+  - range_id: test-enhanced-kvm-auto
+    hosts:
+    - host_id: localhost
+      instance_number: 1
+      guests:
+      - guest_id: debian-enhanced
+        number: 1
+        entry_point: yes
+      - guest_id: centos-spice
+        number: 1
+        entry_point: no
+      - guest_id: debian-headless
+        number: 1
+        entry_point: no
+      topology:
+      - type: custom
+        networks:
+        - name: frontend
+          members: debian-enhanced.eth0, centos-spice.eth0
+        - name: backend
+          members: centos-spice.eth1, debian-headless.eth0

@@ -304,7 +304,17 @@ class CyRISConfigParser:
                     image_name=guest_data.get('image_name'),
                     vcpus=guest_data.get('vcpus'),
                     memory=guest_data.get('memory'),
-                    disk_size=guest_data.get('disk_size')
+                    disk_size=guest_data.get('disk_size'),
+                    # Enhanced kvm-auto configuration options
+                    graphics_type=guest_data.get('graphics_type', 'vnc'),
+                    graphics_port=guest_data.get('graphics_port'),
+                    graphics_listen=guest_data.get('graphics_listen', '127.0.0.1'),
+                    console_type=guest_data.get('console_type', 'pty'),
+                    network_model=guest_data.get('network_model', 'virtio'),
+                    os_variant=guest_data.get('os_variant'),
+                    boot_options=guest_data.get('boot_options'),
+                    cpu_model=guest_data.get('cpu_model'),
+                    extra_args=guest_data.get('extra_args')
                 )
             else:
                 # Regular guest types - use defaults for missing required fields

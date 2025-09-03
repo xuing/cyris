@@ -12,6 +12,7 @@ from ..diagnostic_messages import DiagnosticMessageFormatter, get_diagnostic_pat
 from ...tools.vm_diagnostics import VMDiagnostics
 from ...core.progress import get_progress_tracker
 from ...core.operation_tracker import is_all_operations_successful
+from ...config.parser import ConfigurationError
 
 
 class CreateCommandHandler(BaseCommandHandler, ValidationMixin):

@@ -383,8 +383,9 @@ class KVMProvider(InfrastructureProvider):
             return None
     
     def _create_vm_with_virt_install(self, guest: Guest, vm_name: str, disk_path: str) -> Optional[str]:
-        """Create VM using virt-install command"""
+        """Create VM using virt-install command with enhanced configuration options"""
         try:
+            # Base virt-install command
             virt_install_cmd = [
                 'virt-install',
                 '--name', vm_name,
@@ -392,16 +393,59 @@ class KVMProvider(InfrastructureProvider):
                 '--memory', str(guest.memory),
                 '--disk', f'path={disk_path}',
                 '--import',  # Import existing disk
-                '--network', 'bridge=virbr0',
-                '--graphics', 'none',  # No graphics for headless operation
-                '--noautoconsole'
             ]
+            
+            # Network configuration
+            network_config = f'bridge=virbr0'
+            if guest.network_model:
+                network_config += f',model={guest.network_model}'
+            virt_install_cmd.extend(['--network', network_config])
+            
+            # Graphics configuration
+            graphics_config = guest.graphics_type or 'none'
+            if guest.graphics_type in ['vnc', 'spice']:
+                if guest.graphics_port:
+                    graphics_config += f',port={guest.graphics_port}'
+                if guest.graphics_listen:
+                    graphics_config += f',listen={guest.graphics_listen}'
+            virt_install_cmd.extend(['--graphics', graphics_config])
+            
+            # Console configuration
+            if guest.console_type:
+                virt_install_cmd.extend(['--console', guest.console_type])
+            
+            # OS variant for optimization
+            if guest.os_variant:
+                virt_install_cmd.extend(['--os-variant', guest.os_variant])
+            elif guest.basevm_os_type:
+                # Auto-derive os-variant from basevm_os_type
+                os_variant = self._get_os_variant_from_os_type(guest.basevm_os_type)
+                if os_variant:
+                    virt_install_cmd.extend(['--os-variant', os_variant])
+            
+            # Boot options
+            if guest.boot_options:
+                virt_install_cmd.extend(['--boot', guest.boot_options])
+            
+            # CPU model
+            if guest.cpu_model:
+                virt_install_cmd.extend(['--cpu', guest.cpu_model])
+            
+            # Extra arguments
+            if guest.extra_args:
+                # Split extra args and add them
+                extra_args = guest.extra_args.split()
+                virt_install_cmd.extend(extra_args)
+            
+            # Always no auto console for automation
+            virt_install_cmd.append('--noautoconsole')
             
             self.logger.debug(f"Running: {' '.join(virt_install_cmd)}")
             result = subprocess.run(virt_install_cmd, capture_output=True, text=True, timeout=300)
             
             if result.returncode == 0:
-                self.logger.info(f"Successfully created VM with virt-install: {vm_name}")
+                self.logger.info(f"Successfully created VM with enhanced virt-install: {vm_name}")
+                self.logger.debug(f"virt-install output: {result.stdout}")
                 return vm_name
             else:
                 self.logger.error(f"virt-install failed: {result.stderr}")
@@ -410,6 +454,25 @@ class KVMProvider(InfrastructureProvider):
         except subprocess.SubprocessError as e:
             self.logger.error(f"Failed to run virt-install: {e}")
             return None
+    
+    def _get_os_variant_from_os_type(self, os_type) -> Optional[str]:
+        """Convert OSType to virt-install os-variant"""
+        # Mapping from internal OSType to virt-install os-variant
+        os_variant_mapping = {
+            'ubuntu': 'ubuntu22.04',
+            'ubuntu_16': 'ubuntu16.04',
+            'ubuntu_18': 'ubuntu18.04', 
+            'ubuntu_20': 'ubuntu20.04',
+            'centos': 'centos-stream9',
+            'windows.7': 'win7',
+            'windows.8.1': 'win8.1',
+            'windows.10': 'win10',
+            'amazon_linux': 'rhel8',
+            'amazon_linux2': 'rhel8',
+            'red_hat': 'rhel9'
+        }
+        
+        return os_variant_mapping.get(str(os_type).lower())
     
     def destroy_hosts(self, host_ids: List[str]) -> None:
         """

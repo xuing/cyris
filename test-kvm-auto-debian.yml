@@ -1,0 +1,37 @@
+---
+# Test Configuration 2: Debian Server with minimal resources
+- host_settings:
+  - id: localhost
+    mgmt_addr: localhost
+    virbr_addr: 192.168.122.1
+    account: ubuntu
+
+- guest_settings:
+  - id: debian-server
+    basevm_type: kvm-auto
+    image_name: debian-11
+    vcpus: 1
+    memory: 512
+    disk_size: 8G
+    tasks:
+    - add_account:
+      - account: admin
+        passwd: admin123
+    - modify_account:
+      - account: root
+        new_passwd: rootpass
+
+- clone_settings:
+  - range_id: test-auto-debian
+    hosts:
+    - host_id: localhost
+      instance_number: 1
+      guests:
+      - guest_id: debian-server
+        number: 1
+        entry_point: yes
+      topology:
+      - type: custom
+        networks:
+        - name: management
+          members: debian-server.eth0

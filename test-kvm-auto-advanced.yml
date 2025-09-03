@@ -1,0 +1,43 @@
+---
+# Test Configuration 4: Advanced configuration with complex tasks
+- host_settings:
+  - id: localhost
+    mgmt_addr: localhost
+    virbr_addr: 192.168.122.1
+    account: ubuntu
+
+- guest_settings:
+  - id: fedora-workstation
+    basevm_type: kvm-auto
+    image_name: fedora-38
+    vcpus: 4
+    memory: 4096
+    disk_size: 25G
+    tasks:
+    - add_account:
+      - account: analyst
+        passwd: analyst2023
+      - account: researcher
+        passwd: research456
+      - account: intern
+        passwd: intern789
+    - modify_account:
+      - account: root
+        new_passwd: fedoraroot123
+      - account: fedora
+        new_passwd: fedorauser456
+
+- clone_settings:
+  - range_id: test-auto-advanced
+    hosts:
+    - host_id: localhost
+      instance_number: 1
+      guests:
+      - guest_id: fedora-workstation
+        number: 1
+        entry_point: yes
+      topology:
+      - type: custom
+        networks:
+        - name: workstation
+          members: fedora-workstation.eth0

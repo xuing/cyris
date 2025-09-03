@@ -1,0 +1,12 @@
+{
+  "range_id": "test-basic",
+  "name": "Range test-basic",
+  "description": "Range created from test-basic.yml",
+  "created_at": "2025-09-02T17:26:30.440233",
+  "status": "error",
+  "last_modified": "2025-09-02T17:26:32.345139",
+  "owner": null,
+  "tags": {
+    "source_file": "test-basic.yml"
+  }
+}

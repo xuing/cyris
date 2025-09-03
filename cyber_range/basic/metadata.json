@@ -1,0 +1,12 @@
+{
+  "range_id": "basic",
+  "name": "Range basic",
+  "description": "Range created from basic.yml",
+  "created_at": "2025-09-02T15:06:20.159409",
+  "status": "error",
+  "last_modified": "2025-09-02T15:06:21.855884",
+  "owner": null,
+  "tags": {
+    "source_file": "examples/basic.yml"
+  }
+}
