@@ -15,7 +15,8 @@ from dataclasses import dataclass
 
 from ..domain.entities.guest import Guest
 from ..domain.entities.host import Host
-from ..core.exceptions import CyRISException, ResourceCreationError
+from ..core.exceptions import CyRISException
+from .providers.base_provider import ResourceCreationError
 
 @dataclass
 class BuildResult:
