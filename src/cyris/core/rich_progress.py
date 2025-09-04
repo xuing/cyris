@@ -119,7 +119,7 @@ class RichProgressManager:
     def create_progress_display(self) -> Progress:
         """Create Rich progress display with custom columns"""
         return Progress(
-            SpinnerColumn(spinner_style="bold green"),
+            SpinnerColumn(style="bold green"),
             TextColumn("[bold blue]{task.description}", justify="left"),
             BarColumn(bar_width=40),
             "[progress.percentage]{task.percentage:>3.1f}%",
