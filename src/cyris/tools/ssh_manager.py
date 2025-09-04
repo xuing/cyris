@@ -5,7 +5,9 @@ This module provides SSH key management and remote command execution
 capabilities for cyber range operations.
 """
 
-import logging
+# import logging  # Replaced with unified logger
+from cyris.core.unified_logger import get_logger
+import logging  # Keep for type annotations
 import socket
 from typing import Dict, List, Optional, Any, Union, Tuple
 from pathlib import Path
@@ -115,7 +117,7 @@ class SSHManager:
         self.connection_timeout = connection_timeout
         self.command_timeout = command_timeout
         self.key_dir = Path(key_dir) if key_dir else Path.home() / ".cyris" / "ssh_keys"
-        self.logger = logger or logging.getLogger(__name__)
+        self.logger = logger or get_logger(__name__, "ssh_manager")
         
         # Ensure key directory exists
         self.key_dir.mkdir(parents=True, exist_ok=True)

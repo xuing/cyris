@@ -5,7 +5,9 @@ This service handles the cleanup and destruction of cyber range resources,
 ensuring proper resource deallocation and data archival.
 """
 
-import logging
+# import logging  # Replaced with unified logger
+from cyris.core.unified_logger import get_logger
+import logging  # Keep for type annotations
 import shutil
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -81,7 +83,7 @@ class CleanupService:
         self.provider = infrastructure_provider
         self.cyber_range_dir = Path(cyber_range_dir)
         self.archive_dir = Path(archive_dir) if archive_dir else self.cyber_range_dir / "archive"
-        self.logger = logger or logging.getLogger(__name__)
+        self.logger = logger or get_logger(__name__, "cleanup_service")
         
         # Ensure directories exist
         self.cyber_range_dir.mkdir(exist_ok=True)

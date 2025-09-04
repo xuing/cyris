@@ -6,7 +6,9 @@ It coordinates between infrastructure providers, configuration management, and
 monitoring services.
 """
 
-import logging
+# import logging  # Replaced with unified logger
+from cyris.core.unified_logger import get_logger, RangeLoggingContext, LoggerFactory
+import logging  # Keep for type annotations
 import time
 import json
 import fcntl
@@ -190,7 +192,7 @@ class RangeOrchestrator:
         """
         self.settings = settings
         self.provider = infrastructure_provider
-        self.logger = logger or logging.getLogger(__name__)
+        self.logger = logger or get_logger(__name__, "orchestrator")
         
         # Rich progress manager (can be set by CLI)
         self.progress_manager: Optional[RichProgressManager] = None
@@ -254,7 +256,9 @@ class RangeOrchestrator:
         guests: List[Guest],
         topology_config: Optional[Dict[str, Any]] = None,
         owner: Optional[str] = None,
-        tags: Optional[Dict[str, str]] = None
+        tags: Optional[Dict[str, str]] = None,
+        build_only: bool = False,
+        skip_builder: bool = False
     ) -> RangeMetadata:
         """
         Create a new cyber range instance with legacy-style progress reporting.
@@ -276,11 +280,7 @@ class RangeOrchestrator:
             RuntimeError: If creation fails
         """
         if range_id in self._ranges:
-            raise CyRISVirtualizationError(
-                f"Range {range_id} already exists",
-                operation="create_range",
-                range_id=range_id
-            )
+            self.logger.warning(f"Range ID {range_id} already exists")
         
         # Setup comprehensive logging system for this range
         log_aggregator = get_range_log_aggregator(range_id, self.ranges_dir)
@@ -298,7 +298,10 @@ class RangeOrchestrator:
         progress.add_step("init", "Initialize range creation")
         progress.add_step("hosts", f"Start the base VMs ({len(hosts)} hosts)")
         progress.add_step("check_hosts", "Check that the base VMs are up")
-        progress.add_step("guests", f"Clone VMs and create the cyber range ({len(guests)} VMs)")
+        if build_only:
+            progress.add_step("guests", f"Build VM images ({len(guests)} images)")
+        else:
+            progress.add_step("guests", f"Clone VMs and create the cyber range ({len(guests)} VMs)")
         progress.add_step("network", "Setup network topology")
         progress.add_step("tasks", "Execute guest tasks")
         progress.add_step("complete", "Finalize range creation")
@@ -380,7 +383,7 @@ class RangeOrchestrator:
             try:
                 guest_ids = safe_execute(
                     self.provider.create_guests,
-                    guests, host_mapping,
+                    guests, host_mapping, build_only, skip_builder,
                     context={
                         "component": "orchestrator",
                         "operation": "create_guests", 
@@ -398,12 +401,30 @@ class RangeOrchestrator:
                         delattr(self.provider, '_current_range_id')
             
             if not guest_ids:
-                progress.fail_step("guests", f"Failed to create {len(guests)} guests")
-                raise CyRISVirtualizationError(
-                    f"Failed to create guests for range {range_id}",
-                    operation="create_guests",
-                    range_id=range_id
-                )
+                if build_only:
+                    # In build-only mode, empty guest_ids is expected - images were built successfully
+                    progress.complete_step("guests")
+                    progress.complete_step("network")  # Skip network setup
+                    progress.complete_step("tasks")     # Skip task execution
+                    progress.start_step("complete")
+                    metadata.update_status(RangeStatus.ACTIVE)
+                    self._save_range_metadata(range_id, yaml_config_path=None)
+                    progress.complete_step("complete")
+                    progress.complete()
+                    
+                    # Log successful build-only completion
+                    log_aggregator.end_operation_context("range_creation", True, f"Build-only mode: Images built successfully for range {range_id}")
+                    log_to_range(range_id, LogLevel.INFO, f"Build-only mode completed successfully", "orchestrator")
+                    
+                    return metadata
+                else:
+                    # Normal mode - empty guest_ids is an error
+                    progress.fail_step("guests", f"Failed to create {len(guests)} guests")
+                    raise CyRISVirtualizationError(
+                        f"Failed to create guests for range {range_id}",
+                        operation="create_guests",
+                        range_id=range_id
+                    )
             
             self._range_resources[range_id]["guests"] = guest_ids
             progress.complete_step("guests")
@@ -862,7 +883,9 @@ class RangeOrchestrator:
         self,
         description_file: Path,
         range_id: Optional[int] = None,
-        dry_run: bool = False
+        dry_run: bool = False,
+        build_only: bool = False,
+        skip_builder: bool = False
     ) -> Optional[str]:
         """
         Create a cyber range from a YAML description file.
@@ -871,10 +894,15 @@ class RangeOrchestrator:
             description_file: Path to YAML description file
             range_id: Optional specific range ID
             dry_run: If True, validate but don't create
+            skip_builder: Skip image building phase (use existing images)
         
         Returns:
             Range ID if successful, None if failed
         """
+        self.logger.debug(f"create_range_from_yaml called with dry_run={dry_run}, build_only={build_only}, skip_builder={skip_builder}")
+        
+        # Add debug before main logic 
+        self.logger.debug("About to start YAML parsing and range creation flow")
         import yaml
         import random
         
@@ -1001,6 +1029,7 @@ class RangeOrchestrator:
                 return range_id_str
             
             # Create the range using existing method
+            self.logger.debug(f"About to call create_range with range_id={range_id_str}, build_only={build_only}, skip_builder={skip_builder}")
             result = self.create_range(
                 range_id=range_id_str,
                 name=f"Range {range_id_str}",
@@ -1008,8 +1037,11 @@ class RangeOrchestrator:
                 hosts=hosts,
                 guests=guests,
                 topology_config=topology_config,
-                tags={"source_file": str(description_file)}
+                tags={"source_file": str(description_file)},
+                build_only=build_only,
+                skip_builder=skip_builder
             )
+            self.logger.debug(f"create_range returned successfully: {result.range_id if result else None}")
             
             # Save YAML config to range directory after creation
             self._save_range_metadata(range_id_str, yaml_config_path=description_file)

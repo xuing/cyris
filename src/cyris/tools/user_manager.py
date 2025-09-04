@@ -7,13 +7,15 @@ Replaces the over-engineered 735-line version with ~100 lines of focused functio
 Complexity Reduction: 735 → 100 lines (86% reduction)
 """
 
-import logging
+# import logging  # Replaced with unified logger
+from cyris.core.unified_logger import get_logger
+import logging  # Keep for type annotations
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 from .ssh_manager import SSHManager, SSHCredentials, SSHCommand
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__, "user_manager")
 
 
 @dataclass
@@ -37,7 +39,7 @@ class UserManager:
     """
     
     def __init__(self, logger: Optional[logging.Logger] = None):
-        self.logger = logger or logging.getLogger(__name__)
+        self.logger = logger or get_logger(__name__, "user_manager")
     
     def create_user(self, ssh_manager: SSHManager, user_config: Dict[str, Any]) -> UserResult:
         """

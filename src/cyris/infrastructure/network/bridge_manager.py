@@ -5,7 +5,9 @@ This module manages network bridges for cyber range networking,
 including creation, configuration, and cleanup of virtual network bridges.
 """
 
-import logging
+# import logging  # Replaced with unified logger
+from cyris.core.unified_logger import get_logger
+import logging  # Keep for type annotations
 import subprocess
 import ipaddress
 from typing import Dict, List, Optional, Any
@@ -83,7 +85,7 @@ class BridgeManager:
         """
         self.bridge_prefix = bridge_prefix
         self.config_dir = Path(config_dir) if config_dir else Path("/tmp/cyris/bridges")
-        self.logger = logger or logging.getLogger(__name__)
+        self.logger = logger or get_logger(__name__, "bridge_manager")
         
         # Ensure config directory exists
         self.config_dir.mkdir(parents=True, exist_ok=True)

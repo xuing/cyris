@@ -24,7 +24,9 @@ Usage:
 """
 
 import libvirt
-import logging
+# import logging  # Replaced with unified logger
+from cyris.core.unified_logger import get_logger
+import logging  # Keep for type annotations
 import tempfile
 import uuid
 import os
@@ -49,7 +51,7 @@ from .libvirt_domain_wrapper import (
     NetworkInterface
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__, "libvirt_provider")
 
 
 class LibvirtProviderError(Exception):
@@ -153,7 +155,7 @@ class LibvirtProvider:
         """
         self.uri = uri
         self.timeout = timeout
-        self.logger = logger or logging.getLogger(__name__)
+        self.logger = logger or get_logger(__name__, "libvirt_provider")
         
         # Enhanced connection management
         try:

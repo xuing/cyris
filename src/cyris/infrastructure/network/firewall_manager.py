@@ -5,7 +5,9 @@ This module manages firewall rules and network security for cyber ranges,
 including iptables configuration and network isolation policies.
 """
 
-import logging
+# import logging  # Replaced with unified logger
+from cyris.core.unified_logger import get_logger
+import logging  # Keep for type annotations
 import subprocess
 from typing import Dict, List, Optional, Any, Set
 from dataclasses import dataclass, field
@@ -104,7 +106,7 @@ class FirewallManager:
         """
         self.config_dir = Path(config_dir) if config_dir else Path("/tmp/cyris/firewall")
         self.backup_dir = Path(backup_dir) if backup_dir else self.config_dir / "backups"
-        self.logger = logger or logging.getLogger(__name__)
+        self.logger = logger or get_logger(__name__, "firewall_manager")
         
         # Ensure directories exist
         self.config_dir.mkdir(parents=True, exist_ok=True)

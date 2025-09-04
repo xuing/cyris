@@ -12,7 +12,9 @@ Key Features:
 - Integration with existing FirewallManager and TopologyManager
 """
 
-import logging
+# import logging  # Replaced with unified logger
+from cyris.core.unified_logger import get_logger
+import logging  # Keep for type annotations
 import ipaddress
 import re
 from typing import Dict, List, Optional, Any, Tuple
@@ -49,7 +51,7 @@ class Layer3NetworkService:
         """
         self.firewall_manager = firewall_manager or FirewallManager()
         self.topology_manager = topology_manager
-        self.logger = logger or logging.getLogger(__name__)
+        self.logger = logger or get_logger(__name__, "layer3_network_service")
         
         # Initialize firewall chains if needed
         try:

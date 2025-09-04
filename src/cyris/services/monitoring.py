@@ -5,7 +5,9 @@ This service provides monitoring capabilities for cyber range instances,
 including resource usage, health checks, and performance metrics.
 """
 
-import logging
+# import logging  # Replaced with unified logger
+from cyris.core.unified_logger import get_logger
+import logging  # Keep for type annotations
 import time
 from datetime import datetime, timedelta
 
@@ -95,7 +97,7 @@ class MonitoringService:
             metrics_retention_hours: How long to keep metrics data
             collection_interval_seconds: Interval between metric collections
         """
-        self.logger = logger or logging.getLogger(__name__)
+        self.logger = logger or get_logger(__name__, "monitoring")
         self.metrics_retention_hours = metrics_retention_hours
         self.collection_interval_seconds = collection_interval_seconds
         
