@@ -2,7 +2,7 @@
 Host Entity Module
 """
 from typing import Optional, List, Union
-from pydantic import Field, validator
+from pydantic import Field, field_validator
 import ipaddress
 import re
 
@@ -16,11 +16,12 @@ class Host(Entity):
     """
     
     host_id: str = Field(..., description="Host unique identifier")
-    mgmt_addr: str = Field(..., description="Management address", schema_extra={"format": "hostname-or-ip"})
-    virbr_addr: str = Field(..., description="Virtual bridge address", schema_extra={"format": "hostname-or-ip"})
+    mgmt_addr: str = Field(..., description="Management address", json_schema_extra={"format": "hostname-or-ip"})
+    virbr_addr: str = Field(..., description="Virtual bridge address", json_schema_extra={"format": "hostname-or-ip"})
     account: str = Field(..., description="Host account name")
     
-    @validator('mgmt_addr', 'virbr_addr', pre=True)
+    @field_validator('mgmt_addr', 'virbr_addr', mode='before')
+    @classmethod
     def validate_address(cls, v):
         """Validate address is not empty"""
         if not isinstance(v, str) or len(v.strip()) == 0:
