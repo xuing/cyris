@@ -11,6 +11,7 @@ from cyris.cli.presentation import MessageFormatter
 from ..diagnostic_messages import DiagnosticMessageFormatter, get_diagnostic_pattern_help
 from ...tools.vm_diagnostics import VMDiagnostics
 from ...core.progress import get_progress_tracker
+from ...core.rich_progress import create_rich_progress_manager, ProgressLevel
 from ...core.operation_tracker import is_all_operations_successful
 from ...config.parser import ConfigurationError
 
@@ -138,45 +139,102 @@ class CreateCommandHandler(BaseCommandHandler, ValidationMixin):
     
     def _execute_actual_creation(self, description_file: Path, range_id: Optional[int],
                                network_mode: str, enable_ssh: bool) -> bool:
-        """执行实际的靶场创建"""
+        """Execute actual cyber range creation with Rich progress display"""
+        
+        # Create Rich progress manager for the entire operation
+        progress_manager = create_rich_progress_manager(
+            "range_creation", 
+            f"Creating Cyber Range: {description_file.stem}"
+        )
+        
         try:
-            orchestrator, provider, singleton = self.create_orchestrator(network_mode, enable_ssh)
-            if not orchestrator:
-                return False
-                
-            with singleton:
-                # Let the orchestrator handle progress reporting through the progress tracker
-                result_range_id = orchestrator.create_range_from_yaml(
-                    description_file,
-                    range_id
-                )
+            # Start the main operation with Rich progress context
+            with progress_manager.progress_context():
+                with progress_manager.live_context():
+                    
+                    # Phase 1: Initialize orchestrator
+                    progress_manager.start_step("init", "Initializing orchestrator...")
+                    orchestrator, provider, singleton = self.create_orchestrator(network_mode, enable_ssh)
+                    if not orchestrator:
+                        progress_manager.fail_step("init", "Failed to create orchestrator")
+                        return False
+                    progress_manager.complete_step("init")
+                    
+                    with singleton:
+                        # Phase 2: Parse and validate configuration
+                        progress_manager.start_step("parse", "Parsing YAML configuration...")
+                        try:
+                            from ...config.parser import CyRISConfigParser
+                            parser = CyRISConfigParser()
+                            config = parser.parse_file(description_file)
+                            progress_manager.log_info(f"Found {len(config.hosts)} hosts and {len(config.guests)} guests")
+                            progress_manager.complete_step("parse")
+                        except Exception as e:
+                            progress_manager.fail_step("parse", f"Configuration parsing failed: {e}")
+                            return False
+                        
+                        # Phase 3: Create cyber range with orchestrator
+                        progress_manager.start_step("create", "Creating cyber range infrastructure...", total=100)
+                        
+                        # Pass progress manager to orchestrator for detailed progress updates
+                        if hasattr(orchestrator, 'set_progress_manager'):
+                            orchestrator.set_progress_manager(progress_manager)
+                        
+                        result_range_id = orchestrator.create_range_from_yaml(
+                            description_file,
+                            range_id
+                        )
+                        
+                        if result_range_id:
+                            progress_manager.complete_step("create")
+                        else:
+                            progress_manager.fail_step("create", "Range creation failed")
+                            return False
             
-            if result_range_id:
-                # Get the created range details for display
-                range_metadata = orchestrator.get_range(result_range_id)
-                
-                if range_metadata:
-                    self.console.print(MessageFormatter.success(
-                        f"✅ Cyber range '{range_metadata.name}' created successfully!"
-                    ))
-                    self.console.print(f"[cyan]Range ID:[/cyan] {result_range_id}")
-                    self.console.print(f"[cyan]Status:[/cyan] {range_metadata.status.value}")
-                    self.console.print(f"[cyan]Created:[/cyan] {range_metadata.created_at}")
-                else:
-                    self.console.print(MessageFormatter.success(
-                        f"✅ Cyber range '{result_range_id}' created successfully!"
-                    ))
-                    self.console.print(f"[cyan]Range ID:[/cyan] {result_range_id}")
-                
-                # Post-creation validation
-                self._run_post_creation_validation(result_range_id, orchestrator)
-                
-                return True
-            else:
-                self.console.print(MessageFormatter.error("Cyber range creation failed"))
-                return False
+                        # Phase 4: Post-creation validation 
+                        progress_manager.start_step("validate", "Running post-creation validation...")
+                        
+                        # Get the created range details for display
+                        range_metadata = orchestrator.get_range(result_range_id)
+                        
+                        if range_metadata:
+                            progress_manager.log_success(f"Cyber range '{range_metadata.name}' created successfully!")
+                            progress_manager.log_info(f"Range ID: {result_range_id}")
+                            progress_manager.log_info(f"Status: {range_metadata.status.value}")
+                            progress_manager.log_info(f"Created: {range_metadata.created_at}")
+                        else:
+                            progress_manager.log_success(f"Cyber range '{result_range_id}' created successfully!")
+                            progress_manager.log_info(f"Range ID: {result_range_id}")
+                        
+                        # Post-creation validation with progress tracking
+                        validation_success = self._run_post_creation_validation_with_progress(
+                            result_range_id, orchestrator, progress_manager
+                        )
+                        
+                        if validation_success:
+                            progress_manager.complete_step("validate")
+                        else:
+                            progress_manager.fail_step("validate", "Post-creation validation found issues")
+                        
+                        # Complete the overall operation
+                        progress_manager.complete()
+                        
+                        # Final success display
+                        if progress_manager.overall_success:
+                            self.console.print("\n" + MessageFormatter.success(
+                                f"🎉 Cyber range creation completed successfully!"
+                            ))
+                            return True
+                        else:
+                            self.console.print("\n" + MessageFormatter.error(
+                                "⚠️ Cyber range created but with validation issues"
+                            ))
+                            return False
                 
         except Exception as e:
+            progress_manager.fail_step("error", f"Unexpected error: {str(e)}")
+            progress_manager.complete()
+            
             self.error_display.display_error(f"Error creating cyber range: {str(e)}")
             if self.verbose:
                 import traceback
@@ -184,10 +242,17 @@ class CreateCommandHandler(BaseCommandHandler, ValidationMixin):
             return False
     
     def _run_pre_creation_checks(self, description_file: Path) -> bool:
-        """Run environment checks before VM creation"""
-        self.console.print("\n[bold blue]🔍 Pre-Creation Checks[/bold blue]")
+        """Run environment checks before VM creation with Rich progress"""
+        # Create progress manager for pre-checks
+        check_progress = create_rich_progress_manager(
+            "pre_checks", 
+            "Pre-Creation Environment Checks"
+        )
         
         all_checks_passed = True
+        
+        with check_progress.progress_context():
+            with check_progress.live_context():
         
         try:
             # Parse YAML to determine guest types
@@ -197,12 +262,20 @@ class CreateCommandHandler(BaseCommandHandler, ValidationMixin):
             parser = CyRISConfigParser()
             config = parser.parse_file(description_file)
             
-            # Check if we have traditional KVM guests (need base images)
-            traditional_kvm_guests = [g for g in config.guests if g.basevm_type == BaseVMType.KVM]
-            kvm_auto_guests = [g for g in config.guests if g.basevm_type == BaseVMType.KVM_AUTO]
-            
-            # Only check base images if we have traditional KVM guests
-            if traditional_kvm_guests:
+                # Step 1: Parse configuration
+                check_progress.start_step("config", "Parsing configuration...")
+                
+                # Check if we have traditional KVM guests (need base images)
+                traditional_kvm_guests = [g for g in config.guests if g.basevm_type == BaseVMType.KVM]
+                kvm_auto_guests = [g for g in config.guests if g.basevm_type == BaseVMType.KVM_AUTO]
+                
+                check_progress.log_info(f"Found {len(traditional_kvm_guests)} traditional KVM guests")
+                check_progress.log_info(f"Found {len(kvm_auto_guests)} kvm-auto guests")
+                check_progress.complete_step("config")
+                
+                # Step 2: Check base images (only if needed)
+                if traditional_kvm_guests:
+                    check_progress.start_step("base_images", "Checking base VM images...")
                 base_image_paths = [
                     "/home/ubuntu/cyris/docs/images/basevm.qcow2",
                     "/home/ubuntu/cyris/images/basevm.qcow2"
@@ -372,7 +445,7 @@ class CreateCommandHandler(BaseCommandHandler, ValidationMixin):
             return False
     
     def _run_post_creation_validation(self, range_id: str, orchestrator) -> None:
-        """Validate VM health after creation"""
+        """Validate VM health after creation (legacy method)"""
         self.console.print("\n[bold blue]🔍 Post-Creation Validation[/bold blue]")
         
         try:
@@ -420,3 +493,140 @@ class CreateCommandHandler(BaseCommandHandler, ValidationMixin):
                 
         except Exception as e:
             self.console.print(f"  ⚠️ Post-validation failed: {str(e)}")
+
+    def _run_post_creation_validation_with_progress(self, range_id: str, orchestrator, progress_manager) -> bool:
+        """Validate VM health after creation with Rich progress tracking"""
+        
+        try:
+            # Wait for VMs to initialize
+            progress_manager.log_info("Waiting for VMs to initialize...")
+            import time
+            time.sleep(5)
+            
+            # Get range resources
+            resources = orchestrator.get_range_resources(range_id)
+            if not resources or not resources.get('guests'):
+                progress_manager.log_error("No VMs found in created range")
+                return False
+            
+            vm_count = len(resources['guests'])
+            progress_manager.log_info(f"Validating {vm_count} VMs...")
+            
+            vm_issues_found = False
+            diagnostics = VMDiagnostics()
+            
+            for i, vm_name in enumerate(resources['guests']):
+                progress_manager.update_step("validate", completed=int((i/vm_count) * 100))
+                
+                try:
+                    progress_manager.log_info(f"Checking VM: {vm_name}")
+                    
+                    # Quick health check
+                    health_results = diagnostics.check_cloud_init_config(vm_name)
+                    health_results.extend(diagnostics.check_vm_image_health(vm_name))
+                    
+                    # Check for critical issues
+                    critical_issues = [r for r in health_results if r.level.value in ['error', 'critical']]
+                    
+                    if critical_issues:
+                        progress_manager.log_error(f"{vm_name}: {len(critical_issues)} issue(s) detected")
+                        for issue in critical_issues[:2]:  # Show top 2 issues
+                            progress_manager.log_warning(f"  • {issue.message}")
+                            if issue.suggestion:
+                                progress_manager.log_info(f"    💡 {issue.suggestion}")
+                        vm_issues_found = True
+                    else:
+                        progress_manager.log_success(f"{vm_name}: Initial validation passed")
+                        
+                except Exception as e:
+                    progress_manager.log_error(f"{vm_name}: Validation check failed - {str(e)}")
+                    vm_issues_found = True
+            
+            if vm_issues_found:
+                progress_manager.log_info(f"💡 Tip: Use 'cyris status {range_id} --verbose' for detailed diagnostics")
+                return False
+            else:
+                progress_manager.log_success("🎉 All VMs appear healthy!")
+                return True
+                
+        except Exception as e:
+            progress_manager.log_error(f"Post-validation failed: {str(e)}")
+            return False
+    
+    def _check_kvm_auto_requirements_with_progress(self, description_file: Path, progress_manager) -> bool:
+        """Check kvm-auto specific requirements with progress tracking"""
+        try:
+            # Parse YAML to check for kvm-auto guests
+            from ...config.parser import CyRISConfigParser
+            from ...domain.entities.guest import BaseVMType
+            from ...infrastructure.image_builder import LocalImageBuilder
+            
+            parser = CyRISConfigParser()
+            config = parser.parse_file(description_file)
+            
+            kvm_auto_guests = [g for g in config.guests if g.basevm_type == BaseVMType.KVM_AUTO]
+            
+            if not kvm_auto_guests:
+                # No kvm-auto guests, skip checks
+                return True
+            
+            progress_manager.log_info(f"Checking kvm-auto requirements for {len(kvm_auto_guests)} guests...")
+            
+            image_builder = LocalImageBuilder()
+            deps = image_builder.check_local_dependencies()
+            
+            all_passed = True
+            
+            # Check virt-builder availability
+            if not deps.get('virt-builder', False):
+                progress_manager.log_error("virt-builder not available (required for kvm-auto)")
+                progress_manager.log_info("Install with: sudo apt install libguestfs-tools")
+                all_passed = False
+            else:
+                progress_manager.log_success("virt-builder available")
+            
+            # Check virt-customize availability
+            if not deps.get('virt-customize', False):
+                progress_manager.log_error("virt-customize not available (required for kvm-auto tasks)")
+                progress_manager.log_info("Install with: sudo apt install libguestfs-tools")
+                all_passed = False
+            else:
+                progress_manager.log_success("virt-customize available")
+            
+            # Check virt-install availability
+            if not deps.get('virt-install', False):
+                progress_manager.log_error("virt-install not available (required for kvm-auto)")
+                progress_manager.log_info("Install with: sudo apt install virtinst")
+                all_passed = False
+            else:
+                progress_manager.log_success("virt-install available")
+            
+            # Validate image names against available images
+            if deps.get('virt-builder', False):
+                available_images = image_builder.get_available_images()
+                
+                for guest in kvm_auto_guests:
+                    if guest.image_name not in available_images:
+                        progress_manager.log_error(f"Image '{guest.image_name}' not available")
+                        progress_manager.log_info(f"Available images: {', '.join(available_images[:5])}...")
+                        progress_manager.log_info("Run: virt-builder --list for full list")
+                        all_passed = False
+                    else:
+                        progress_manager.log_success(f"Image '{guest.image_name}' available")
+            
+            # Show kvm-auto configuration example if there are issues
+            if not all_passed:
+                progress_manager.log_info("Example kvm-auto configuration:")
+                progress_manager.log_info("  guest_settings:")
+                progress_manager.log_info("    - id: ubuntu-desktop")
+                progress_manager.log_info("      basevm_type: kvm-auto")
+                progress_manager.log_info("      image_name: ubuntu-20.04")
+                progress_manager.log_info("      vcpus: 2")
+                progress_manager.log_info("      memory: 2048")
+                progress_manager.log_info("      disk_size: 20G")
+            
+            return all_passed
+            
+        except Exception as e:
+            progress_manager.log_error(f"kvm-auto validation failed: {e}")
+            return False
