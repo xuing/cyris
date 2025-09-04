@@ -1,0 +1,28 @@
+# CyRIS 最小核心依赖
+# 运行基本功能所需的最小依赖集合
+
+# 核心框架依赖
+click>=8.2.0              # CLI 框架
+rich>=14.1.0              # 终端美化输出
+pydantic>=2.11.0          # 数据验证
+pydantic-settings>=2.10.0 # 配置管理
+PyYAML>=6.0.0             # YAML 解析
+
+# SSH 和系统监控
+paramiko>=4.0.0           # SSH 连接 (可选，无则 SSH 功能禁用)
+psutil>=7.0.0             # 系统监控 (可选，无则监控功能禁用)
+
+# 加密和安全
+cryptography>=45.0.0      # 加密操作
+
+# 结构化日志
+structlog>=25.4.0         # 结构化日志
+
+# 类型支持
+typing-extensions>=4.14.0 # 类型注解扩展
+
+# 云平台支持 (可选)
+# boto3>=1.40.0           # AWS 支持 (可选)
+
+# 虚拟化支持 (系统级，通过 apt 安装)
+# libvirt-python          # 通过 apt install python3-libvirt 安装

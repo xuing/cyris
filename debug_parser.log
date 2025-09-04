@@ -1,0 +1,182 @@
+2025-09-04 22:06:56,771 - cyris.config.parser - DEBUG - [DEBUG] parse_file START: test-minimal.yml
+2025-09-04 22:06:56,771 - cyris.config.parser - DEBUG - [DEBUG] Opening file: test-minimal.yml
+2025-09-04 22:06:56,772 - cyris.config.parser - DEBUG - [DEBUG] About to call yaml.safe_load()
+2025-09-04 22:06:56,773 - cyris.config.parser - DEBUG - [DEBUG] YAML loaded successfully: type=<class 'list'>
+2025-09-04 22:06:56,773 - cyris.config.parser - DEBUG - [DEBUG] Starting to parse sections...
+2025-09-04 22:06:56,773 - cyris.config.parser - DEBUG - [DEBUG] Processing list-based YAML with 1 sections
+2025-09-04 22:06:56,773 - cyris.config.parser - DEBUG - [DEBUG] Processing section 0: keys=['host_settings']
+2025-09-04 22:06:56,773 - cyris.config.parser - DEBUG - [DEBUG] Parsing 1 hosts
+2025-09-04 22:06:56,773 - cyris.config.parser - DEBUG - [DEBUG] Parsing host 0: localhost
+2025-09-04 22:06:56,774 - cyris.config.parser - DEBUG - [DEBUG] Host localhost parsed successfully
+2025-09-04 22:06:56,774 - cyris.config.parser - DEBUG - [DEBUG] Parse complete. Hosts: 1, Guests: 0
+2025-09-04 22:06:56,774 - cyris.config.parser - DEBUG - [DEBUG] parse_file START: test-guest.yml
+2025-09-04 22:06:56,774 - cyris.config.parser - DEBUG - [DEBUG] Opening file: test-guest.yml
+2025-09-04 22:06:56,774 - cyris.config.parser - DEBUG - [DEBUG] About to call yaml.safe_load()
+2025-09-04 22:06:56,775 - cyris.config.parser - DEBUG - [DEBUG] YAML loaded successfully: type=<class 'list'>
+2025-09-04 22:06:56,775 - cyris.config.parser - DEBUG - [DEBUG] Starting to parse sections...
+2025-09-04 22:06:56,775 - cyris.config.parser - DEBUG - [DEBUG] Processing list-based YAML with 1 sections
+2025-09-04 22:06:56,775 - cyris.config.parser - DEBUG - [DEBUG] Processing section 0: keys=['guest_settings']
+2025-09-04 22:06:56,775 - cyris.config.parser - DEBUG - [DEBUG] Parsing 1 guests
+2025-09-04 22:06:56,776 - cyris.config.parser - DEBUG - [DEBUG] About to parse guest 0: id=test-guest, type=kvm-auto
+2025-09-04 22:06:56,776 - cyris.config.parser - DEBUG - [DEBUG] _parse_guest START: id=test-guest, basevm_type=kvm-auto
+2025-09-04 22:06:56,776 - cyris.config.parser - DEBUG - [DEBUG] Creating KVM_AUTO guest with image_name=opensuse-tumbleweed
+2025-09-04 22:06:56,776 - cyris.config.parser - DEBUG - [DEBUG] About to instantiate Guest entity for kvm-auto
+2025-09-04 22:06:56,776 - cyris.config.parser - ERROR - [ERROR] Failed to parse guest test-guest: name 'logger' is not defined
+2025-09-04 22:06:56,776 - cyris.config.parser - ERROR - [ERROR] Guest data was: {'id': 'test-guest', 'basevm_type': 'kvm-auto', 'image_name': 'opensuse-tumbleweed', 'vcpus': 2, 'memory': 2048, 'disk_size': '20G'}
+2025-09-04 22:06:56,779 - cyris.config.parser - ERROR - [ERROR] Traceback:
+Traceback (most recent call last):
+  File "/home/ubuntu/cyris/src/cyris/config/parser.py", line 329, in _parse_guest
+    guest_instance = Guest(
+                     ^^^^^^
+  File "/home/ubuntu/cyris/.venv/lib/python3.12/site-packages/pydantic/main.py", line 253, in __init__
+    validated_self = self.__pydantic_validator__.validate_python(data, self_instance=self)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/cyris/src/cyris/domain/entities/guest.py", line 152, in validate_kvm_auto_requirements
+    logger.debug(f"[DEBUG] Guest validation COMPLETE for {getattr(self, 'guest_id', 'no-id')}")
+    ^^^^^^
+NameError: name 'logger' is not defined
+
+2025-09-04 22:06:56,779 - cyris.config.parser - DEBUG - [DEBUG] _parse_guest returned: False
+2025-09-04 22:06:56,779 - cyris.config.parser - WARNING - [WARNING] _parse_guest returned None for test-guest
+2025-09-04 22:06:56,779 - cyris.config.parser - DEBUG - [DEBUG] Parse complete. Hosts: 0, Guests: 0
+2025-09-04 22:06:56,780 - cyris.config.parser - DEBUG - [DEBUG] parse_file START: test-kvm-auto.yml
+2025-09-04 22:06:56,780 - cyris.config.parser - DEBUG - [DEBUG] Opening file: test-kvm-auto.yml
+2025-09-04 22:06:56,780 - cyris.config.parser - DEBUG - [DEBUG] About to call yaml.safe_load()
+2025-09-04 22:06:56,786 - cyris.config.parser - DEBUG - [DEBUG] YAML loaded successfully: type=<class 'list'>
+2025-09-04 22:06:56,786 - cyris.config.parser - DEBUG - [DEBUG] Starting to parse sections...
+2025-09-04 22:06:56,786 - cyris.config.parser - DEBUG - [DEBUG] Processing list-based YAML with 3 sections
+2025-09-04 22:06:56,786 - cyris.config.parser - DEBUG - [DEBUG] Processing section 0: keys=['host_settings']
+2025-09-04 22:06:56,786 - cyris.config.parser - DEBUG - [DEBUG] Parsing 1 hosts
+2025-09-04 22:06:56,786 - cyris.config.parser - DEBUG - [DEBUG] Parsing host 0: localhost
+2025-09-04 22:06:56,786 - cyris.config.parser - DEBUG - [DEBUG] Host localhost parsed successfully
+2025-09-04 22:06:56,786 - cyris.config.parser - DEBUG - [DEBUG] Processing section 1: keys=['guest_settings']
+2025-09-04 22:06:56,786 - cyris.config.parser - DEBUG - [DEBUG] Parsing 1 guests
+2025-09-04 22:06:56,786 - cyris.config.parser - DEBUG - [DEBUG] About to parse guest 0: id=opensuse-desktop, type=kvm-auto
+2025-09-04 22:06:56,786 - cyris.config.parser - DEBUG - [DEBUG] _parse_guest START: id=opensuse-desktop, basevm_type=kvm-auto
+2025-09-04 22:06:56,786 - cyris.config.parser - DEBUG - [DEBUG] Creating KVM_AUTO guest with image_name=opensuse-tumbleweed
+2025-09-04 22:06:56,787 - cyris.config.parser - DEBUG - [DEBUG] About to instantiate Guest entity for kvm-auto
+2025-09-04 22:06:56,787 - cyris.config.parser - ERROR - [ERROR] Failed to parse guest opensuse-desktop: name 'logger' is not defined
+2025-09-04 22:06:56,787 - cyris.config.parser - ERROR - [ERROR] Guest data was: {'id': 'opensuse-desktop', 'basevm_type': 'kvm-auto', 'image_name': 'opensuse-tumbleweed', 'vcpus': 2, 'memory': 2048, 'disk_size': '20G', 'tasks': [{'add_account': [{'account': 'trainee', 'passwd': 'training123'}, {'account': 'student', 'passwd': 'student456'}]}, {'modify_account': [{'account': 'root', 'new_passwd': 'newpass'}]}]}
+2025-09-04 22:06:56,789 - cyris.config.parser - ERROR - [ERROR] Traceback:
+Traceback (most recent call last):
+  File "/home/ubuntu/cyris/src/cyris/config/parser.py", line 329, in _parse_guest
+    guest_instance = Guest(
+                     ^^^^^^
+  File "/home/ubuntu/cyris/.venv/lib/python3.12/site-packages/pydantic/main.py", line 253, in __init__
+    validated_self = self.__pydantic_validator__.validate_python(data, self_instance=self)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/cyris/src/cyris/domain/entities/guest.py", line 152, in validate_kvm_auto_requirements
+    logger.debug(f"[DEBUG] Guest validation COMPLETE for {getattr(self, 'guest_id', 'no-id')}")
+    ^^^^^^
+NameError: name 'logger' is not defined
+
+2025-09-04 22:06:56,789 - cyris.config.parser - DEBUG - [DEBUG] _parse_guest returned: False
+2025-09-04 22:06:56,789 - cyris.config.parser - WARNING - [WARNING] _parse_guest returned None for opensuse-desktop
+2025-09-04 22:06:56,789 - cyris.config.parser - DEBUG - [DEBUG] Processing section 2: keys=['clone_settings']
+2025-09-04 22:06:56,789 - cyris.config.parser - DEBUG - [DEBUG] Parsing clone_settings
+2025-09-04 22:06:56,789 - cyris.config.parser - DEBUG - [DEBUG] Clone settings parsed successfully
+2025-09-04 22:06:56,789 - cyris.config.parser - DEBUG - [DEBUG] Parse complete. Hosts: 1, Guests: 0
+2025-09-04 22:07:16,694 - cyris.config.parser - DEBUG - [DEBUG] parse_file START: test-minimal.yml
+2025-09-04 22:07:16,694 - cyris.config.parser - DEBUG - [DEBUG] Opening file: test-minimal.yml
+2025-09-04 22:07:16,695 - cyris.config.parser - DEBUG - [DEBUG] About to call yaml.safe_load()
+2025-09-04 22:07:16,696 - cyris.config.parser - DEBUG - [DEBUG] YAML loaded successfully: type=<class 'list'>
+2025-09-04 22:07:16,696 - cyris.config.parser - DEBUG - [DEBUG] Starting to parse sections...
+2025-09-04 22:07:16,696 - cyris.config.parser - DEBUG - [DEBUG] Processing list-based YAML with 1 sections
+2025-09-04 22:07:16,696 - cyris.config.parser - DEBUG - [DEBUG] Processing section 0: keys=['host_settings']
+2025-09-04 22:07:16,696 - cyris.config.parser - DEBUG - [DEBUG] Parsing 1 hosts
+2025-09-04 22:07:16,696 - cyris.config.parser - DEBUG - [DEBUG] Parsing host 0: localhost
+2025-09-04 22:07:16,696 - cyris.config.parser - DEBUG - [DEBUG] Host localhost parsed successfully
+2025-09-04 22:07:16,696 - cyris.config.parser - DEBUG - [DEBUG] Parse complete. Hosts: 1, Guests: 0
+2025-09-04 22:07:16,697 - cyris.config.parser - DEBUG - [DEBUG] parse_file START: test-guest.yml
+2025-09-04 22:07:16,697 - cyris.config.parser - DEBUG - [DEBUG] Opening file: test-guest.yml
+2025-09-04 22:07:16,697 - cyris.config.parser - DEBUG - [DEBUG] About to call yaml.safe_load()
+2025-09-04 22:07:16,698 - cyris.config.parser - DEBUG - [DEBUG] YAML loaded successfully: type=<class 'list'>
+2025-09-04 22:07:16,698 - cyris.config.parser - DEBUG - [DEBUG] Starting to parse sections...
+2025-09-04 22:07:16,698 - cyris.config.parser - DEBUG - [DEBUG] Processing list-based YAML with 1 sections
+2025-09-04 22:07:16,698 - cyris.config.parser - DEBUG - [DEBUG] Processing section 0: keys=['guest_settings']
+2025-09-04 22:07:16,698 - cyris.config.parser - DEBUG - [DEBUG] Parsing 1 guests
+2025-09-04 22:07:16,698 - cyris.config.parser - DEBUG - [DEBUG] About to parse guest 0: id=test-guest, type=kvm-auto
+2025-09-04 22:07:16,698 - cyris.config.parser - DEBUG - [DEBUG] _parse_guest START: id=test-guest, basevm_type=kvm-auto
+2025-09-04 22:07:16,698 - cyris.config.parser - DEBUG - [DEBUG] Creating KVM_AUTO guest with image_name=opensuse-tumbleweed
+2025-09-04 22:07:16,698 - cyris.config.parser - DEBUG - [DEBUG] About to instantiate Guest entity for kvm-auto
+2025-09-04 22:07:16,699 - cyris.domain.entities.guest - DEBUG - [DEBUG] Guest validation COMPLETE for test-guest
+2025-09-04 22:07:16,699 - cyris.config.parser - DEBUG - [DEBUG] KVM_AUTO Guest entity created successfully: test-guest
+2025-09-04 22:07:16,699 - cyris.config.parser - DEBUG - [DEBUG] _parse_guest returned: True
+2025-09-04 22:07:16,699 - cyris.config.parser - DEBUG - [DEBUG] Guest test-guest parsed successfully
+2025-09-04 22:07:16,699 - cyris.config.parser - DEBUG - [DEBUG] Parse complete. Hosts: 0, Guests: 1
+2025-09-04 22:07:16,699 - cyris.config.parser - DEBUG - [DEBUG] parse_file START: test-kvm-auto.yml
+2025-09-04 22:07:16,699 - cyris.config.parser - DEBUG - [DEBUG] Opening file: test-kvm-auto.yml
+2025-09-04 22:07:16,699 - cyris.config.parser - DEBUG - [DEBUG] About to call yaml.safe_load()
+2025-09-04 22:07:16,705 - cyris.config.parser - DEBUG - [DEBUG] YAML loaded successfully: type=<class 'list'>
+2025-09-04 22:07:16,705 - cyris.config.parser - DEBUG - [DEBUG] Starting to parse sections...
+2025-09-04 22:07:16,705 - cyris.config.parser - DEBUG - [DEBUG] Processing list-based YAML with 3 sections
+2025-09-04 22:07:16,705 - cyris.config.parser - DEBUG - [DEBUG] Processing section 0: keys=['host_settings']
+2025-09-04 22:07:16,705 - cyris.config.parser - DEBUG - [DEBUG] Parsing 1 hosts
+2025-09-04 22:07:16,705 - cyris.config.parser - DEBUG - [DEBUG] Parsing host 0: localhost
+2025-09-04 22:07:16,705 - cyris.config.parser - DEBUG - [DEBUG] Host localhost parsed successfully
+2025-09-04 22:07:16,705 - cyris.config.parser - DEBUG - [DEBUG] Processing section 1: keys=['guest_settings']
+2025-09-04 22:07:16,705 - cyris.config.parser - DEBUG - [DEBUG] Parsing 1 guests
+2025-09-04 22:07:16,705 - cyris.config.parser - DEBUG - [DEBUG] About to parse guest 0: id=opensuse-desktop, type=kvm-auto
+2025-09-04 22:07:16,705 - cyris.config.parser - DEBUG - [DEBUG] _parse_guest START: id=opensuse-desktop, basevm_type=kvm-auto
+2025-09-04 22:07:16,706 - cyris.config.parser - DEBUG - [DEBUG] Creating KVM_AUTO guest with image_name=opensuse-tumbleweed
+2025-09-04 22:07:16,706 - cyris.config.parser - DEBUG - [DEBUG] About to instantiate Guest entity for kvm-auto
+2025-09-04 22:07:16,706 - cyris.domain.entities.guest - DEBUG - [DEBUG] Guest validation COMPLETE for opensuse-desktop
+2025-09-04 22:07:16,706 - cyris.config.parser - DEBUG - [DEBUG] KVM_AUTO Guest entity created successfully: opensuse-desktop
+2025-09-04 22:07:16,706 - cyris.config.parser - DEBUG - [DEBUG] _parse_guest returned: True
+2025-09-04 22:07:16,706 - cyris.config.parser - DEBUG - [DEBUG] Guest opensuse-desktop parsed successfully
+2025-09-04 22:07:16,706 - cyris.config.parser - DEBUG - [DEBUG] Processing section 2: keys=['clone_settings']
+2025-09-04 22:07:16,706 - cyris.config.parser - DEBUG - [DEBUG] Parsing clone_settings
+2025-09-04 22:07:16,706 - cyris.config.parser - DEBUG - [DEBUG] Clone settings parsed successfully
+2025-09-04 22:07:16,706 - cyris.config.parser - DEBUG - [DEBUG] Parse complete. Hosts: 1, Guests: 1
+2025-09-04 22:10:46,626 - cyris.config.parser - DEBUG - [DEBUG] parse_file START: test-minimal.yml
+2025-09-04 22:10:46,627 - cyris.config.parser - DEBUG - [DEBUG] Opening file: test-minimal.yml
+2025-09-04 22:10:46,627 - cyris.config.parser - DEBUG - [DEBUG] About to call yaml.safe_load()
+2025-09-04 22:10:46,630 - cyris.config.parser - DEBUG - [DEBUG] YAML loaded successfully: type=<class 'list'>
+2025-09-04 22:10:46,630 - cyris.config.parser - DEBUG - [DEBUG] Starting to parse sections...
+2025-09-04 22:10:46,630 - cyris.config.parser - DEBUG - [DEBUG] Processing list-based YAML with 1 sections
+2025-09-04 22:10:46,630 - cyris.config.parser - DEBUG - [DEBUG] Processing section 0: keys=['host_settings']
+2025-09-04 22:10:46,630 - cyris.config.parser - DEBUG - [DEBUG] Parsing 1 hosts
+2025-09-04 22:10:46,630 - cyris.config.parser - DEBUG - [DEBUG] Parsing host 0: localhost
+2025-09-04 22:10:46,630 - cyris.config.parser - DEBUG - [DEBUG] Host localhost parsed successfully
+2025-09-04 22:10:46,630 - cyris.config.parser - DEBUG - [DEBUG] Parse complete. Hosts: 1, Guests: 0
+2025-09-04 22:10:46,631 - cyris.config.parser - DEBUG - [DEBUG] parse_file START: test-guest.yml
+2025-09-04 22:10:46,631 - cyris.config.parser - DEBUG - [DEBUG] Opening file: test-guest.yml
+2025-09-04 22:10:46,631 - cyris.config.parser - DEBUG - [DEBUG] About to call yaml.safe_load()
+2025-09-04 22:10:46,632 - cyris.config.parser - DEBUG - [DEBUG] YAML loaded successfully: type=<class 'list'>
+2025-09-04 22:10:46,632 - cyris.config.parser - DEBUG - [DEBUG] Starting to parse sections...
+2025-09-04 22:10:46,632 - cyris.config.parser - DEBUG - [DEBUG] Processing list-based YAML with 1 sections
+2025-09-04 22:10:46,632 - cyris.config.parser - DEBUG - [DEBUG] Processing section 0: keys=['guest_settings']
+2025-09-04 22:10:46,632 - cyris.config.parser - DEBUG - [DEBUG] Parsing 1 guests
+2025-09-04 22:10:46,632 - cyris.config.parser - DEBUG - [DEBUG] About to parse guest 0: id=test-guest, type=kvm-auto
+2025-09-04 22:10:46,633 - cyris.config.parser - DEBUG - [DEBUG] _parse_guest START: id=test-guest, basevm_type=kvm-auto
+2025-09-04 22:10:46,633 - cyris.config.parser - DEBUG - [DEBUG] Creating KVM_AUTO guest with image_name=opensuse-tumbleweed
+2025-09-04 22:10:46,633 - cyris.config.parser - DEBUG - [DEBUG] About to instantiate Guest entity for kvm-auto
+2025-09-04 22:10:46,633 - cyris.domain.entities.guest - DEBUG - [DEBUG] Guest validation COMPLETE for test-guest
+2025-09-04 22:10:46,633 - cyris.config.parser - DEBUG - [DEBUG] KVM_AUTO Guest entity created successfully: test-guest
+2025-09-04 22:10:46,633 - cyris.config.parser - DEBUG - [DEBUG] _parse_guest returned: True
+2025-09-04 22:10:46,633 - cyris.config.parser - DEBUG - [DEBUG] Guest test-guest parsed successfully
+2025-09-04 22:10:46,633 - cyris.config.parser - DEBUG - [DEBUG] Parse complete. Hosts: 0, Guests: 1
+2025-09-04 22:10:46,634 - cyris.config.parser - DEBUG - [DEBUG] parse_file START: test-kvm-auto.yml
+2025-09-04 22:10:46,634 - cyris.config.parser - DEBUG - [DEBUG] Opening file: test-kvm-auto.yml
+2025-09-04 22:10:46,634 - cyris.config.parser - DEBUG - [DEBUG] About to call yaml.safe_load()
+2025-09-04 22:10:46,638 - cyris.config.parser - DEBUG - [DEBUG] YAML loaded successfully: type=<class 'list'>
+2025-09-04 22:10:46,638 - cyris.config.parser - DEBUG - [DEBUG] Starting to parse sections...
+2025-09-04 22:10:46,638 - cyris.config.parser - DEBUG - [DEBUG] Processing list-based YAML with 3 sections
+2025-09-04 22:10:46,638 - cyris.config.parser - DEBUG - [DEBUG] Processing section 0: keys=['host_settings']
+2025-09-04 22:10:46,638 - cyris.config.parser - DEBUG - [DEBUG] Parsing 1 hosts
+2025-09-04 22:10:46,638 - cyris.config.parser - DEBUG - [DEBUG] Parsing host 0: localhost
+2025-09-04 22:10:46,638 - cyris.config.parser - DEBUG - [DEBUG] Host localhost parsed successfully
+2025-09-04 22:10:46,638 - cyris.config.parser - DEBUG - [DEBUG] Processing section 1: keys=['guest_settings']
+2025-09-04 22:10:46,638 - cyris.config.parser - DEBUG - [DEBUG] Parsing 1 guests
+2025-09-04 22:10:46,638 - cyris.config.parser - DEBUG - [DEBUG] About to parse guest 0: id=opensuse-desktop, type=kvm-auto
+2025-09-04 22:10:46,638 - cyris.config.parser - DEBUG - [DEBUG] _parse_guest START: id=opensuse-desktop, basevm_type=kvm-auto
+2025-09-04 22:10:46,638 - cyris.config.parser - DEBUG - [DEBUG] Creating KVM_AUTO guest with image_name=opensuse-tumbleweed
+2025-09-04 22:10:46,638 - cyris.config.parser - DEBUG - [DEBUG] About to instantiate Guest entity for kvm-auto
+2025-09-04 22:10:46,638 - cyris.domain.entities.guest - DEBUG - [DEBUG] Guest validation COMPLETE for opensuse-desktop
+2025-09-04 22:10:46,638 - cyris.config.parser - DEBUG - [DEBUG] KVM_AUTO Guest entity created successfully: opensuse-desktop
+2025-09-04 22:10:46,638 - cyris.config.parser - DEBUG - [DEBUG] _parse_guest returned: True
+2025-09-04 22:10:46,639 - cyris.config.parser - DEBUG - [DEBUG] Guest opensuse-desktop parsed successfully
+2025-09-04 22:10:46,639 - cyris.config.parser - DEBUG - [DEBUG] Processing section 2: keys=['clone_settings']
+2025-09-04 22:10:46,639 - cyris.config.parser - DEBUG - [DEBUG] Parsing clone_settings
+2025-09-04 22:10:46,639 - cyris.config.parser - DEBUG - [DEBUG] Clone settings parsed successfully
+2025-09-04 22:10:46,639 - cyris.config.parser - DEBUG - [DEBUG] Parse complete. Hosts: 1, Guests: 1

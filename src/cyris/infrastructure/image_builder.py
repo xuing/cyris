@@ -54,9 +54,23 @@ class LocalImageBuilder:
     def check_local_dependencies(self) -> Dict[str, bool]:
         """Check availability of required tools on local machine"""
         tools = {}
+        
+        # First, ensure sudo authentication is cached
+        try:
+            print("🔐 Checking sudo authentication for virt-builder tools...")
+            print("💡 You may be prompted for your password to run virt-builder commands.")
+            result = subprocess.run(['sudo', '-v'], timeout=30)
+            if result.returncode != 0:
+                self.logger.error("Failed to authenticate with sudo")
+                return {tool: False for tool in ['virt-builder', 'virt-install', 'virt-customize']}
+        except subprocess.SubprocessError:
+            self.logger.error("Failed to check sudo authentication")
+            return {tool: False for tool in ['virt-builder', 'virt-install', 'virt-customize']}
+        
         for tool in ['virt-builder', 'virt-install', 'virt-customize']:
             try:
-                result = subprocess.run([tool, '--version'], 
+                # Use non-interactive sudo (should work with cached authentication)
+                result = subprocess.run(['sudo', '-n', tool, '--version'], 
                                       capture_output=True, timeout=10)
                 tools[tool] = result.returncode == 0
                 self.logger.debug(f"Tool {tool}: {'available' if tools[tool] else 'not available'}")
@@ -68,7 +82,8 @@ class LocalImageBuilder:
     def get_available_images(self) -> List[str]:
         """Get list of available virt-builder images"""
         try:
-            result = subprocess.run(['virt-builder', '--list'], 
+            # Use cached sudo authentication for virt-builder --list
+            result = subprocess.run(['sudo', '-n', 'virt-builder', '--list'], 
                                   capture_output=True, text=True, timeout=30)
             if result.returncode == 0:
                 # Parse virt-builder --list output
@@ -122,9 +137,9 @@ class LocalImageBuilder:
             self.logger.info(path_msg)
         
         try:
-            # Build base image with virt-builder
+            # Build base image with virt-builder (using cached sudo authentication)
             build_cmd = [
-                'virt-builder', guest.image_name,
+                'sudo', '-n', 'virt-builder', guest.image_name,
                 '--size', guest.disk_size,
                 '--format', 'qcow2',
                 '--output', str(image_path)
@@ -143,10 +158,11 @@ class LocalImageBuilder:
                 self.logger.info(cmd_detail)
                 self.logger.info(time_msg)
             
-            # Execute with progress monitoring
+            # Execute with progress monitoring (allow interactive sudo)
             if self.progress_manager:
                 result = self._run_command_with_progress(build_cmd, "Building VM image", timeout=600)
             else:
+                # Use cached sudo authentication for virt-builder
                 result = subprocess.run(build_cmd, capture_output=True, text=True, timeout=600)
             
             # Log command output for debugging
@@ -261,11 +277,12 @@ class LocalImageBuilder:
         """Run a command with progress monitoring"""
         import threading
         
-        # Start process
+        # Start process (allow interactive sudo password input)
         process = subprocess.Popen(
             cmd, 
             stdout=subprocess.PIPE, 
             stderr=subprocess.PIPE, 
+            stdin=None,  # Allow interactive password input
             text=True,
             bufsize=1,
             universal_newlines=True
@@ -386,14 +403,15 @@ class LocalImageBuilder:
             return
         
         try:
-            # Create user and set password
+            # Create user and set password (using cached sudo authentication)
             cmd = [
-                'virt-customize', '-a', str(image_path),
+                'sudo', '-n', 'virt-customize', '-a', str(image_path),
                 '--run-command', f'useradd -m {account}',
                 '--password', f'{account}:password:{passwd}'
             ]
             
             self.logger.debug(f"Adding account: {account}")
+            # Use cached sudo authentication for virt-customize
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
             
             if result.returncode != 0:
@@ -415,11 +433,12 @@ class LocalImageBuilder:
         
         try:
             cmd = [
-                'virt-customize', '-a', str(image_path),
+                'sudo', 'virt-customize', '-a', str(image_path),
                 '--password', f'{account}:password:{new_passwd}'
             ]
             
             self.logger.debug(f"Modifying account: {account}")
+            # Use cached sudo authentication for virt-customize
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
             
             if result.returncode != 0:

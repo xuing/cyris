@@ -1,0 +1,7 @@
+Requirement already satisfied: paramiko in ./.venv/lib/python3.12/site-packages (4.0.0)
+Requirement already satisfied: bcrypt>=3.2 in ./.venv/lib/python3.12/site-packages (from paramiko) (4.3.0)
+Requirement already satisfied: cryptography>=3.3 in ./.venv/lib/python3.12/site-packages (from paramiko) (45.0.6)
+Requirement already satisfied: invoke>=2.0 in ./.venv/lib/python3.12/site-packages (from paramiko) (2.2.0)
+Requirement already satisfied: pynacl>=1.5 in ./.venv/lib/python3.12/site-packages (from paramiko) (1.5.0)
+Requirement already satisfied: cffi>=1.14 in ./.venv/lib/python3.12/site-packages (from cryptography>=3.3->paramiko) (1.17.1)
+Requirement already satisfied: pycparser in ./.venv/lib/python3.12/site-packages (from cffi>=1.14->cryptography>=3.3->paramiko) (2.22)

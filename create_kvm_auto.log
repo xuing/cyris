@@ -1,0 +1,14 @@
+
+🔍 Pre-Creation Checks
+  ✅ Using kvm-auto guests (no base image required)
+  ✅ cloud-init.iso found
+  ✅ libvirt connectivity confirmed
+  ⚠️ Default network may not be active
+  🔧 Checking kvm-auto requirements for 1 guests...
+  ✅ virt-builder available
+  ✅ virt-customize available
+  ✅ virt-install available
+  ✅ Image 'ubuntu-20.04' available
+⚠️ Pre-checks failed. Creation may encounter issues.
+Continue anyway? (y/N): Creating cyber range: test-kvm-auto-ubuntu.yml
+Terminated

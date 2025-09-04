@@ -1,0 +1,15 @@
+CyRIS Range Creation Log - test-auto-ubuntu
+Started at: 2025-09-04 23:48:07
+================================================================================
+
+[2025-09-04 23:48:07] * INFO: cyris: Starting range creation: Range test-auto-ubuntu
+[2025-09-04 23:48:07] * INFO: cyris: Initialize range creation
+[2025-09-04 23:48:07] * INFO: cyris: Starting operation: Create cyber range test-auto-ubuntu
+[2025-09-04 23:48:07] * INFO: cyris: Start the base VMs (1 hosts)
+[2025-09-04 23:48:07] * INFO: cyris: Check that the base VMs are up
+[2025-09-04 23:48:07] * INFO: cyris: Clone VMs and create the cyber range (1 VMs)
+[2025-09-04 23:48:07] * ERROR: cyris: Failed to create 1 guests
+[2025-09-04 23:48:07] * ERROR: cyris: Completed operation: Create cyber range test-auto-ubuntu - Range creation failed with CyRIS exception
+[2025-09-04 23:48:07] * INFO: cyris: Creation result: FAILURE (1 errors) (took 0.0s)
+[2025-09-04 23:48:07] * INFO: cyris: Operation Summary: 0 successful, 1 failed
+[2025-09-04 23:48:07] * ERROR: cyris: Range creation failed

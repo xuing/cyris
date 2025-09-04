@@ -1,0 +1,1357 @@
+
+[DEBUG] main() started with sys.argv: ['./cyris', 'create', 'test-kvm-auto.yml']
+[DEBUG] Detected modern command: create
+[DEBUG] Args: ['create', 'test-kvm-auto.yml']
+[DEBUG] Starting modern CLI try block
+[DEBUG] About to import from /home/ubuntu/cyris/src
+[DEBUG] Successfully imported CLI main
+[DEBUG] About to call cli_main with argv: ['cyris', 'create', 'test-kvm-auto.yml']
+[DEBUG] CLI main() called with args: None
+[DEBUG] About to call cli()...
+[DEBUG] cli() called with config=None, verbose=False, version=False
+[DEBUG] Initializing context
+[DEBUG] Loading configuration
+[DEBUG] Looking for default config files
+[DEBUG] Checking config file: /home/ubuntu/cyris/config.yml
+[DEBUG] Found config file: /home/ubuntu/cyris/config.yml, parsing...
+[DEBUG] Configuration loaded successfully
+[DEBUG] cli() function completed successfully
+[DEBUG] create() called with file=test-kvm-auto.yml, dry_run=False
+[DEBUG] Imported CreateCommandHandler
+[DEBUG] Got config and verbose, creating handler
+[DEBUG] BaseCommandHandler.__init__() START
+[DEBUG] About to call get_console()
+[DEBUG] About to call get_error_console()
+[DEBUG] About to create ErrorDisplayManager()
+[DEBUG] BaseCommandHandler.__init__() COMPLETE
+[DEBUG] About to call handler.execute()
+[DEBUG] CreateCommandHandler.execute() START with file=test-kvm-auto.yml
+[DEBUG] Starting input validation
+[DEBUG] validate_file_exists() called with: test-kvm-auto.yml
+[DEBUG] File exists: test-kvm-auto.yml
+[DEBUG] validate_yaml_file() called with: test-kvm-auto.yml
+[DEBUG] About to import yaml
+[DEBUG] About to open and read YAML file: test-kvm-auto.yml
+[DEBUG] YAML file parsed successfully: test-kvm-auto.yml
+[DEBUG] validate_network_mode() called with: bridge
+[DEBUG] Network mode validation passed: bridge
+[DEBUG] Input validation completed successfully
+[DEBUG] About to start pre-creation checks, dry_run=False
+[DEBUG] Calling _run_pre_creation_checks()
+[DEBUG] _run_pre_creation_checks() START
+[DEBUG] About to create Rich progress manager (using simple fallback)
+[DEBUG] Rich progress manager created
+[DEBUG] About to enter progress context
+[DEBUG] Entered progress context, about to enter live context
+[DEBUG] Entered live context, starting try block
+[DEBUG] About to parse YAML and import config parser
+[DEBUG] Imports completed, creating parser instance
+[DEBUG] Parser created, about to parse file
+[DEBUG] File parsed successfully, continuing with checks
+[DEBUG] About to call check_progress.start_step('config')
+[DEBUG] start_step('config') completed
+[DEBUG] About to access config.guests
+[DEBUG] traditional_kvm_guests created: 0
+[DEBUG] kvm_auto_guests created: 0
+[DEBUG] About to log guest counts to progress
+[DEBUG] Logged traditional KVM guests count
+[DEBUG] Logged kvm-auto guests count
+[DEBUG] complete_step('config') called
+[DEBUG] start_step(init): Initializing orchestrator... (total=None)
+[DEBUG] create_orchestrator() START with network_mode=bridge, enable_ssh=True
+[DEBUG] About to import RangeOrchestrator
+[DEBUG] RangeOrchestrator imported successfully
+[DEBUG] About to import KVMProvider
+[DEBUG] KVMProvider imported successfully
+[DEBUG] About to configure network settings
+[DEBUG] libvirt_uri set to: qemu:///system
+[DEBUG] kvm_settings created: {'connection_uri': 'qemu:///system', 'libvirt_uri': 'qemu:///system', 'base_path': '/home/ubuntu/cyris/cyber_range', 'network_mode': 'bridge', 'enable_ssh': True}
+[DEBUG] About to create KVMProvider instance
+[DEBUG] KVMProvider instance created successfully
+[DEBUG] About to import CyRISSingleton
+[DEBUG] CyRISSingleton imported successfully
+[DEBUG] About to create CyRISSingleton with lock file: /home/ubuntu/cyris/cyber_range/.cyris.lock
+[DEBUG] CyRISSingleton created successfully
+[DEBUG] About to create RangeOrchestrator instance
+[DEBUG] RangeOrchestrator instance created successfully
+[DEBUG] create_orchestrator() completed successfully
+[DEBUG] complete_step(init) called
+[DEBUG] start_step(parse): Parsing YAML configuration... (total=None)
+[DEBUG] log_info: [DEBUG] Importing CyRISConfigParser...
+[DEBUG] log_info: [DEBUG] Creating parser instance...
+[DEBUG] log_info: [DEBUG] About to call parse_file(test-kvm-auto.yml)...
+[DEBUG] log_info: [DEBUG] parse_file completed successfully!
+[DEBUG] log_info: Found 1 hosts and 0 guests
+[DEBUG] complete_step(parse) called
+[DEBUG] start_step(create): Creating cyber range infrastructure... (total=100)
+[DEBUG] log_info: [DEBUG] Starting orchestrator phase...
+[DEBUG] log_info: [DEBUG] Setting progress manager on orchestrator...
+[DEBUG] log_info: [DEBUG] About to call orchestrator.create_range_from_yaml(test-kvm-auto.yml, None)...
+[DEBUG] log_info: 🤖 Starting kvm-auto workflow for 1 guests
+[DEBUG] log_info: 📦 Grouped guests into 1 image configurations
+[DEBUG] start_step(kvm_auto): Building images and creating VMs... (total=1)
+[DEBUG] log_info: 🔨 Processing image group 1/1: opensuse-tumbleweed_2_2048_20G
+[DEBUG] log_info:    📋 This group contains 1 guests: ['opensuse-desktop']
+[DEBUG] log_info: 🧩 Using guest 'opensuse-desktop' as template for image building
+[DEBUG] start_step(image_build_1): Building image for opensuse-tumbleweed... (total=None)
+[DEBUG] log_info: 🔧 Starting image build for guest 'opensuse-desktop'
+[DEBUG] log_info: 📋 Build parameters: image=opensuse-tumbleweed, vcpus=2, memory=2048, disk=20G
+[DEBUG] log_info: 📁 Output image path: /tmp/cyris-builds/opensuse-desktop-opensuse-tumbleweed.qcow2
+[DEBUG] log_info: 🚀 Executing virt-builder command:
+[DEBUG] log_command: virt-builder opensuse-tumbleweed --size 20G --format qcow2 --output /tmp/cyris-builds/opensuse-desktop-opensuse-tumbleweed.qcow2
+[DEBUG] log_info: ⏳ This may take several minutes for image download and creation...
+[DEBUG] start_step(cmd_1756994455): Building VM image (total=None)
+
+[DEBUG] main() started with sys.argv: ['./cyris', 'create', 'test-kvm-auto.yml']
+[DEBUG] Detected modern command: create
+[DEBUG] Args: ['create', 'test-kvm-auto.yml']
+[DEBUG] Starting modern CLI try block
+[DEBUG] About to import from /home/ubuntu/cyris/src
+[DEBUG] Successfully imported CLI main
+[DEBUG] About to call cli_main with argv: ['cyris', 'create', 'test-kvm-auto.yml']
+[DEBUG] CLI main() called with args: None
+[DEBUG] About to call cli()...
+[DEBUG] cli() called with config=None, verbose=False, version=False
+[DEBUG] Initializing context
+[DEBUG] Loading configuration
+[DEBUG] Looking for default config files
+[DEBUG] Checking config file: /home/ubuntu/cyris/config.yml
+[DEBUG] Found config file: /home/ubuntu/cyris/config.yml, parsing...
+[DEBUG] Configuration loaded successfully
+[DEBUG] cli() function completed successfully
+[DEBUG] create() called with file=test-kvm-auto.yml, dry_run=False
+[DEBUG] Imported CreateCommandHandler
+[DEBUG] Got config and verbose, creating handler
+[DEBUG] BaseCommandHandler.__init__() START
+[DEBUG] About to call get_console()
+[DEBUG] About to call get_error_console()
+[DEBUG] About to create ErrorDisplayManager()
+[DEBUG] BaseCommandHandler.__init__() COMPLETE
+[DEBUG] About to call handler.execute()
+[DEBUG] CreateCommandHandler.execute() START with file=test-kvm-auto.yml
+[DEBUG] Starting input validation
+[DEBUG] validate_file_exists() called with: test-kvm-auto.yml
+[DEBUG] File exists: test-kvm-auto.yml
+[DEBUG] validate_yaml_file() called with: test-kvm-auto.yml
+[DEBUG] About to import yaml
+[DEBUG] About to open and read YAML file: test-kvm-auto.yml
+[DEBUG] YAML file parsed successfully: test-kvm-auto.yml
+[DEBUG] validate_network_mode() called with: bridge
+[DEBUG] Network mode validation passed: bridge
+[DEBUG] Input validation completed successfully
+[DEBUG] About to start pre-creation checks, dry_run=False
+[DEBUG] Calling _run_pre_creation_checks()
+[DEBUG] _run_pre_creation_checks() START
+[DEBUG] About to create Rich progress manager (using simple fallback)
+[DEBUG] Rich progress manager created
+[DEBUG] About to enter progress context
+[DEBUG] Entered progress context, about to enter live context
+[DEBUG] Entered live context, starting try block
+[DEBUG] About to parse YAML and import config parser
+[DEBUG] Imports completed, creating parser instance
+[DEBUG] Parser created, about to parse file
+[DEBUG] File parsed successfully, continuing with checks
+[DEBUG] About to call check_progress.start_step('config')
+[DEBUG] start_step('config') completed
+[DEBUG] About to access config.guests
+[DEBUG] traditional_kvm_guests created: 0
+[DEBUG] kvm_auto_guests created: 0
+[DEBUG] About to log guest counts to progress
+[DEBUG] Logged traditional KVM guests count
+[DEBUG] Logged kvm-auto guests count
+[DEBUG] complete_step('config') called
+[DEBUG] start_step(init): Initializing orchestrator... (total=None)
+[DEBUG] create_orchestrator() START with network_mode=bridge, enable_ssh=True
+[DEBUG] About to import RangeOrchestrator
+[DEBUG] RangeOrchestrator imported successfully
+[DEBUG] About to import KVMProvider
+[DEBUG] KVMProvider imported successfully
+[DEBUG] About to configure network settings
+[DEBUG] libvirt_uri set to: qemu:///system
+[DEBUG] kvm_settings created: {'connection_uri': 'qemu:///system', 'libvirt_uri': 'qemu:///system', 'base_path': '/home/ubuntu/cyris/cyber_range', 'network_mode': 'bridge', 'enable_ssh': True}
+[DEBUG] About to create KVMProvider instance
+[DEBUG] KVMProvider instance created successfully
+[DEBUG] About to import CyRISSingleton
+[DEBUG] CyRISSingleton imported successfully
+[DEBUG] About to create CyRISSingleton with lock file: /home/ubuntu/cyris/cyber_range/.cyris.lock
+[DEBUG] CyRISSingleton created successfully
+[DEBUG] About to create RangeOrchestrator instance
+[DEBUG] RangeOrchestrator instance created successfully
+[DEBUG] create_orchestrator() completed successfully
+[DEBUG] complete_step(init) called
+[DEBUG] start_step(parse): Parsing YAML configuration... (total=None)
+[DEBUG] log_info: [DEBUG] Importing CyRISConfigParser...
+[DEBUG] log_info: [DEBUG] Creating parser instance...
+[DEBUG] log_info: [DEBUG] About to call parse_file(test-kvm-auto.yml)...
+[DEBUG] log_info: [DEBUG] parse_file completed successfully!
+[DEBUG] log_info: Found 1 hosts and 0 guests
+[DEBUG] complete_step(parse) called
+[DEBUG] start_step(create): Creating cyber range infrastructure... (total=100)
+[DEBUG] log_info: [DEBUG] Starting orchestrator phase...
+[DEBUG] log_info: [DEBUG] Setting progress manager on orchestrator...
+[DEBUG] log_info: [DEBUG] About to call orchestrator.create_range_from_yaml(test-kvm-auto.yml, None)...
+[DEBUG] log_info: 🤖 Starting kvm-auto workflow for 1 guests
+[DEBUG] log_info: 📦 Grouped guests into 1 image configurations
+[DEBUG] start_step(kvm_auto): Building images and creating VMs... (total=1)
+[DEBUG] log_info: 🔨 Processing image group 1/1: opensuse-tumbleweed_2_2048_20G
+[DEBUG] log_info:    📋 This group contains 1 guests: ['opensuse-desktop']
+[DEBUG] log_info: 🧩 Using guest 'opensuse-desktop' as template for image building
+[DEBUG] start_step(image_build_1): Building image for opensuse-tumbleweed... (total=None)
+[DEBUG] log_info: 🔧 Starting image build for guest 'opensuse-desktop'
+[DEBUG] log_info: 📋 Build parameters: image=opensuse-tumbleweed, vcpus=2, memory=2048, disk=20G
+[DEBUG] log_info: 📁 Output image path: /tmp/cyris-builds/opensuse-desktop-opensuse-tumbleweed.qcow2
+[DEBUG] log_info: 🚀 Executing virt-builder command:
+[DEBUG] log_command: virt-builder opensuse-tumbleweed --size 20G --format qcow2 --output /tmp/cyris-builds/opensuse-desktop-opensuse-tumbleweed.qcow2
+[DEBUG] log_info: ⏳ This may take several minutes for image download and creation...
+[DEBUG] start_step(cmd_1756994698): Building VM image (total=None)
+[DEBUG] fail_step(cmd_1756994698): Command failed with exit code 1
+[DEBUG] log_info: virt-builder output: [   7.1] Downloading: http://download.opensuse.org/repositories/Virtualization:/virt-builder-images/images/openSUSE-Tumbleweed.x86_64-2022.11.22-Build8.420.qcow2.xz
+[ 130.8] Planning how to build this...
+[DEBUG] fail_step(image_build_1): Image build failed: virt-builder failed (exit code 1): ##O=-#      #                                                                                                                                                                                         
+#=O#-   #      #                                                                                                                                                                                      
+-#O=#     #       #                                                                                                                                                                                   
+
+                                                                                                                                                                                                  0.0%
+                                                                                                                                                                                                  0.0%
+                                                                                                                                                                                                  0.1%
+                                                                                                                                                                                                  0.1%
+                                                                                                                                                                                                  0.1%
+                                                                                                                                                                                                  0.3%
+                                                                                                                                                                                                  0.5%
+#                                                                                                                                                                                                 1.0%
+###                                                                                                                                                                                               1.8%
+###                                                                                                                                                                                               1.8%
+###                                                                                                                                                                                               1.9%
+###                                                                                                                                                                                               2.0%
+####                                                                                                                                                                                              2.2%
+####                                                                                                                                                                                              2.3%
+####                                                                                                                                                                                              2.4%
+####                                                                                                                                                                                              2.5%
+####                                                                                                                                                                                              2.6%
+#####                                                                                                                                                                                             2.7%
+#####                                                                                                                                                                                             2.8%
+#####                                                                                                                                                                                             2.9%
+#####                                                                                                                                                                                             3.0%
+#####                                                                                                                                                                                             3.1%
+######                                                                                                                                                                                            3.2%
+######                                                                                                                                                                                            3.3%
+######                                                                                                                                                                                            3.4%
+######                                                                                                                                                                                            3.6%
+######                                                                                                                                                                                            3.6%
+#######                                                                                                                                                                                           3.8%
+#######                                                                                                                                                                                           4.0%
+#######                                                                                                                                                                                           4.0%
+#######                                                                                                                                                                                           4.0%
+#######                                                                                                                                                                                           4.0%
+#######                                                                                                                                                                                           4.0%
+#######                                                                                                                                                                                           4.0%
+#######                                                                                                                                                                                           4.0%
+#######                                                                                                                                                                                           4.1%
+#######                                                                                                                                                                                           4.1%
+#######                                                                                                                                                                                           4.1%
+#######                                                                                                                                                                                           4.2%
+########                                                                                                                                                                                          4.2%
+########                                                                                                                                                                                          4.3%
+########                                                                                                                                                                                          4.3%
+########                                                                                                                                                                                          4.4%
+########                                                                                                                                                                                          4.5%
+########                                                                                                                                                                                          4.5%
+########                                                                                                                                                                                          4.6%
+########                                                                                                                                                                                          4.6%
+########                                                                                                                                                                                          4.7%
+########                                                                                                                                                                                          4.7%
+#########                                                                                                                                                                                         4.8%
+#########                                                                                                                                                                                         4.8%
+#########                                                                                                                                                                                         4.8%
+#########                                                                                                                                                                                         4.9%
+#########                                                                                                                                                                                         4.9%
+#########                                                                                                                                                                                         4.9%
+#########                                                                                                                                                                                         5.0%
+#########                                                                                                                                                                                         5.0%
+#########                                                                                                                                                                                         5.0%
+#########                                                                                                                                                                                         5.1%
+#########                                                                                                                                                                                         5.1%
+#########                                                                                                                                                                                         5.1%
+#########                                                                                                                                                                                         5.1%
+#########                                                                                                                                                                                         5.1%
+#########                                                                                                                                                                                         5.2%
+#########                                                                                                                                                                                         5.2%
+#########                                                                                                                                                                                         5.2%
+##########                                                                                                                                                                                        5.2%
+##########                                                                                                                                                                                        5.3%
+##########                                                                                                                                                                                        5.3%
+##########                                                                                                                                                                                        5.3%
+##########                                                                                                                                                                                        5.4%
+##########                                                                                                                                                                                        5.4%
+##########                                                                                                                                                                                        5.4%
+##########                                                                                                                                                                                        5.5%
+##########                                                                                                                                                                                        5.6%
+##########                                                                                                                                                                                        5.6%
+##########                                                                                                                                                                                        5.6%
+##########                                                                                                                                                                                        5.6%
+##########                                                                                                                                                                                        5.6%
+##########                                                                                                                                                                                        5.6%
+##########                                                                                                                                                                                        5.6%
+##########                                                                                                                                                                                        5.6%
+##########                                                                                                                                                                                        5.6%
+##########                                                                                                                                                                                        5.7%
+##########                                                                                                                                                                                        5.7%
+##########                                                                                                                                                                                        5.8%
+###########                                                                                                                                                                                       5.8%
+###########                                                                                                                                                                                       5.9%
+###########                                                                                                                                                                                       5.9%
+###########                                                                                                                                                                                       6.0%
+###########                                                                                                                                                                                       6.1%
+###########                                                                                                                                                                                       6.2%
+###########                                                                                                                                                                                       6.2%
+###########                                                                                                                                                                                       6.3%
+############                                                                                                                                                                                      6.3%
+############                                                                                                                                                                                      6.4%
+############                                                                                                                                                                                      6.5%
+############                                                                                                                                                                                      6.5%
+############                                                                                                                                                                                      6.7%
+############                                                                                                                                                                                      6.8%
+############                                                                                                                                                                                      6.8%
+############                                                                                                                                                                                      6.8%
+############                                                                                                                                                                                      6.8%
+############                                                                                                                                                                                      6.8%
+############                                                                                                                                                                                      6.8%
+############                                                                                                                                                                                      6.8%
+#############                                                                                                                                                                                     6.8%
+#############                                                                                                                                                                                     6.9%
+#############                                                                                                                                                                                     6.9%
+#############                                                                                                                                                                                     6.9%
+#############                                                                                                                                                                                     6.9%
+#############                                                                                                                                                                                     6.9%
+#############                                                                                                                                                                                     7.0%
+#############                                                                                                                                                                                     7.0%
+#############                                                                                                                                                                                     7.0%
+#############                                                                                                                                                                                     7.1%
+#############                                                                                                                                                                                     7.1%
+#############                                                                                                                                                                                     7.2%
+#############                                                                                                                                                                                     7.2%
+#############                                                                                                                                                                                     7.2%
+#############                                                                                                                                                                                     7.3%
+#############                                                                                                                                                                                     7.3%
+##############                                                                                                                                                                                    7.3%
+##############                                                                                                                                                                                    7.4%
+##############                                                                                                                                                                                    7.4%
+##############                                                                                                                                                                                    7.4%
+##############                                                                                                                                                                                    7.5%
+##############                                                                                                                                                                                    7.5%
+##############                                                                                                                                                                                    7.7%
+##############                                                                                                                                                                                    7.7%
+##############                                                                                                                                                                                    7.7%
+##############                                                                                                                                                                                    7.7%
+##############                                                                                                                                                                                    7.7%
+##############                                                                                                                                                                                    7.7%
+##############                                                                                                                                                                                    7.8%
+##############                                                                                                                                                                                    7.8%
+##############                                                                                                                                                                                    7.8%
+##############                                                                                                                                                                                    7.8%
+##############                                                                                                                                                                                    7.8%
+##############                                                                                                                                                                                    7.9%
+###############                                                                                                                                                                                   7.9%
+###############                                                                                                                                                                                   7.9%
+###############                                                                                                                                                                                   7.9%
+###############                                                                                                                                                                                   8.0%
+###############                                                                                                                                                                                   8.0%
+###############                                                                                                                                                                                   8.0%
+###############                                                                                                                                                                                   8.1%
+###############                                                                                                                                                                                   8.1%
+###############                                                                                                                                                                                   8.1%
+###############                                                                                                                                                                                   8.1%
+###############                                                                                                                                                                                   8.1%
+###############                                                                                                                                                                                   8.2%
+###############                                                                                                                                                                                   8.2%
+###############                                                                                                                                                                                   8.2%
+###############                                                                                                                                                                                   8.2%
+###############                                                                                                                                                                                   8.3%
+################                                                                                                                                                                                  8.6%
+#################                                                                                                                                                                                 8.9%
+#################                                                                                                                                                                                 9.3%
+##################                                                                                                                                                                                9.6%
+###################                                                                                                                                                                              10.0%
+###################                                                                                                                                                                              10.4%
+####################                                                                                                                                                                             10.7%
+#####################                                                                                                                                                                            11.1%
+#####################                                                                                                                                                                            11.5%
+######################                                                                                                                                                                           11.9%
+#######################                                                                                                                                                                          12.2%
+########################                                                                                                                                                                         12.6%
+########################                                                                                                                                                                         13.0%
+#########################                                                                                                                                                                        13.4%
+##########################                                                                                                                                                                       13.8%
+###########################                                                                                                                                                                      14.2%
+###########################                                                                                                                                                                      14.6%
+############################                                                                                                                                                                     15.0%
+#############################                                                                                                                                                                    15.4%
+##############################                                                                                                                                                                   15.8%
+##############################                                                                                                                                                                   16.2%
+###############################                                                                                                                                                                  16.6%
+################################                                                                                                                                                                 17.0%
+#################################                                                                                                                                                                17.4%
+#################################                                                                                                                                                                17.8%
+##################################                                                                                                                                                               18.2%
+###################################                                                                                                                                                              18.6%
+####################################                                                                                                                                                             19.0%
+#####################################                                                                                                                                                            19.4%
+#####################################                                                                                                                                                            19.8%
+######################################                                                                                                                                                           20.2%
+#######################################                                                                                                                                                          20.6%
+########################################                                                                                                                                                         21.0%
+########################################                                                                                                                                                         21.4%
+#########################################                                                                                                                                                        21.8%
+##########################################                                                                                                                                                       22.2%
+##########################################                                                                                                                                                       22.3%
+##########################################                                                                                                                                                       22.3%
+##########################################                                                                                                                                                       22.5%
+###########################################                                                                                                                                                      22.6%
+###########################################                                                                                                                                                      22.7%
+###########################################                                                                                                                                                      22.8%
+###########################################                                                                                                                                                      22.8%
+###########################################                                                                                                                                                      23.0%
+###########################################                                                                                                                                                      23.0%
+############################################                                                                                                                                                     23.2%
+############################################                                                                                                                                                     23.2%
+############################################                                                                                                                                                     23.4%
+############################################                                                                                                                                                     23.4%
+#############################################                                                                                                                                                    23.6%
+#############################################                                                                                                                                                    23.6%
+#############################################                                                                                                                                                    23.8%
+#############################################                                                                                                                                                    23.8%
+#############################################                                                                                                                                                    24.0%
+#############################################                                                                                                                                                    24.1%
+##############################################                                                                                                                                                   24.2%
+##############################################                                                                                                                                                   24.3%
+##############################################                                                                                                                                                   24.5%
+##############################################                                                                                                                                                   24.5%
+###############################################                                                                                                                                                  24.6%
+###############################################                                                                                                                                                  24.7%
+###############################################                                                                                                                                                  24.9%
+###############################################                                                                                                                                                  25.0%
+###############################################                                                                                                                                                  25.1%
+################################################                                                                                                                                                 25.2%
+################################################                                                                                                                                                 25.3%
+################################################                                                                                                                                                 25.4%
+################################################                                                                                                                                                 25.5%
+#################################################                                                                                                                                                25.7%
+#################################################                                                                                                                                                25.8%
+#################################################                                                                                                                                                25.9%
+#################################################                                                                                                                                                26.0%
+#################################################                                                                                                                                                26.1%
+##################################################                                                                                                                                               26.3%
+##################################################                                                                                                                                               26.4%
+##################################################                                                                                                                                               26.5%
+##################################################                                                                                                                                               26.6%
+###################################################                                                                                                                                              26.8%
+###################################################                                                                                                                                              26.9%
+###################################################                                                                                                                                              27.0%
+###################################################                                                                                                                                              27.1%
+###################################################                                                                                                                                              27.2%
+####################################################                                                                                                                                             27.3%
+####################################################                                                                                                                                             27.4%
+####################################################                                                                                                                                             27.6%
+####################################################                                                                                                                                             27.7%
+#####################################################                                                                                                                                            27.8%
+#####################################################                                                                                                                                            27.9%
+#####################################################                                                                                                                                            28.1%
+#####################################################                                                                                                                                            28.2%
+######################################################                                                                                                                                           28.3%
+######################################################                                                                                                                                           28.4%
+######################################################                                                                                                                                           28.5%
+######################################################                                                                                                                                           28.8%
+######################################################                                                                                                                                           28.8%
+#######################################################                                                                                                                                          29.0%
+#######################################################                                                                                                                                          29.0%
+#######################################################                                                                                                                                          29.1%
+#######################################################                                                                                                                                          29.3%
+########################################################                                                                                                                                         29.3%
+########################################################                                                                                                                                         29.5%
+########################################################                                                                                                                                         29.6%
+########################################################                                                                                                                                         29.7%
+########################################################                                                                                                                                         29.8%
+#########################################################                                                                                                                                        30.0%
+#########################################################                                                                                                                                        30.1%
+#########################################################                                                                                                                                        30.2%
+#########################################################                                                                                                                                        30.3%
+##########################################################                                                                                                                                       30.4%
+##########################################################                                                                                                                                       30.6%
+##########################################################                                                                                                                                       30.7%
+##########################################################                                                                                                                                       30.8%
+###########################################################                                                                                                                                      30.9%
+###########################################################                                                                                                                                      31.0%
+###########################################################                                                                                                                                      31.2%
+###########################################################                                                                                                                                      31.3%
+############################################################                                                                                                                                     31.4%
+############################################################                                                                                                                                     31.5%
+############################################################                                                                                                                                     31.7%
+############################################################                                                                                                                                     31.8%
+############################################################                                                                                                                                     31.9%
+#############################################################                                                                                                                                    32.0%
+#############################################################                                                                                                                                    32.2%
+#############################################################                                                                                                                                    32.3%
+#############################################################                                                                                                                                    32.4%
+##############################################################                                                                                                                                   32.5%
+##############################################################                                                                                                                                   32.7%
+##############################################################                                                                                                                                   32.8%
+##############################################################                                                                                                                                   32.9%
+###############################################################                                                                                                                                  33.0%
+###############################################################                                                                                                                                  33.2%
+###############################################################                                                                                                                                  33.3%
+###############################################################                                                                                                                                  33.5%
+################################################################                                                                                                                                 33.6%
+################################################################                                                                                                                                 33.7%
+################################################################                                                                                                                                 33.8%
+################################################################                                                                                                                                 34.0%
+#################################################################                                                                                                                                34.1%
+#################################################################                                                                                                                                34.3%
+#################################################################                                                                                                                                34.4%
+##################################################################                                                                                                                               34.6%
+##################################################################                                                                                                                               34.7%
+##################################################################                                                                                                                               34.8%
+##################################################################                                                                                                                               34.9%
+##################################################################                                                                                                                               34.9%
+##################################################################                                                                                                                               35.0%
+##################################################################                                                                                                                               35.0%
+##################################################################                                                                                                                               35.0%
+##################################################################                                                                                                                               35.0%
+##################################################################                                                                                                                               35.1%
+###################################################################                                                                                                                              35.1%
+###################################################################                                                                                                                              35.1%
+###################################################################                                                                                                                              35.1%
+###################################################################                                                                                                                              35.2%
+###################################################################                                                                                                                              35.2%
+###################################################################                                                                                                                              35.2%
+###################################################################                                                                                                                              35.4%
+###################################################################                                                                                                                              35.4%
+####################################################################                                                                                                                             35.7%
+####################################################################                                                                                                                             35.9%
+#####################################################################                                                                                                                            36.2%
+#####################################################################                                                                                                                            36.4%
+#####################################################################                                                                                                                            36.6%
+######################################################################                                                                                                                           36.9%
+######################################################################                                                                                                                           37.1%
+#######################################################################                                                                                                                          37.4%
+#######################################################################                                                                                                                          37.4%
+#######################################################################                                                                                                                          37.7%
+#######################################################################                                                                                                                          37.7%
+########################################################################                                                                                                                         37.9%
+########################################################################                                                                                                                         38.0%
+########################################################################                                                                                                                         38.2%
+#########################################################################                                                                                                                        38.3%
+#########################################################################                                                                                                                        38.5%
+#########################################################################                                                                                                                        38.5%
+##########################################################################                                                                                                                       38.8%
+##########################################################################                                                                                                                       38.8%
+##########################################################################                                                                                                                       39.1%
+##########################################################################                                                                                                                       39.1%
+###########################################################################                                                                                                                      39.3%
+###########################################################################                                                                                                                      39.4%
+###########################################################################                                                                                                                      39.6%
+###########################################################################                                                                                                                      39.7%
+############################################################################                                                                                                                     39.9%
+############################################################################                                                                                                                     39.9%
+############################################################################                                                                                                                     40.2%
+############################################################################                                                                                                                     40.2%
+#############################################################################                                                                                                                    40.5%
+#############################################################################                                                                                                                    40.5%
+#############################################################################                                                                                                                    40.8%
+#############################################################################                                                                                                                    40.8%
+##############################################################################                                                                                                                   41.1%
+##############################################################################                                                                                                                   41.2%
+###############################################################################                                                                                                                  41.4%
+###############################################################################                                                                                                                  41.4%
+###############################################################################                                                                                                                  41.7%
+###############################################################################                                                                                                                  41.7%
+################################################################################                                                                                                                 42.0%
+################################################################################                                                                                                                 42.0%
+################################################################################                                                                                                                 42.3%
+################################################################################                                                                                                                 42.3%
+#################################################################################                                                                                                                42.6%
+#################################################################################                                                                                                                42.6%
+#################################################################################                                                                                                                42.9%
+#################################################################################                                                                                                                42.9%
+##################################################################################                                                                                                               43.2%
+##################################################################################                                                                                                               43.2%
+###################################################################################                                                                                                              43.5%
+###################################################################################                                                                                                              43.5%
+###################################################################################                                                                                                              43.8%
+###################################################################################                                                                                                              43.8%
+####################################################################################                                                                                                             44.1%
+####################################################################################                                                                                                             44.1%
+####################################################################################                                                                                                             44.4%
+####################################################################################                                                                                                             44.4%
+#####################################################################################                                                                                                            44.7%
+#####################################################################################                                                                                                            44.7%
+#####################################################################################                                                                                                            45.0%
+#####################################################################################                                                                                                            45.0%
+######################################################################################                                                                                                           45.3%
+######################################################################################                                                                                                           45.3%
+#######################################################################################                                                                                                          45.6%
+#######################################################################################                                                                                                          45.6%
+#######################################################################################                                                                                                          45.8%
+#######################################################################################                                                                                                          45.9%
+########################################################################################                                                                                                         46.1%
+########################################################################################                                                                                                         46.2%
+########################################################################################                                                                                                         46.4%
+########################################################################################                                                                                                         46.5%
+#########################################################################################                                                                                                        46.7%
+#########################################################################################                                                                                                        46.8%
+#########################################################################################                                                                                                        47.0%
+#########################################################################################                                                                                                        47.1%
+##########################################################################################                                                                                                       47.4%
+##########################################################################################                                                                                                       47.4%
+###########################################################################################                                                                                                      47.7%
+###########################################################################################                                                                                                      47.7%
+###########################################################################################                                                                                                      48.0%
+###########################################################################################                                                                                                      48.0%
+############################################################################################                                                                                                     48.3%
+############################################################################################                                                                                                     48.3%
+############################################################################################                                                                                                     48.6%
+############################################################################################                                                                                                     48.6%
+#############################################################################################                                                                                                    48.9%
+#############################################################################################                                                                                                    48.9%
+#############################################################################################                                                                                                    49.2%
+#############################################################################################                                                                                                    49.2%
+##############################################################################################                                                                                                   49.5%
+##############################################################################################                                                                                                   49.5%
+###############################################################################################                                                                                                  49.8%
+###############################################################################################                                                                                                  49.8%
+###############################################################################################                                                                                                  50.1%
+###############################################################################################                                                                                                  50.2%
+################################################################################################                                                                                                 50.5%
+################################################################################################                                                                                                 50.5%
+#################################################################################################                                                                                                50.8%
+#################################################################################################                                                                                                50.8%
+#################################################################################################                                                                                                51.1%
+#################################################################################################                                                                                                51.2%
+##################################################################################################                                                                                               51.5%
+##################################################################################################                                                                                               51.5%
+###################################################################################################                                                                                              51.8%
+###################################################################################################                                                                                              51.9%
+###################################################################################################                                                                                              52.2%
+###################################################################################################                                                                                              52.2%
+####################################################################################################                                                                                             52.6%
+####################################################################################################                                                                                             52.6%
+#####################################################################################################                                                                                            52.9%
+#####################################################################################################                                                                                            52.9%
+#####################################################################################################                                                                                            53.3%
+#####################################################################################################                                                                                            53.3%
+######################################################################################################                                                                                           53.7%
+######################################################################################################                                                                                           53.7%
+#######################################################################################################                                                                                          54.1%
+#######################################################################################################                                                                                          54.1%
+########################################################################################################                                                                                         54.5%
+########################################################################################################                                                                                         54.5%
+########################################################################################################                                                                                         54.9%
+########################################################################################################                                                                                         54.9%
+#########################################################################################################                                                                                        55.3%
+#########################################################################################################                                                                                        55.4%
+##########################################################################################################                                                                                       55.8%
+##########################################################################################################                                                                                       55.8%
+###########################################################################################################                                                                                      56.2%
+###########################################################################################################                                                                                      56.2%
+############################################################################################################                                                                                     56.7%
+############################################################################################################                                                                                     56.7%
+#############################################################################################################                                                                                    57.2%
+##############################################################################################################                                                                                   57.6%
+##############################################################################################################                                                                                   57.7%
+###############################################################################################################                                                                                  58.1%
+###############################################################################################################                                                                                  58.2%
+################################################################################################################                                                                                 58.6%
+################################################################################################################                                                                                 58.7%
+#################################################################################################################                                                                                59.2%
+#################################################################################################################                                                                                59.2%
+##################################################################################################################                                                                               59.7%
+##################################################################################################################                                                                               59.8%
+###################################################################################################################                                                                              60.3%
+###################################################################################################################                                                                              60.3%
+####################################################################################################################                                                                             60.9%
+####################################################################################################################                                                                             60.9%
+#####################################################################################################################                                                                            61.5%
+#####################################################################################################################                                                                            61.5%
+######################################################################################################################                                                                           62.1%
+######################################################################################################################                                                                           62.2%
+#######################################################################################################################                                                                          62.8%
+#######################################################################################################################                                                                          62.8%
+#########################################################################################################################                                                                        63.4%
+#########################################################################################################################                                                                        63.5%
+##########################################################################################################################                                                                       64.1%
+##########################################################################################################################                                                                       64.2%
+###########################################################################################################################                                                                      64.8%
+###########################################################################################################################                                                                      64.9%
+#############################################################################################################################                                                                    65.6%
+#############################################################################################################################                                                                    65.6%
+##############################################################################################################################                                                                   66.4%
+##############################################################################################################################                                                                   66.4%
+################################################################################################################################                                                                 67.1%
+################################################################################################################################                                                                 67.2%
+#################################################################################################################################                                                                68.0%
+#################################################################################################################################                                                                68.0%
+###################################################################################################################################                                                              68.8%
+###################################################################################################################################                                                              68.9%
+#####################################################################################################################################                                                            69.7%
+#####################################################################################################################################                                                            69.8%
+######################################################################################################################################                                                           70.6%
+#######################################################################################################################################                                                          70.7%
+########################################################################################################################################                                                         71.6%
+########################################################################################################################################                                                         71.6%
+##########################################################################################################################################                                                       72.5%
+##########################################################################################################################################                                                       72.6%
+############################################################################################################################################                                                     73.5%
+############################################################################################################################################                                                     73.6%
+##############################################################################################################################################                                                   74.6%
+##############################################################################################################################################                                                   74.7%
+###############################################################################################################################################                                                  75.1%
+###############################################################################################################################################                                                  75.1%
+###############################################################################################################################################                                                  75.2%
+###############################################################################################################################################                                                  75.2%
+###############################################################################################################################################                                                  75.2%
+###############################################################################################################################################                                                  75.2%
+###############################################################################################################################################                                                  75.2%
+###############################################################################################################################################                                                  75.2%
+###############################################################################################################################################                                                  75.2%
+###############################################################################################################################################                                                  75.2%
+###############################################################################################################################################                                                  75.3%
+###############################################################################################################################################                                                  75.3%
+###############################################################################################################################################                                                  75.3%
+###############################################################################################################################################                                                  75.3%
+###############################################################################################################################################                                                  75.4%
+################################################################################################################################################                                                 75.4%
+################################################################################################################################################                                                 75.4%
+################################################################################################################################################                                                 75.5%
+################################################################################################################################################                                                 75.5%
+################################################################################################################################################                                                 75.5%
+################################################################################################################################################                                                 75.6%
+################################################################################################################################################                                                 75.6%
+################################################################################################################################################                                                 75.7%
+################################################################################################################################################                                                 75.7%
+################################################################################################################################################                                                 75.8%
+################################################################################################################################################                                                 75.8%
+################################################################################################################################################                                                 75.8%
+################################################################################################################################################                                                 75.9%
+#################################################################################################################################################                                                75.9%
+#################################################################################################################################################                                                76.0%
+#################################################################################################################################################                                                76.0%
+#################################################################################################################################################                                                76.1%
+#################################################################################################################################################                                                76.1%
+#################################################################################################################################################                                                76.2%
+#################################################################################################################################################                                                76.3%
+#################################################################################################################################################                                                76.3%
+#################################################################################################################################################                                                76.4%
+##################################################################################################################################################                                               76.6%
+##################################################################################################################################################                                               76.6%
+##################################################################################################################################################                                               76.6%
+##################################################################################################################################################                                               76.6%
+##################################################################################################################################################                                               76.7%
+##################################################################################################################################################                                               76.7%
+##################################################################################################################################################                                               76.7%
+##################################################################################################################################################                                               76.8%
+##################################################################################################################################################                                               76.8%
+##################################################################################################################################################                                               76.8%
+##################################################################################################################################################                                               76.8%
+##################################################################################################################################################                                               76.9%
+##################################################################################################################################################                                               76.9%
+##################################################################################################################################################                                               77.0%
+###################################################################################################################################################                                              77.0%
+###################################################################################################################################################                                              77.0%
+###################################################################################################################################################                                              77.0%
+###################################################################################################################################################                                              77.1%
+###################################################################################################################################################                                              77.1%
+###################################################################################################################################################                                              77.1%
+###################################################################################################################################################                                              77.1%
+###################################################################################################################################################                                              77.1%
+###################################################################################################################################################                                              77.2%
+###################################################################################################################################################                                              77.2%
+###################################################################################################################################################                                              77.2%
+###################################################################################################################################################                                              77.2%
+###################################################################################################################################################                                              77.3%
+###################################################################################################################################################                                              77.3%
+###################################################################################################################################################                                              77.3%
+###################################################################################################################################################                                              77.4%
+###################################################################################################################################################                                              77.4%
+####################################################################################################################################################                                             77.6%
+####################################################################################################################################################                                             77.6%
+####################################################################################################################################################                                             77.6%
+####################################################################################################################################################                                             77.6%
+####################################################################################################################################################                                             77.6%
+####################################################################################################################################################                                             77.6%
+####################################################################################################################################################                                             77.6%
+####################################################################################################################################################                                             77.7%
+####################################################################################################################################################                                             77.7%
+####################################################################################################################################################                                             77.7%
+####################################################################################################################################################                                             77.7%
+####################################################################################################################################################                                             77.8%
+####################################################################################################################################################                                             77.8%
+####################################################################################################################################################                                             77.8%
+####################################################################################################################################################                                             77.8%
+####################################################################################################################################################                                             77.9%
+####################################################################################################################################################                                             77.9%
+####################################################################################################################################################                                             78.0%
+#####################################################################################################################################################                                            78.0%
+#####################################################################################################################################################                                            78.1%
+#####################################################################################################################################################                                            78.1%
+#####################################################################################################################################################                                            78.2%
+#####################################################################################################################################################                                            78.2%
+#####################################################################################################################################################                                            78.2%
+#####################################################################################################################################################                                            78.2%
+######################################################################################################################################################                                           78.6%
+######################################################################################################################################################                                           78.6%
+######################################################################################################################################################                                           78.6%
+######################################################################################################################################################                                           78.7%
+######################################################################################################################################################                                           78.7%
+######################################################################################################################################################                                           78.7%
+######################################################################################################################################################                                           78.7%
+######################################################################################################################################################                                           78.7%
+######################################################################################################################################################                                           78.8%
+######################################################################################################################################################                                           78.8%
+######################################################################################################################################################                                           78.8%
+######################################################################################################################################################                                           78.9%
+######################################################################################################################################################                                           78.9%
+######################################################################################################################################################                                           78.9%
+######################################################################################################################################################                                           79.0%
+######################################################################################################################################################                                           79.0%
+######################################################################################################################################################                                           79.1%
+#######################################################################################################################################################                                          79.3%
+########################################################################################################################################################                                         79.6%
+########################################################################################################################################################                                         79.9%
+#########################################################################################################################################################                                        80.2%
+#########################################################################################################################################################                                        80.5%
+##########################################################################################################################################################                                       80.9%
+###########################################################################################################################################################                                      81.2%
+###########################################################################################################################################################                                      81.5%
+############################################################################################################################################################                                     81.8%
+############################################################################################################################################################                                     82.1%
+############################################################################################################################################################                                     82.1%
+#############################################################################################################################################################                                    82.4%
+#############################################################################################################################################################                                    82.5%
+#############################################################################################################################################################                                    82.7%
+##############################################################################################################################################################                                   82.8%
+##############################################################################################################################################################                                   83.0%
+##############################################################################################################################################################                                   83.1%
+###############################################################################################################################################################                                  83.4%
+###############################################################################################################################################################                                  83.5%
+###############################################################################################################################################################                                  83.7%
+################################################################################################################################################################                                 83.8%
+################################################################################################################################################################                                 84.1%
+################################################################################################################################################################                                 84.1%
+#################################################################################################################################################################                                84.4%
+#################################################################################################################################################################                                84.5%
+#################################################################################################################################################################                                84.7%
+##################################################################################################################################################################                               84.8%
+##################################################################################################################################################################                               85.1%
+##################################################################################################################################################################                               85.2%
+###################################################################################################################################################################                              85.3%
+###################################################################################################################################################################                              85.5%
+###################################################################################################################################################################                              85.7%
+###################################################################################################################################################################                              85.8%
+####################################################################################################################################################################                             86.0%
+####################################################################################################################################################################                             86.2%
+####################################################################################################################################################################                             86.3%
+#####################################################################################################################################################################                            86.5%
+#####################################################################################################################################################################                            86.6%
+#####################################################################################################################################################################                            86.9%
+######################################################################################################################################################################                           86.9%
+######################################################################################################################################################################                           87.2%
+######################################################################################################################################################################                           87.3%
+#######################################################################################################################################################################                          87.6%
+#######################################################################################################################################################################                          87.6%
+#######################################################################################################################################################################                          87.9%
+########################################################################################################################################################################                         88.0%
+########################################################################################################################################################################                         88.2%
+########################################################################################################################################################################                         88.3%
+#########################################################################################################################################################################                        88.6%
+#########################################################################################################################################################################                        88.6%
+#########################################################################################################################################################################                        88.9%
+#########################################################################################################################################################################                        89.0%
+##########################################################################################################################################################################                       89.3%
+##########################################################################################################################################################################                       89.3%
+###########################################################################################################################################################################                      89.6%
+###########################################################################################################################################################################                      89.7%
+###########################################################################################################################################################################                      90.0%
+############################################################################################################################################################################                     90.1%
+############################################################################################################################################################################                     90.3%
+############################################################################################################################################################################                     90.5%
+#############################################################################################################################################################################                    90.6%
+#############################################################################################################################################################################                    90.8%
+#############################################################################################################################################################################                    91.0%
+##############################################################################################################################################################################                   91.1%
+##############################################################################################################################################################################                   91.3%
+##############################################################################################################################################################################                   91.5%
+###############################################################################################################################################################################                  91.7%
+###############################################################################################################################################################################                  91.8%
+###############################################################################################################################################################################                  92.0%
+###############################################################################################################################################################################                  92.1%
+################################################################################################################################################################################                 92.4%
+################################################################################################################################################################################                 92.5%
+#################################################################################################################################################################################                92.7%
+#################################################################################################################################################################################                92.9%
+#################################################################################################################################################################################                93.1%
+##################################################################################################################################################################################               93.2%
+##################################################################################################################################################################################               93.4%
+##################################################################################################################################################################################               93.6%
+###################################################################################################################################################################################              93.8%
+###################################################################################################################################################################################              94.0%
+###################################################################################################################################################################################              94.1%
+####################################################################################################################################################################################             94.4%
+####################################################################################################################################################################################             94.5%
+####################################################################################################################################################################################             94.7%
+#####################################################################################################################################################################################            94.9%
+#####################################################################################################################################################################################            95.0%
+#####################################################################################################################################################################################            95.2%
+######################################################################################################################################################################################           95.4%
+######################################################################################################################################################################################           95.6%
+######################################################################################################################################################################################           95.8%
+#######################################################################################################################################################################################          96.0%
+#######################################################################################################################################################################################          96.2%
+#######################################################################################################################################################################################          96.3%
+########################################################################################################################################################################################         96.5%
+########################################################################################################################################################################################         96.7%
+#########################################################################################################################################################################################        96.9%
+#########################################################################################################################################################################################        97.1%
+#########################################################################################################################################################################################        97.3%
+##########################################################################################################################################################################################       97.5%
+##########################################################################################################################################################################################       97.6%
+##########################################################################################################################################################################################       97.9%
+###########################################################################################################################################################################################      98.0%
+###########################################################################################################################################################################################      98.0%
+###########################################################################################################################################################################################      98.1%
+###########################################################################################################################################################################################      98.2%
+###########################################################################################################################################################################################      98.3%
+###########################################################################################################################################################################################      98.4%
+############################################################################################################################################################################################     98.7%
+#############################################################################################################################################################################################    99.0%
+#############################################################################################################################################################################################    99.0%
+#############################################################################################################################################################################################    99.0%
+#############################################################################################################################################################################################    99.0%
+#############################################################################################################################################################################################    99.0%
+#############################################################################################################################################################################################    99.0%
+#############################################################################################################################################################################################    99.0%
+#############################################################################################################################################################################################    99.1%
+#############################################################################################################################################################################################    99.1%
+#############################################################################################################################################################################################    99.1%
+#############################################################################################################################################################################################    99.1%
+#############################################################################################################################################################################################    99.1%
+#############################################################################################################################################################################################    99.1%
+#############################################################################################################################################################################################    99.1%
+#############################################################################################################################################################################################    99.1%
+#############################################################################################################################################################################################    99.2%
+#############################################################################################################################################################################################    99.2%
+#############################################################################################################################################################################################    99.2%
+#############################################################################################################################################################################################    99.2%
+#############################################################################################################################################################################################    99.2%
+#############################################################################################################################################################################################    99.2%
+#############################################################################################################################################################################################    99.3%
+#############################################################################################################################################################################################    99.3%
+#############################################################################################################################################################################################    99.3%
+#############################################################################################################################################################################################    99.3%
+#############################################################################################################################################################################################    99.3%
+#############################################################################################################################################################################################    99.4%
+##############################################################################################################################################################################################   99.6%
+##############################################################################################################################################################################################   99.6%
+##############################################################################################################################################################################################   99.8%
+############################################################################################################################################################################################### 100.0%
+virt-resize: error: libguestfs error: /usr/bin/supermin exited with error status 1.
+To see full error messages you may need to enable debugging.
+Do:
+  export LIBGUESTFS_DEBUG=1 LIBGUESTFS_TRACE=1
+and run the command again.  For further information, read:
+  http://libguestfs.org/guestfs-faq.1.html#debugging-libguestfs
+You can also run 'libguestfs-test-tool' and post the *complete* output
+into a bug report or message to the libguestfs mailing list.
+
+If reporting bugs, run virt-resize with debugging enabled and include the complete output:
+
+  virt-resize -v -x [...]
+
+[DEBUG] complete_step(kvm_auto) called
+[DEBUG] fail_step(error): Unexpected error: Failed to create guests for range test-auto-ubuntu
+[DEBUG] progress_manager.complete() called
+[DEBUG] handler.execute() returned: False
+
+[DEBUG] main() started with sys.argv: ['./cyris', 'create', 'test-kvm-auto.yml']
+[DEBUG] Detected modern command: create
+[DEBUG] Args: ['create', 'test-kvm-auto.yml']
+[DEBUG] Starting modern CLI try block
+[DEBUG] About to import from /home/ubuntu/cyris/src
+[DEBUG] Successfully imported CLI main
+[DEBUG] About to call cli_main with argv: ['cyris', 'create', 'test-kvm-auto.yml']
+[DEBUG] CLI main() called with args: None
+[DEBUG] About to call cli()...
+[DEBUG] cli() called with config=None, verbose=False, version=False
+[DEBUG] Initializing context
+[DEBUG] Loading configuration
+[DEBUG] Looking for default config files
+[DEBUG] Checking config file: /home/ubuntu/cyris/config.yml
+[DEBUG] Found config file: /home/ubuntu/cyris/config.yml, parsing...
+[DEBUG] Configuration loaded successfully
+[DEBUG] cli() function completed successfully
+[DEBUG] create() called with file=test-kvm-auto.yml, dry_run=False
+[DEBUG] Imported CreateCommandHandler
+[DEBUG] Got config and verbose, creating handler
+[DEBUG] BaseCommandHandler.__init__() START
+[DEBUG] About to call get_console()
+[DEBUG] About to call get_error_console()
+[DEBUG] About to create ErrorDisplayManager()
+[DEBUG] BaseCommandHandler.__init__() COMPLETE
+[DEBUG] About to call handler.execute()
+[DEBUG] CreateCommandHandler.execute() START with file=test-kvm-auto.yml
+[DEBUG] Starting input validation
+[DEBUG] validate_file_exists() called with: test-kvm-auto.yml
+[DEBUG] File exists: test-kvm-auto.yml
+[DEBUG] validate_yaml_file() called with: test-kvm-auto.yml
+[DEBUG] About to import yaml
+[DEBUG] About to open and read YAML file: test-kvm-auto.yml
+[DEBUG] YAML file parsed successfully: test-kvm-auto.yml
+[DEBUG] validate_network_mode() called with: bridge
+[DEBUG] Network mode validation passed: bridge
+[DEBUG] Input validation completed successfully
+[DEBUG] About to start pre-creation checks, dry_run=False
+[DEBUG] Calling _run_pre_creation_checks()
+[DEBUG] _run_pre_creation_checks() START
+[DEBUG] About to create Rich progress manager (using simple fallback)
+[DEBUG] Rich progress manager created
+[DEBUG] About to enter progress context
+[DEBUG] Entered progress context, about to enter live context
+[DEBUG] Entered live context, starting try block
+[DEBUG] About to parse YAML and import config parser
+[DEBUG] Imports completed, creating parser instance
+[DEBUG] Parser created, about to parse file
+[DEBUG] File parsed successfully, continuing with checks
+[DEBUG] About to call check_progress.start_step('config')
+[DEBUG] start_step('config') completed
+[DEBUG] About to access config.guests
+[DEBUG] traditional_kvm_guests created: 0
+[DEBUG] kvm_auto_guests created: 0
+[DEBUG] About to log guest counts to progress
+[DEBUG] Logged traditional KVM guests count
+[DEBUG] Logged kvm-auto guests count
+[DEBUG] complete_step('config') called
+[DEBUG] start_step(init): Initializing orchestrator... (total=None)
+[DEBUG] create_orchestrator() START with network_mode=bridge, enable_ssh=True
+[DEBUG] About to import RangeOrchestrator
+[DEBUG] RangeOrchestrator imported successfully
+[DEBUG] About to import KVMProvider
+[DEBUG] KVMProvider imported successfully
+[DEBUG] About to configure network settings
+[DEBUG] libvirt_uri set to: qemu:///system
+[DEBUG] kvm_settings created: {'connection_uri': 'qemu:///system', 'libvirt_uri': 'qemu:///system', 'base_path': '/home/ubuntu/cyris/cyber_range', 'network_mode': 'bridge', 'enable_ssh': True}
+[DEBUG] About to create KVMProvider instance
+[DEBUG] KVMProvider instance created successfully
+[DEBUG] About to import CyRISSingleton
+[DEBUG] CyRISSingleton imported successfully
+[DEBUG] About to create CyRISSingleton with lock file: /home/ubuntu/cyris/cyber_range/.cyris.lock
+[DEBUG] CyRISSingleton created successfully
+[DEBUG] About to create RangeOrchestrator instance
+[DEBUG] RangeOrchestrator instance created successfully
+[DEBUG] create_orchestrator() completed successfully
+[DEBUG] complete_step(init) called
+[DEBUG] start_step(parse): Parsing YAML configuration... (total=None)
+[DEBUG] log_info: [DEBUG] Importing CyRISConfigParser...
+[DEBUG] log_info: [DEBUG] Creating parser instance...
+[DEBUG] log_info: [DEBUG] About to call parse_file(test-kvm-auto.yml)...
+[DEBUG] log_info: [DEBUG] parse_file completed successfully!
+[DEBUG] log_info: Found 1 hosts and 0 guests
+[DEBUG] complete_step(parse) called
+[DEBUG] start_step(create): Creating cyber range infrastructure... (total=100)
+[DEBUG] log_info: [DEBUG] Starting orchestrator phase...
+[DEBUG] log_info: [DEBUG] Setting progress manager on orchestrator...
+[DEBUG] log_info: [DEBUG] About to call orchestrator.create_range_from_yaml(test-kvm-auto.yml, None)...
+[DEBUG] log_info: 🤖 Starting kvm-auto workflow for 1 guests
+[DEBUG] log_info: 📦 Grouped guests into 1 image configurations
+[DEBUG] start_step(kvm_auto): Building images and creating VMs... (total=1)
+[DEBUG] log_info: 🔨 Processing image group 1/1: opensuse-tumbleweed_2_2048_20G
+[DEBUG] log_info:    📋 This group contains 1 guests: ['opensuse-desktop']
+[DEBUG] log_info: 🧩 Using guest 'opensuse-desktop' as template for image building
+[DEBUG] start_step(image_build_1): Building image for opensuse-tumbleweed... (total=None)
+[DEBUG] log_info: 🔧 Starting image build for guest 'opensuse-desktop'
+[DEBUG] log_info: 📋 Build parameters: image=opensuse-tumbleweed, vcpus=2, memory=2048, disk=20G
+[DEBUG] log_info: 📁 Output image path: /tmp/cyris-builds/opensuse-desktop-opensuse-tumbleweed.qcow2
+[DEBUG] log_info: 🚀 Executing virt-builder command:
+[DEBUG] log_command: virt-builder opensuse-tumbleweed --size 20G --format qcow2 --output /tmp/cyris-builds/opensuse-desktop-opensuse-tumbleweed.qcow2
+[DEBUG] log_info: ⏳ This may take several minutes for image download and creation...
+[DEBUG] start_step(cmd_1756995547): Building VM image (total=None)
+[DEBUG] fail_step(cmd_1756995547): Command failed with exit code 1
+[DEBUG] log_info: virt-builder output: [   5.7] Downloading: http://download.opensuse.org/repositories/Virtualization:/virt-builder-images/images/openSUSE-Tumbleweed.x86_64-2022.11.22-Build8.420.qcow2.xz
+[   6.6] Planning how to build this...
+[DEBUG] fail_step(image_build_1): Image build failed: virt-builder failed (exit code 1): virt-resize: error: libguestfs error: /usr/bin/supermin exited with error status 1.
+To see full error messages you may need to enable debugging.
+Do:
+  export LIBGUESTFS_DEBUG=1 LIBGUESTFS_TRACE=1
+and run the command again.  For further information, read:
+  http://libguestfs.org/guestfs-faq.1.html#debugging-libguestfs
+You can also run 'libguestfs-test-tool' and post the *complete* output
+into a bug report or message to the libguestfs mailing list.
+
+If reporting bugs, run virt-resize with debugging enabled and include the complete output:
+
+  virt-resize -v -x [...]
+
+[DEBUG] complete_step(kvm_auto) called
+[DEBUG] fail_step(error): Unexpected error: Failed to create guests for range test-auto-ubuntu
+[DEBUG] progress_manager.complete() called
+[DEBUG] handler.execute() returned: False
+
+[DEBUG] main() started with sys.argv: ['./cyris', 'create', 'test-kvm-auto.yml']
+[DEBUG] Detected modern command: create
+[DEBUG] Args: ['create', 'test-kvm-auto.yml']
+[DEBUG] Starting modern CLI try block
+[DEBUG] About to import from /home/ubuntu/cyris/src
+[DEBUG] Successfully imported CLI main
+[DEBUG] About to call cli_main with argv: ['cyris', 'create', 'test-kvm-auto.yml']
+[DEBUG] CLI main() called with args: None
+[DEBUG] About to call cli()...
+[DEBUG] cli() called with config=None, verbose=False, version=False
+[DEBUG] Initializing context
+[DEBUG] Loading configuration
+[DEBUG] Looking for default config files
+[DEBUG] Checking config file: /home/ubuntu/cyris/config.yml
+[DEBUG] Found config file: /home/ubuntu/cyris/config.yml, parsing...
+[DEBUG] Configuration loaded successfully
+[DEBUG] cli() function completed successfully
+[DEBUG] create() called with file=test-kvm-auto.yml, dry_run=False
+[DEBUG] Imported CreateCommandHandler
+[DEBUG] Got config and verbose, creating handler
+[DEBUG] BaseCommandHandler.__init__() START
+[DEBUG] About to call get_console()
+[DEBUG] About to call get_error_console()
+[DEBUG] About to create ErrorDisplayManager()
+[DEBUG] BaseCommandHandler.__init__() COMPLETE
+[DEBUG] About to call handler.execute()
+[DEBUG] CreateCommandHandler.execute() START with file=test-kvm-auto.yml
+[DEBUG] Starting input validation
+[DEBUG] validate_file_exists() called with: test-kvm-auto.yml
+[DEBUG] File exists: test-kvm-auto.yml
+[DEBUG] validate_yaml_file() called with: test-kvm-auto.yml
+[DEBUG] About to import yaml
+[DEBUG] About to open and read YAML file: test-kvm-auto.yml
+[DEBUG] YAML file parsed successfully: test-kvm-auto.yml
+[DEBUG] validate_network_mode() called with: bridge
+[DEBUG] Network mode validation passed: bridge
+[DEBUG] Input validation completed successfully
+[DEBUG] About to start pre-creation checks, dry_run=False
+[DEBUG] Calling _run_pre_creation_checks()
+[DEBUG] _run_pre_creation_checks() START
+[DEBUG] About to create Rich progress manager (using simple fallback)
+[DEBUG] Rich progress manager created
+[DEBUG] About to enter progress context
+[DEBUG] Entered progress context, about to enter live context
+[DEBUG] Entered live context, starting try block
+[DEBUG] About to parse YAML and import config parser
+[DEBUG] Imports completed, creating parser instance
+[DEBUG] Parser created, about to parse file
+[DEBUG] File parsed successfully, continuing with checks
+[DEBUG] About to call check_progress.start_step('config')
+[DEBUG] start_step('config') completed
+[DEBUG] About to access config.guests
+[DEBUG] traditional_kvm_guests created: 0
+[DEBUG] kvm_auto_guests created: 0
+[DEBUG] About to log guest counts to progress
+[DEBUG] Logged traditional KVM guests count
+[DEBUG] Logged kvm-auto guests count
+[DEBUG] complete_step('config') called
+[DEBUG] start_step(init): Initializing orchestrator... (total=None)
+[DEBUG] create_orchestrator() START with network_mode=bridge, enable_ssh=True
+[DEBUG] About to import RangeOrchestrator
+[DEBUG] RangeOrchestrator imported successfully
+[DEBUG] About to import KVMProvider
+[DEBUG] KVMProvider imported successfully
+[DEBUG] About to configure network settings
+[DEBUG] libvirt_uri set to: qemu:///system
+[DEBUG] kvm_settings created: {'connection_uri': 'qemu:///system', 'libvirt_uri': 'qemu:///system', 'base_path': '/home/ubuntu/cyris/cyber_range', 'network_mode': 'bridge', 'enable_ssh': True}
+[DEBUG] About to create KVMProvider instance
+[DEBUG] KVMProvider instance created successfully
+[DEBUG] About to import CyRISSingleton
+[DEBUG] CyRISSingleton imported successfully
+[DEBUG] About to create CyRISSingleton with lock file: /home/ubuntu/cyris/cyber_range/.cyris.lock
+[DEBUG] CyRISSingleton created successfully
+[DEBUG] About to create RangeOrchestrator instance
+[DEBUG] RangeOrchestrator instance created successfully
+[DEBUG] create_orchestrator() completed successfully
+[DEBUG] complete_step(init) called
+[DEBUG] start_step(parse): Parsing YAML configuration... (total=None)
+[DEBUG] log_info: [DEBUG] Importing CyRISConfigParser...
+[DEBUG] log_info: [DEBUG] Creating parser instance...
+[DEBUG] log_info: [DEBUG] About to call parse_file(test-kvm-auto.yml)...
+[DEBUG] log_info: [DEBUG] parse_file completed successfully!
+[DEBUG] log_info: Found 1 hosts and 0 guests
+[DEBUG] complete_step(parse) called
+[DEBUG] start_step(create): Creating cyber range infrastructure... (total=100)
+[DEBUG] log_info: [DEBUG] Starting orchestrator phase...
+[DEBUG] log_info: [DEBUG] Setting progress manager on orchestrator...
+[DEBUG] log_info: [DEBUG] About to call orchestrator.create_range_from_yaml(test-kvm-auto.yml, None)...
+[DEBUG] log_info: 🤖 Starting kvm-auto workflow for 1 guests
+[DEBUG] log_info: 📦 Grouped guests into 1 image configurations
+[DEBUG] start_step(kvm_auto): Building images and creating VMs... (total=1)
+[DEBUG] log_info: 🔨 Processing image group 1/1: opensuse-tumbleweed_2_2048_20G
+[DEBUG] log_info:    📋 This group contains 1 guests: ['opensuse-desktop']
+[DEBUG] log_info: 🧩 Using guest 'opensuse-desktop' as template for image building
+[DEBUG] start_step(image_build_1): Building image for opensuse-tumbleweed... (total=None)
+[DEBUG] log_info: 🔧 Starting image build for guest 'opensuse-desktop'
+[DEBUG] log_info: 📋 Build parameters: image=opensuse-tumbleweed, vcpus=2, memory=2048, disk=20G
+[DEBUG] fail_step(image_build_1): Image build failed: Build requirements validation failed
+[DEBUG] complete_step(kvm_auto) called
+[DEBUG] fail_step(error): Unexpected error: Failed to create guests for range test-auto-ubuntu
+[DEBUG] progress_manager.complete() called
+[DEBUG] handler.execute() returned: False
+
+[DEBUG] main() started with sys.argv: ['./cyris', 'create', 'test-kvm-auto.yml', '--dry-run']
+[DEBUG] Detected modern command: create
+[DEBUG] Args: ['create', 'test-kvm-auto.yml', '--dry-run']
+[DEBUG] Starting modern CLI try block
+[DEBUG] About to import from /home/ubuntu/cyris/src
+[DEBUG] Successfully imported CLI main
+[DEBUG] About to call cli_main with argv: ['cyris', 'create', 'test-kvm-auto.yml', '--dry-run']
+[DEBUG] CLI main() called with args: None
+[DEBUG] About to call cli()...
+[DEBUG] cli() called with config=None, verbose=False, version=False
+[DEBUG] Initializing context
+[DEBUG] Loading configuration
+[DEBUG] Looking for default config files
+[DEBUG] Checking config file: /home/ubuntu/cyris/config.yml
+[DEBUG] Found config file: /home/ubuntu/cyris/config.yml, parsing...
+[DEBUG] Configuration loaded successfully
+[DEBUG] cli() function completed successfully
+[DEBUG] create() called with file=test-kvm-auto.yml, dry_run=True
+[DEBUG] Imported CreateCommandHandler
+[DEBUG] Got config and verbose, creating handler
+[DEBUG] BaseCommandHandler.__init__() START
+[DEBUG] About to call get_console()
+[DEBUG] About to call get_error_console()
+[DEBUG] About to create ErrorDisplayManager()
+[DEBUG] BaseCommandHandler.__init__() COMPLETE
+[DEBUG] About to call handler.execute()
+[DEBUG] CreateCommandHandler.execute() START with file=test-kvm-auto.yml
+[DEBUG] Starting input validation
+[DEBUG] validate_file_exists() called with: test-kvm-auto.yml
+[DEBUG] File exists: test-kvm-auto.yml
+[DEBUG] validate_yaml_file() called with: test-kvm-auto.yml
+[DEBUG] About to import yaml
+[DEBUG] About to open and read YAML file: test-kvm-auto.yml
+[DEBUG] YAML file parsed successfully: test-kvm-auto.yml
+[DEBUG] validate_network_mode() called with: bridge
+[DEBUG] Network mode validation passed: bridge
+[DEBUG] Input validation completed successfully
+[DEBUG] About to start pre-creation checks, dry_run=True
+[DEBUG] create_orchestrator() START with network_mode=bridge, enable_ssh=True
+[DEBUG] About to import RangeOrchestrator
+[DEBUG] RangeOrchestrator imported successfully
+[DEBUG] About to import KVMProvider
+[DEBUG] KVMProvider imported successfully
+[DEBUG] About to configure network settings
+[DEBUG] libvirt_uri set to: qemu:///system
+[DEBUG] kvm_settings created: {'connection_uri': 'qemu:///system', 'libvirt_uri': 'qemu:///system', 'base_path': '/home/ubuntu/cyris/cyber_range', 'network_mode': 'bridge', 'enable_ssh': True}
+[DEBUG] About to create KVMProvider instance
+[DEBUG] KVMProvider instance created successfully
+[DEBUG] About to import CyRISSingleton
+[DEBUG] CyRISSingleton imported successfully
+[DEBUG] About to create CyRISSingleton with lock file: /home/ubuntu/cyris/cyber_range/.cyris.lock
+[DEBUG] CyRISSingleton created successfully
+[DEBUG] About to create RangeOrchestrator instance
+[DEBUG] RangeOrchestrator instance created successfully
+[DEBUG] create_orchestrator() completed successfully
+[DEBUG] handler.execute() returned: True
+
+[DEBUG] main() started with sys.argv: ['./cyris', 'create', 'test-kvm-auto.yml']
+[DEBUG] Detected modern command: create
+[DEBUG] Args: ['create', 'test-kvm-auto.yml']
+[DEBUG] Starting modern CLI try block
+[DEBUG] About to import from /home/ubuntu/cyris/src
+[DEBUG] Successfully imported CLI main
+[DEBUG] About to call cli_main with argv: ['cyris', 'create', 'test-kvm-auto.yml']
+[DEBUG] CLI main() called with args: None
+[DEBUG] About to call cli()...
+[DEBUG] cli() called with config=None, verbose=False, version=False
+[DEBUG] Initializing context
+[DEBUG] Loading configuration
+[DEBUG] Looking for default config files
+[DEBUG] Checking config file: /home/ubuntu/cyris/config.yml
+[DEBUG] Found config file: /home/ubuntu/cyris/config.yml, parsing...
+[DEBUG] Configuration loaded successfully
+[DEBUG] cli() function completed successfully
+[DEBUG] create() called with file=test-kvm-auto.yml, dry_run=False
+[DEBUG] Imported CreateCommandHandler
+[DEBUG] Got config and verbose, creating handler
+[DEBUG] BaseCommandHandler.__init__() START
+[DEBUG] About to call get_console()
+[DEBUG] About to call get_error_console()
+[DEBUG] About to create ErrorDisplayManager()
+[DEBUG] BaseCommandHandler.__init__() COMPLETE
+[DEBUG] About to call handler.execute()
+[DEBUG] CreateCommandHandler.execute() START with file=test-kvm-auto.yml
+[DEBUG] Starting input validation
+[DEBUG] validate_file_exists() called with: test-kvm-auto.yml
+[DEBUG] File exists: test-kvm-auto.yml
+[DEBUG] validate_yaml_file() called with: test-kvm-auto.yml
+[DEBUG] About to import yaml
+[DEBUG] About to open and read YAML file: test-kvm-auto.yml
+[DEBUG] YAML file parsed successfully: test-kvm-auto.yml
+[DEBUG] validate_network_mode() called with: bridge
+[DEBUG] Network mode validation passed: bridge
+[DEBUG] Input validation completed successfully
+[DEBUG] About to start pre-creation checks, dry_run=False
+[DEBUG] Calling _run_pre_creation_checks()
+[DEBUG] _run_pre_creation_checks() START
+[DEBUG] About to create Rich progress manager (using simple fallback)
+[DEBUG] Rich progress manager created
+[DEBUG] About to enter progress context
+[DEBUG] Entered progress context, about to enter live context
+[DEBUG] Entered live context, starting try block
+[DEBUG] About to parse YAML and import config parser
+[DEBUG] Imports completed, creating parser instance
+[DEBUG] Parser created, about to parse file
+[DEBUG] File parsed successfully, continuing with checks
+[DEBUG] About to call check_progress.start_step('config')
+[DEBUG] start_step('config') completed
+[DEBUG] About to access config.guests
+[DEBUG] traditional_kvm_guests created: 0
+[DEBUG] kvm_auto_guests created: 0
+[DEBUG] About to log guest counts to progress
+[DEBUG] Logged traditional KVM guests count
+[DEBUG] Logged kvm-auto guests count
+[DEBUG] complete_step('config') called
+[DEBUG] start_step(init): Initializing orchestrator... (total=None)
+[DEBUG] create_orchestrator() START with network_mode=bridge, enable_ssh=True
+[DEBUG] About to import RangeOrchestrator
+[DEBUG] RangeOrchestrator imported successfully
+[DEBUG] About to import KVMProvider
+[DEBUG] KVMProvider imported successfully
+[DEBUG] About to configure network settings
+[DEBUG] libvirt_uri set to: qemu:///system
+[DEBUG] kvm_settings created: {'connection_uri': 'qemu:///system', 'libvirt_uri': 'qemu:///system', 'base_path': '/home/ubuntu/cyris/cyber_range', 'network_mode': 'bridge', 'enable_ssh': True}
+[DEBUG] About to create KVMProvider instance
+[DEBUG] KVMProvider instance created successfully
+[DEBUG] About to import CyRISSingleton
+[DEBUG] CyRISSingleton imported successfully
+[DEBUG] About to create CyRISSingleton with lock file: /home/ubuntu/cyris/cyber_range/.cyris.lock
+[DEBUG] CyRISSingleton created successfully
+[DEBUG] About to create RangeOrchestrator instance
+[DEBUG] RangeOrchestrator instance created successfully
+[DEBUG] create_orchestrator() completed successfully
+[DEBUG] complete_step(init) called
+[DEBUG] start_step(parse): Parsing YAML configuration... (total=None)
+[DEBUG] log_info: [DEBUG] Importing CyRISConfigParser...
+[DEBUG] log_info: [DEBUG] Creating parser instance...
+[DEBUG] log_info: [DEBUG] About to call parse_file(test-kvm-auto.yml)...
+[DEBUG] log_info: [DEBUG] parse_file completed successfully!
+[DEBUG] log_info: Found 1 hosts and 0 guests
+[DEBUG] complete_step(parse) called
+[DEBUG] start_step(create): Creating cyber range infrastructure... (total=100)
+[DEBUG] log_info: [DEBUG] Starting orchestrator phase...
+[DEBUG] log_info: [DEBUG] Setting progress manager on orchestrator...
+[DEBUG] log_info: [DEBUG] About to call orchestrator.create_range_from_yaml(test-kvm-auto.yml, None)...
+[DEBUG] log_info: 🤖 Starting kvm-auto workflow for 1 guests
+[DEBUG] log_info: 📦 Grouped guests into 1 image configurations
+[DEBUG] start_step(kvm_auto): Building images and creating VMs... (total=1)
+[DEBUG] log_info: 🔨 Processing image group 1/1: opensuse-tumbleweed_2_2048_20G
+[DEBUG] log_info:    📋 This group contains 1 guests: ['opensuse-desktop']
+[DEBUG] log_info: 🧩 Using guest 'opensuse-desktop' as template for image building
+[DEBUG] start_step(image_build_1): Building image for opensuse-tumbleweed... (total=None)
+[DEBUG] log_info: 🔧 Starting image build for guest 'opensuse-desktop'
+[DEBUG] log_info: 📋 Build parameters: image=opensuse-tumbleweed, vcpus=2, memory=2048, disk=20G
+[DEBUG] fail_step(image_build_1): Image build failed: Build requirements validation failed
+[DEBUG] complete_step(kvm_auto) called
+[DEBUG] fail_step(error): Unexpected error: Failed to create guests for range test-auto-ubuntu
+[DEBUG] progress_manager.complete() called
+[DEBUG] handler.execute() returned: False
