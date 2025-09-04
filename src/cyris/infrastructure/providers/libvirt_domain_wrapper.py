@@ -20,7 +20,8 @@ Usage:
 """
 
 import libvirt
-import logging
+# import logging  # Replaced with unified logger
+from cyris.core.unified_logger import get_logger
 import xml.etree.ElementTree as ET
 import time
 import re
@@ -35,7 +36,7 @@ from .libvirt_connection_manager import (
     LibvirtDomainError
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__, "libvirt_domain_wrapper")
 
 
 class DomainState(Enum):

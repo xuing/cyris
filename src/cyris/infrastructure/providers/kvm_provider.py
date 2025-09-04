@@ -5,7 +5,8 @@ This module provides KVM/QEMU virtualization support for CyRIS,
 implementing the infrastructure provider interface for local virtualization.
 """
 
-import logging
+# import logging  # Replaced with unified logger
+from cyris.core.unified_logger import get_logger
 import subprocess
 import xml.etree.ElementTree as ET
 from typing import Dict, List, Optional, Any
@@ -29,10 +30,10 @@ from .base_provider import (
     InfrastructureError, ConnectionError, ResourceCreationError,
     ResourceDestructionError, ResourceNotFoundError
 )
-from ...domain.entities.host import Host
-from ...domain.entities.guest import Guest, BaseVMType
+from cyris.domain.entities.host import Host
+from cyris.domain.entities.guest import Guest, BaseVMType
 from ..image_builder import LocalImageBuilder, BuildResult
-from ...core.rich_progress import RichProgressManager
+from cyris.core.rich_progress import RichProgressManager
 
 
 class KVMProvider(InfrastructureProvider):
@@ -79,7 +80,7 @@ class KVMProvider(InfrastructureProvider):
         
         # Connection state
         self._connection: Optional[libvirt.virConnect] = None
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__, "kvm_provider")
         
         # Initialize permission manager for automatic libvirt access
         self.permission_manager = PermissionManager()
@@ -201,7 +202,7 @@ class KVMProvider(InfrastructureProvider):
         
         return host_ids
     
-    def create_guests(self, guests: List[Guest], host_mapping: Dict[str, str]) -> List[str]:
+    def create_guests(self, guests: List[Guest], host_mapping: Dict[str, str], build_only: bool = False, skip_builder: bool = False) -> List[str]:
         """
         Create virtual machines with support for kvm-auto type.
         
@@ -227,7 +228,7 @@ class KVMProvider(InfrastructureProvider):
         # Handle kvm-auto guests
         if kvm_auto_guests:
             self.logger.info(f"Creating {len(kvm_auto_guests)} kvm-auto guests")
-            auto_guest_ids = self._create_kvm_auto_guests(kvm_auto_guests, host_mapping)
+            auto_guest_ids = self._create_kvm_auto_guests(kvm_auto_guests, host_mapping, build_only, skip_builder)
             guest_ids.extend(auto_guest_ids)
         
         # Handle regular guests with existing logic
@@ -299,7 +300,7 @@ class KVMProvider(InfrastructureProvider):
         
         return guest_ids
     
-    def _create_kvm_auto_guests(self, guests: List[Guest], host_mapping: Dict[str, str]) -> List[str]:
+    def _create_kvm_auto_guests(self, guests: List[Guest], host_mapping: Dict[str, str], build_only: bool = False, skip_builder: bool = False) -> List[str]:
         """Create guests using kvm-auto workflow with Rich progress tracking"""
         if self.progress_manager:
             self.progress_manager.log_info(f"🤖 Starting kvm-auto workflow for {len(guests)} guests")
@@ -343,30 +344,67 @@ class KVMProvider(InfrastructureProvider):
                 self.logger.info(template_msg)
             
             try:
-                build_result = self.image_builder.build_image_locally(template_guest)
-                
-                if not build_result.success:
-                    error_msg = f"❌ Image build failed: {build_result.error_message}"
-                    skip_msg = f"   🚫 Skipping {len(guest_list)} guests in this group"
+                if skip_builder:
+                    # Skip image building, use existing image
+                    expected_image_path = f"/tmp/cyris-builds/{template_guest.guest_id}-{template_guest.image_name}.qcow2"
+                    if Path(expected_image_path).exists():
+                        skip_msg = f"🏃‍♂️ Skipping image building (--skip-builder), using existing image: {expected_image_path}"
+                        if self.progress_manager:
+                            self.progress_manager.complete_step(f"image_build_{i}")
+                            self.progress_manager.log_info(skip_msg)
+                        else:
+                            self.logger.info(skip_msg)
+                        
+                        # Create a mock build result
+                        build_result = type('BuildResult', (), {
+                            'success': True,
+                            'image_path': expected_image_path,
+                            'build_time': 0.0
+                        })()
+                    else:
+                        error_msg = f"❌ Skip-builder enabled but image not found: {expected_image_path}"
+                        skip_msg = f"   🚫 Skipping {len(guest_list)} guests in this group"
+                        
+                        if self.progress_manager:
+                            self.progress_manager.fail_step(f"image_build_{i}", f"Image not found: {expected_image_path}")
+                            self.progress_manager.log_error(skip_msg)
+                        else:
+                            self.logger.error(error_msg)
+                            self.logger.error(skip_msg)
+                        continue
+                else:
+                    build_result = self.image_builder.build_image_locally(template_guest, build_only=build_only)
+                    
+                    if not build_result.success:
+                        error_msg = f"❌ Image build failed: {build_result.error_message}"
+                        skip_msg = f"   🚫 Skipping {len(guest_list)} guests in this group"
+                        
+                        if self.progress_manager:
+                            self.progress_manager.fail_step(f"image_build_{i}", f"Image build failed: {build_result.error_message}")
+                            self.progress_manager.log_error(skip_msg)
+                        else:
+                            self.logger.error(error_msg)
+                            self.logger.error(skip_msg)
+                        continue
+                    
+                    success_msg = f"✅ Image built successfully in {build_result.build_time:.2f}s"
+                    path_msg = f"   📁 Image path: {build_result.image_path}"
                     
                     if self.progress_manager:
-                        self.progress_manager.fail_step(f"image_build_{i}", f"Image build failed: {build_result.error_message}")
-                        self.progress_manager.log_error(skip_msg)
+                        self.progress_manager.complete_step(f"image_build_{i}")
+                        self.progress_manager.log_success(success_msg)
+                        self.progress_manager.log_info(path_msg)
                     else:
-                        self.logger.error(error_msg)
-                        self.logger.error(skip_msg)
-                    continue
+                        self.logger.info(success_msg)
+                        self.logger.info(path_msg)
                 
-                success_msg = f"✅ Image built successfully in {build_result.build_time:.2f}s"
-                path_msg = f"   📁 Image path: {build_result.image_path}"
-                
-                if self.progress_manager:
-                    self.progress_manager.complete_step(f"image_build_{i}")
-                    self.progress_manager.log_success(success_msg)
-                    self.progress_manager.log_info(path_msg)
-                else:
-                    self.logger.info(success_msg)
-                    self.logger.info(path_msg)
+                # In build-only mode, we're done after successful image build
+                if build_only:
+                    if self.progress_manager:
+                        self.progress_manager.log_success(f"🏁 Build-only mode: Image ready for later use")
+                    else:
+                        self.logger.info(f"🏁 Build-only mode: Image ready for later use")
+                    continue  # Skip VM creation for this group
                 
                 # Create VMs from built image
                 create_msg = f"🚀 Creating {len(guest_list)} VMs from built image"
@@ -441,10 +479,12 @@ class KVMProvider(InfrastructureProvider):
                 import traceback
                 self.logger.error(f"💥 Full traceback: {traceback.format_exc()}")
             finally:
-                # Cleanup build image after VM creation
-                if 'build_result' in locals() and build_result.image_path:
+                # Cleanup build image after VM creation (unless build_only mode)
+                if 'build_result' in locals() and build_result.image_path and not build_only:
                     self.logger.info(f"🧹 Cleaning up temporary build image: {build_result.image_path}")
                     self.image_builder.cleanup_build_files(build_result.image_path)
+                elif 'build_result' in locals() and build_result.image_path and build_only:
+                    self.logger.info(f"🔒 Preserving build image for later use: {build_result.image_path}")
         
         # Complete the overall kvm-auto step
         completion_msg = f"🏁 kvm-auto workflow completed: {len(guest_ids)} VMs created successfully"
@@ -470,23 +510,79 @@ class KVMProvider(InfrastructureProvider):
     def _create_vm_from_built_image(self, guest: Guest, local_image_path: str, 
                                   host_mapping: Dict[str, str]) -> Optional[str]:
         """Create VM from locally built image"""
+        # CRITICAL DEBUG: Add log statement to confirm method is called
+        self.logger.debug(f"_create_vm_from_built_image called with guest={guest.guest_id if hasattr(guest, 'guest_id') else 'unknown'}, image_path={local_image_path}")
         try:
             guest_id = guest.guest_id
             self.logger.info(f"Creating VM from built image for guest {guest_id}")
+            self.logger.info(f"🔧 [DEBUG] Source image path: {local_image_path}")
+            
+            # Verify source image exists
+            from pathlib import Path
+            if not Path(local_image_path).exists():
+                self.logger.error(f"❌ [ERROR] Source image does not exist: {local_image_path}")
+                return None
             
             # Generate unique VM name
             vm_name = f"{self.network_prefix}-{guest_id}-{str(uuid.uuid4())[:8]}"
+            self.logger.info(f"🔧 [DEBUG] Generated VM name: {vm_name}")
             
             # Create final disk path for this VM
             vm_disk_path = self.base_image_dir / f"{vm_name}.qcow2"
+            self.logger.info(f"🔧 [DEBUG] Target disk path: {vm_disk_path}")
+            self.logger.info(f"🔧 [DEBUG] Base image dir: {self.base_image_dir}")
+            
+            # Check if base image directory exists and is writable
+            if not self.base_image_dir.exists():
+                self.logger.error(f"❌ [ERROR] Base image directory does not exist: {self.base_image_dir}")
+                return None
+            
+            if not self.base_image_dir.is_dir():
+                self.logger.error(f"❌ [ERROR] Base image path is not a directory: {self.base_image_dir}")
+                return None
+            
+            # Test write permissions
+            try:
+                test_file = self.base_image_dir / f"write_test_{guest_id}.tmp"
+                test_file.touch()
+                test_file.unlink()
+                self.logger.info(f"✅ [DEBUG] Write permission confirmed for: {self.base_image_dir}")
+            except PermissionError as pe:
+                self.logger.error(f"❌ [ERROR] No write permission to {self.base_image_dir}: {pe}")
+                return None
+            except Exception as e:
+                self.logger.error(f"❌ [ERROR] Cannot write to {self.base_image_dir}: {e}")
+                return None
             
             # Copy the built image to final location
-            import shutil
-            shutil.copy2(local_image_path, vm_disk_path)
-            self.logger.debug(f"Copied image to: {vm_disk_path}")
+            self.logger.info(f"🔧 [DEBUG] About to copy image from {local_image_path} to {vm_disk_path}")
+            try:
+                import shutil
+                shutil.copy2(local_image_path, vm_disk_path)
+                self.logger.info(f"✅ [DEBUG] Successfully copied image to: {vm_disk_path}")
+                
+                # Verify the copied file
+                if vm_disk_path.exists():
+                    file_size = vm_disk_path.stat().st_size
+                    self.logger.info(f"✅ [DEBUG] Copied file size: {file_size} bytes")
+                else:
+                    self.logger.error(f"❌ [ERROR] Copied file does not exist: {vm_disk_path}")
+                    return None
+                    
+            except PermissionError as pe:
+                self.logger.error(f"❌ [ERROR] Permission denied copying to {vm_disk_path}: {pe}")
+                return None
+            except Exception as e:
+                self.logger.error(f"❌ [ERROR] Failed to copy image: {e}")
+                import traceback
+                self.logger.error(f"💥 Copy traceback: {traceback.format_exc()}")
+                return None
             
             # Create VM using virt-install
+            self.logger.info(f"🔧 [DEBUG] About to call _create_vm_with_virt_install")
+            self.logger.info(f"🔧 [DEBUG] Parameters: guest={guest_id}, vm_name={vm_name}, disk_path={vm_disk_path}")
             vm_id = self._create_vm_with_virt_install(guest, vm_name, str(vm_disk_path))
+            self.logger.info(f"🔧 [DEBUG] _create_vm_with_virt_install returned: {vm_id}")
             
             if vm_id:
                 # Register guest resource
@@ -509,12 +605,16 @@ class KVMProvider(InfrastructureProvider):
                 )
                 
                 self._register_resource(guest_resource)
-                self.logger.info(f"Successfully created kvm-auto VM {vm_name} for guest {guest_id}")
+                self.logger.info(f"✅ Successfully created kvm-auto VM {vm_name} for guest {guest_id}")
+            else:
+                self.logger.error(f"❌ [ERROR] VM creation returned None for guest {guest_id}")
                 
             return vm_id
             
         except Exception as e:
-            self.logger.error(f"Failed to create VM from built image for guest {guest.guest_id}: {e}")
+            self.logger.error(f"❌ [ERROR] Failed to create VM from built image for guest {guest.guest_id}: {e}")
+            import traceback
+            self.logger.error(f"💥 Full traceback: {traceback.format_exc()}")
             return None
     
     def _create_vm_with_virt_install(self, guest: Guest, vm_name: str, disk_path: str) -> Optional[str]:
@@ -575,31 +675,103 @@ class KVMProvider(InfrastructureProvider):
             # Always no auto console for automation
             virt_install_cmd.append('--noautoconsole')
             
-            self.logger.info(f"🖥️  Creating VM '{vm_name}' using virt-install:")
-            self.logger.info(f"    {' '.join(virt_install_cmd)}")
-            self.logger.info(f"⏳ VM creation may take 1-2 minutes...")
+            # Pre-execution debugging
+            self.logger.info(f"🖥️  [DEBUG] Creating VM '{vm_name}' using virt-install")
+            self.logger.info(f"📋 [DEBUG] VM Configuration:")
+            self.logger.info(f"    - Name: {vm_name}")
+            self.logger.info(f"    - VCPUs: {guest.vcpus}")
+            self.logger.info(f"    - Memory: {guest.memory} MB")
+            self.logger.info(f"    - Disk Path: {disk_path}")
+            self.logger.info(f"    - Network: {network_config}")
+            self.logger.info(f"    - Graphics: {graphics_config}")
             
+            # Check if disk file exists and is readable
+            disk_file = Path(disk_path)
+            if not disk_file.exists():
+                self.logger.error(f"❌ [ERROR] Disk image file does not exist: {disk_path}")
+                return None
+            else:
+                disk_size = disk_file.stat().st_size / (1024 * 1024)  # MB
+                self.logger.info(f"✅ [DEBUG] Disk image exists: {disk_path} ({disk_size:.1f} MB)")
+            
+            # Log the complete command
+            cmd_str = ' '.join(virt_install_cmd)
+            self.logger.info(f"🚀 [DEBUG] Executing virt-install command:")
+            self.logger.info(f"    {cmd_str}")
+            self.logger.info(f"⏳ [DEBUG] VM creation may take 1-2 minutes...")
+            
+            # Write command to debug log file for manual testing
+            with open('/home/ubuntu/cyris/debug_virt_install.log', 'a') as f:
+                f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] virt-install command:\n")
+                f.write(f"{cmd_str}\n")
+                f.write(f"Working directory: {Path.cwd()}\n")
+                f.write(f"Disk path: {disk_path}\n")
+                f.write(f"Disk exists: {disk_file.exists()}\n\n")
+                f.flush()
+            
+            # Execute the command
             result = subprocess.run(virt_install_cmd, capture_output=True, text=True, timeout=300)
+            
+            # Detailed result logging
+            self.logger.info(f"📊 [DEBUG] virt-install execution completed:")
+            self.logger.info(f"    - Return code: {result.returncode}")
+            self.logger.info(f"    - Stdout length: {len(result.stdout) if result.stdout else 0} chars")
+            self.logger.info(f"    - Stderr length: {len(result.stderr) if result.stderr else 0} chars")
             
             # Log command output for debugging
             if result.stdout:
-                self.logger.info(f"📄 virt-install stdout: {result.stdout}")
+                self.logger.info(f"📄 [DEBUG] virt-install stdout:")
+                for line in result.stdout.strip().split('\n'):
+                    if line.strip():
+                        self.logger.info(f"    STDOUT: {line}")
+            else:
+                self.logger.info(f"📄 [DEBUG] virt-install stdout: (empty)")
+                
             if result.stderr:
-                if result.returncode == 0:
-                    # virt-install may output non-error info to stderr
-                    self.logger.debug(f"virt-install stderr (non-error): {result.stderr}")
-                else:
-                    self.logger.error(f"❌ virt-install stderr: {result.stderr}")
+                self.logger.info(f"📄 [DEBUG] virt-install stderr:")
+                for line in result.stderr.strip().split('\n'):
+                    if line.strip():
+                        if result.returncode == 0:
+                            self.logger.info(f"    STDERR (non-error): {line}")
+                        else:
+                            self.logger.error(f"    STDERR (error): {line}")
+            else:
+                self.logger.info(f"📄 [DEBUG] virt-install stderr: (empty)")
+            
+            # Write detailed results to debug log
+            with open('/home/ubuntu/cyris/debug_virt_install.log', 'a') as f:
+                f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] virt-install result:\n")
+                f.write(f"Return code: {result.returncode}\n")
+                f.write(f"Stdout:\n{result.stdout}\n")
+                f.write(f"Stderr:\n{result.stderr}\n")
+                f.write("="*80 + "\n\n")
+                f.flush()
             
             if result.returncode == 0:
-                self.logger.info(f"✅ VM '{vm_name}' created successfully with virt-install")
+                self.logger.info(f"✅ [SUCCESS] VM '{vm_name}' created successfully with virt-install")
+                
+                # Verify VM was actually created
+                try:
+                    check_result = subprocess.run(['virsh', 'dominfo', vm_name], 
+                                                capture_output=True, text=True, timeout=10)
+                    if check_result.returncode == 0:
+                        self.logger.info(f"✅ [DEBUG] VM verification successful - VM {vm_name} exists in libvirt")
+                        for line in check_result.stdout.strip().split('\n'):
+                            if line.strip():
+                                self.logger.info(f"    DOMINFO: {line}")
+                    else:
+                        self.logger.warning(f"⚠️  [WARNING] VM created but verification failed: {check_result.stderr}")
+                except Exception as e:
+                    self.logger.warning(f"⚠️  [WARNING] Could not verify VM creation: {e}")
+                
                 return vm_name
             else:
-                self.logger.error(f"❌ virt-install failed (exit code {result.returncode})")
-                self.logger.error(f"   💥 Command that failed: {' '.join(virt_install_cmd)}")
-                self.logger.error(f"   💥 Error output: {result.stderr}")
+                self.logger.error(f"❌ [ERROR] virt-install failed (exit code {result.returncode})")
+                self.logger.error(f"   💥 Command that failed: {cmd_str}")
+                if result.stderr:
+                    self.logger.error(f"   💥 Error details: {result.stderr.strip()}")
                 if result.stdout:
-                    self.logger.error(f"   💥 Standard output: {result.stdout}")
+                    self.logger.error(f"   💥 Output details: {result.stdout.strip()}")
                 return None
                 
         except subprocess.TimeoutExpired:

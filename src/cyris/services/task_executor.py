@@ -5,7 +5,8 @@ This service handles the execution of tasks defined in cyber range YAML files.
 It integrates the traditional modules.py functionality into the modern architecture.
 """
 
-import logging
+# import logging  # Replaced with unified logger
+from cyris.core.unified_logger import get_logger
 import subprocess
 import time
 import tempfile
@@ -79,7 +80,7 @@ class TaskExecutor:
             config: Configuration dictionary
         """
         self.config = config
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__, "task_executor")
         self.secure_logger = SecureLogger(self.logger)
         self.abspath = config.get('base_path', '/home/ubuntu/cyris')
         self.instantiation_dir = "instantiation"

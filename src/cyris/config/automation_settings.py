@@ -44,8 +44,9 @@ class TerraformSettings(BaseSettings):
     destroy_on_error: bool = Field(True, description="Destroy resources on error")
     enable_logging: bool = Field(True, description="Enable detailed logging")
     
-    class Config:
-        env_prefix = "CYRIS_TERRAFORM_"
+    model_config = {
+        "env_prefix": "CYRIS_TERRAFORM_"
+    }
 
 
 class PackerSettings(BaseSettings):
@@ -90,8 +91,9 @@ class PackerSettings(BaseSettings):
     memory_size: int = Field(2048, description="Build VM memory in MB") 
     disk_size: str = Field("20G", description="Build VM disk size")
     
-    class Config:
-        env_prefix = "CYRIS_PACKER_"
+    model_config = {
+        "env_prefix": "CYRIS_PACKER_"
+    }
 
 
 class VagrantSettings(BaseSettings):
@@ -114,8 +116,9 @@ class VagrantSettings(BaseSettings):
     sync_folders: bool = Field(True, description="Enable synced folders")
     gui_enabled: bool = Field(False, description="Enable GUI for VMs")
     
-    class Config:
-        env_prefix = "CYRIS_VAGRANT_"
+    model_config = {
+        "env_prefix": "CYRIS_VAGRANT_"
+    }
 
 
 
@@ -163,8 +166,9 @@ class AWSSettings(BaseSettings):
     resource_cleanup: bool = Field(True, description="Enable automatic resource cleanup")
     cost_optimization: bool = Field(True, description="Enable cost optimization features")
     
-    class Config:
-        env_prefix = "CYRIS_AWS_"
+    model_config = {
+        "env_prefix": "CYRIS_AWS_"
+    }
 
 
 class ImageCacheSettings(BaseSettings):
@@ -196,8 +200,9 @@ class ImageCacheSettings(BaseSettings):
         description="CentOS cloud images mirror"
     )
     
-    class Config:
-        env_prefix = "CYRIS_IMAGE_CACHE_"
+    model_config = {
+        "env_prefix": "CYRIS_IMAGE_CACHE_"
+    }
 
 
 class AutomationGlobalSettings(BaseSettings):
@@ -221,8 +226,9 @@ class AutomationGlobalSettings(BaseSettings):
     auto_retry: bool = Field(True, description="Enable automatic retry on failures")
     cleanup_on_failure: bool = Field(True, description="Cleanup resources on failure")
     
-    class Config:
-        env_prefix = "CYRIS_AUTOMATION_"
+    model_config = {
+        "env_prefix": "CYRIS_AUTOMATION_"
+    }
 
 
 class CyRISAutomationSettings(CyRISSettings):
@@ -281,6 +287,7 @@ class CyRISAutomationSettings(CyRISSettings):
             enabled.append('aws')
         return enabled
     
-    class Config:
-        env_file = ".env"
-        env_prefix = "CYRIS_"
+    model_config = {
+        "env_file": ".env",
+        "env_prefix": "CYRIS_"
+    }

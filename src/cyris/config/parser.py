@@ -2,7 +2,8 @@
 Configuration Parser Module
 Supports legacy INI and modern YAML configuration formats
 """
-import logging
+# import logging  # Replaced with unified logger
+from cyris.core.unified_logger import get_logger
 from configparser import ConfigParser
 from pathlib import Path
 from typing import Dict, Any, Union, Tuple, Optional
@@ -15,7 +16,7 @@ from ..domain.entities.host import Host, HostBuilder
 from ..domain.entities.guest import Guest, GuestBuilder, OSType, BaseVMType
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__, "parser")
 
 
 class ConfigurationError(Exception):

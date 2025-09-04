@@ -5,7 +5,8 @@ Provides comprehensive VM health checking and diagnostic capabilities
 with minimal intrusion to existing codebase.
 """
 
-import logging
+# import logging  # Replaced with unified logger
+from cyris.core.unified_logger import get_logger
 import subprocess
 import time
 from typing import Dict, List, Optional, Tuple, NamedTuple
@@ -13,7 +14,7 @@ from pathlib import Path
 from dataclasses import dataclass
 from enum import Enum
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__, "vm_diagnostics")
 
 
 class DiagnosticLevel(Enum):
@@ -38,7 +39,7 @@ class VMDiagnostics:
     """Core VM diagnostics and health checking"""
     
     def __init__(self):
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__, "vm_diagnostics")
         
     def check_vm_image_health(self, vm_name: str) -> List[DiagnosticResult]:
         """Check VM disk image integrity and configuration"""

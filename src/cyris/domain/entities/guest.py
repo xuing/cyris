@@ -5,13 +5,14 @@ from typing import Optional, List, Dict, Any
 from enum import Enum
 from pathlib import Path
 import re
-import logging
+# import logging  # Replaced with unified logger
+from cyris.core.unified_logger import get_logger
 from pydantic import Field, field_validator, model_validator
 
 from .base import Entity
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__, "guest")
 
 
 class BaseVMType(str, Enum):

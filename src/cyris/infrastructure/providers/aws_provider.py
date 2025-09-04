@@ -5,7 +5,8 @@ This module provides AWS cloud infrastructure support for CyRIS,
 implementing the infrastructure provider interface for cloud deployments.
 """
 
-import logging
+# import logging  # Replaced with unified logger
+from cyris.core.unified_logger import get_logger
 import time
 from typing import Dict, List, Optional, Any
 import boto3
@@ -17,8 +18,8 @@ from .base_provider import (
     InfrastructureError, ConnectionError, ResourceCreationError,
     ResourceDestructionError, ResourceNotFoundError
 )
-from ...domain.entities.host import Host
-from ...domain.entities.guest import Guest
+from cyris.domain.entities.host import Host
+from cyris.domain.entities.guest import Guest
 
 
 class AWSProvider(InfrastructureProvider):
@@ -67,7 +68,7 @@ class AWSProvider(InfrastructureProvider):
         # AWS clients
         self._ec2_client: Optional[boto3.client] = None
         self._ec2_resource: Optional[boto3.resource] = None
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__, "aws_provider")
         
         # Resource tracking
         self._vpc_id: Optional[str] = None
@@ -195,13 +196,14 @@ class AWSProvider(InfrastructureProvider):
         
         return host_ids
     
-    def create_guests(self, guests: List[Guest], host_mapping: Dict[str, str]) -> List[str]:
+    def create_guests(self, guests: List[Guest], host_mapping: Dict[str, str], skip_builder: bool = False) -> List[str]:
         """
         Create EC2 instances for virtual machines.
         
         Args:
             guests: List of guest configurations
             host_mapping: Mapping of guest host references to actual host IDs
+            skip_builder: Skip image building phase (use existing images)
         
         Returns:
             List of created guest resource IDs (instance IDs)

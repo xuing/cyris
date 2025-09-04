@@ -6,12 +6,13 @@ Simplified version without external dependencies, focusing on core functionality
 
 import libvirt
 import threading
-import logging
+# import logging  # Replaced with unified logger
+from cyris.core.unified_logger import get_logger
 import time
 from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime, timedelta
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__, "libvirt_connection_manager_simple")
 
 
 class SimpleLibvirtConnectionError(Exception):

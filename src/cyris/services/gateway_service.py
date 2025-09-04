@@ -2,7 +2,8 @@
 网关模式服务 - 管理gw_mode功能的入口点和访问控制
 支持直接模式和网关模式的访问管理
 """
-import logging
+# import logging  # Replaced with unified logger
+from cyris.core.unified_logger import get_logger
 import string
 import secrets
 from dataclasses import dataclass, field
@@ -14,7 +15,7 @@ from cyris.infrastructure.network.tunnel_manager import TunnelManager, TunnelCon
 from cyris.core.exceptions import GatewayError
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__, "gateway_service")
 
 
 @dataclass

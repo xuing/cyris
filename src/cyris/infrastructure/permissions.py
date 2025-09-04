@@ -5,7 +5,8 @@ This module handles automatic permission management for libvirt access,
 ensuring that virtual machines can access disk files and directories
 without manual ACL configuration.
 """
-import logging
+# import logging  # Replaced with unified logger
+from cyris.core.unified_logger import get_logger
 import os
 import pwd
 import grp
@@ -14,7 +15,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__, "permissions")
 
 
 class PermissionManager:

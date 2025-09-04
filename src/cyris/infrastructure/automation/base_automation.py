@@ -10,11 +10,12 @@ from enum import Enum
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any, Union
 from pathlib import Path
-import logging
+# import logging  # Replaced with unified logger
+from cyris.core.unified_logger import get_logger
 import uuid
 from datetime import datetime
 
-from ...core.exceptions import CyRISException
+from cyris.core.exceptions import CyRISException
 
 
 class AutomationStatus(Enum):

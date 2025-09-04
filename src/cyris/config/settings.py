@@ -63,6 +63,7 @@ class CyRISSettings(BaseSettings):
         v.mkdir(parents=True, exist_ok=True)
         return v
     
-    class Config:
-        env_prefix = "CYRIS_"
-        case_sensitive = False
+    model_config = {
+        "env_prefix": "CYRIS_",
+        "case_sensitive": False
+    }

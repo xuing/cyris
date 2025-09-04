@@ -144,13 +144,14 @@ class InfrastructureProvider(ABC):
         pass
     
     @abstractmethod
-    def create_guests(self, guests: List[Guest], host_mapping: Dict[str, str]) -> List[str]:
+    def create_guests(self, guests: List[Guest], host_mapping: Dict[str, str], skip_builder: bool = False) -> List[str]:
         """
         Create virtual machines or guest instances.
         
         Args:
             guests: List of guest configurations
             host_mapping: Mapping of guest host references to actual host IDs
+            skip_builder: Skip image building phase (use existing images)
         
         Returns:
             List of created guest resource IDs

@@ -2,7 +2,8 @@
 Cyber Range Discovery Service
 Discover and synchronize unmanaged cyber range resources
 """
-import logging
+# import logging  # Replaced with unified logger
+from cyris.core.unified_logger import get_logger
 import re
 import json
 from datetime import datetime
@@ -16,7 +17,7 @@ from cyris.infrastructure.providers.libvirt_provider import LibvirtProvider
 from cyris.core.exceptions import CyRISException
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__, "range_discovery")
 
 
 @dataclass

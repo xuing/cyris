@@ -8,11 +8,12 @@ Complexity Reduction: 471 → 50 lines (89% reduction)
 """
 
 import libvirt
-import logging
+# import logging  # Replaced with unified logger
+from cyris.core.unified_logger import get_logger
 from typing import Optional, List
 from contextlib import contextmanager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__, "libvirt_connection_manager")
 
 
 class LibvirtConnectionError(Exception):

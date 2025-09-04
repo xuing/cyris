@@ -5,7 +5,8 @@ This module enhances the existing SSH manager with network reliability features,
 following KISS principle and integrating seamlessly with current SSH operations.
 """
 
-import logging
+# import logging  # Replaced with unified logger
+from cyris.core.unified_logger import get_logger
 import time
 from typing import Optional, Dict, Any, Union
 from dataclasses import dataclass
@@ -19,7 +20,7 @@ from ..services.network_service import NetworkService, NetworkServiceConfig
 from ..core.exceptions import CyRISNetworkError, handle_exception, safe_execute
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__, "ssh_reliability_integration")
 
 
 @dataclass
@@ -61,7 +62,7 @@ class ReliableSSHManager:
         """
         self.ssh_manager = ssh_manager or SSHManager()
         self.config = config or ReliableSSHConfig()
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__, "ssh_reliability_integration")
         
         # Initialize network service if reliability features are enabled
         if (self.config.enable_network_validation or 

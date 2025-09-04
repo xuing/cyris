@@ -21,7 +21,8 @@ Usage:
     health_info = manager.get_vm_health_status("my-vm")
 """
 
-import logging
+# import logging  # Replaced with unified logger
+from cyris.core.unified_logger import get_logger
 import subprocess
 import json
 import time
@@ -191,7 +192,7 @@ class EnhancedVMIPManager:
         libvirt_uri: str = "qemu:///system",
         dhcp_lease_dir: str = "/var/lib/dhcp",
         cache_ttl: int = 300,  # 5 minutes
-        logger: Optional[logging.Logger] = None
+        logger = None
     ):
         """
         Initialize Enhanced VM IP Manager.
@@ -205,7 +206,7 @@ class EnhancedVMIPManager:
         self.libvirt_uri = libvirt_uri
         self.dhcp_lease_dir = dhcp_lease_dir
         self.cache_ttl = cache_ttl
-        self.logger = logger or logging.getLogger(__name__)
+        self.logger = logger or get_logger(__name__, "vm_ip_manager")
         
         # Enhanced connection management with libvirt-python
         try:

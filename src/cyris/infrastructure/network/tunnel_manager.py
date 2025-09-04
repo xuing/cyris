@@ -2,7 +2,8 @@
 SSH Tunnel Manager - Core component implementing gw_mode functionality
 Supports creating and managing SSH tunnels in both direct and gateway modes
 """
-import logging
+# import logging  # Replaced with unified logger
+from cyris.core.unified_logger import get_logger
 import subprocess
 import uuid
 from dataclasses import dataclass
@@ -13,7 +14,7 @@ from cyris.config.settings import CyRISSettings
 from cyris.core.exceptions import TunnelError
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__, "tunnel_manager")
 
 
 @dataclass

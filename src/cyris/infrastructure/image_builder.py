@@ -4,7 +4,9 @@ Local VM Image Builder Service
 Builds VM images locally using virt-builder and distributes to target hosts.
 """
 
-import logging
+# import logging  # Replaced with unified logger
+from cyris.core.unified_logger import get_logger
+import os
 import subprocess
 import tempfile
 import shutil
@@ -42,7 +44,7 @@ class LocalImageBuilder:
     def __init__(self, work_dir: Optional[Path] = None):
         self.work_dir = work_dir or Path("/tmp/cyris-builds")
         self.work_dir.mkdir(parents=True, exist_ok=True)
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__, "image_builder")
         
         # Rich progress manager (can be set by KVM provider)
         self.progress_manager: Optional[RichProgressManager] = None
@@ -57,17 +59,19 @@ class LocalImageBuilder:
         
         # First, ensure sudo authentication is cached
         try:
-            print("🔐 Checking sudo authentication for virt-builder tools...")
-            print("💡 You may be prompted for your password to run virt-builder commands.")
+            self.logger.info("🔐 Checking sudo authentication for virt-builder tools...")
+            self.logger.info("💡 You may be prompted for your password to run virt-builder commands.")
             result = subprocess.run(['sudo', '-v'], timeout=30)
             if result.returncode != 0:
                 self.logger.error("Failed to authenticate with sudo")
-                return {tool: False for tool in ['virt-builder', 'virt-install', 'virt-customize']}
+                return {tool: False for tool in ['virt-builder', 'virt-install', 'virt-customize', 'supermin']}
         except subprocess.SubprocessError:
             self.logger.error("Failed to check sudo authentication")
-            return {tool: False for tool in ['virt-builder', 'virt-install', 'virt-customize']}
+            return {tool: False for tool in ['virt-builder', 'virt-install', 'virt-customize', 'supermin']}
         
-        for tool in ['virt-builder', 'virt-install', 'virt-customize']:
+        # Check libguestfs tools
+        libguestfs_tools = ['virt-builder', 'virt-install', 'virt-customize']
+        for tool in libguestfs_tools:
             try:
                 # Use non-interactive sudo (should work with cached authentication)
                 result = subprocess.run(['sudo', '-n', tool, '--version'], 
@@ -77,6 +81,32 @@ class LocalImageBuilder:
             except (subprocess.SubprocessError, FileNotFoundError):
                 tools[tool] = False
                 self.logger.debug(f"Tool {tool}: not found")
+        
+        # Check supermin specifically (critical for libguestfs functionality)
+        try:
+            result = subprocess.run(['which', 'supermin'], capture_output=True, timeout=5)
+            tools['supermin'] = result.returncode == 0
+            if tools['supermin']:
+                # Test supermin functionality
+                test_result = subprocess.run(['supermin', '--version'], 
+                                           capture_output=True, timeout=5)
+                tools['supermin'] = test_result.returncode == 0
+                
+            self.logger.debug(f"Tool supermin: {'available' if tools['supermin'] else 'not available'}")
+        except (subprocess.SubprocessError, FileNotFoundError):
+            tools['supermin'] = False
+            self.logger.debug("Tool supermin: not found")
+        
+        # Check libguestfs-test-tool availability for diagnostics
+        try:
+            result = subprocess.run(['which', 'libguestfs-test-tool'], 
+                                  capture_output=True, timeout=5)
+            tools['libguestfs-test-tool'] = result.returncode == 0
+            self.logger.debug(f"Tool libguestfs-test-tool: {'available' if tools['libguestfs-test-tool'] else 'not available'}")
+        except (subprocess.SubprocessError, FileNotFoundError):
+            tools['libguestfs-test-tool'] = False
+            self.logger.debug("Tool libguestfs-test-tool: not found")
+            
         return tools
     
     def get_available_images(self) -> List[str]:
@@ -103,7 +133,7 @@ class LocalImageBuilder:
             self.logger.warning(f"Failed to get image list: {e}")
             return []
     
-    def build_image_locally(self, guest: Guest) -> BuildResult:
+    def build_image_locally(self, guest: Guest, build_only: bool = False) -> BuildResult:
         """Build VM image locally using virt-builder with Rich progress tracking"""
         start_time = time.time()
         
@@ -145,6 +175,14 @@ class LocalImageBuilder:
                 '--output', str(image_path)
             ]
             
+            # Add libguestfs debugging environment for better error reporting
+            build_env = os.environ.copy()
+            build_env.update({
+                'LIBGUESTFS_DEBUG': '1',
+                'LIBGUESTFS_TRACE': '1',
+                'TMPDIR': '/tmp'  # Ensure writable temp directory
+            })
+            
             cmd_msg = f"🚀 Executing virt-builder command:"
             cmd_detail = f"    {' '.join(build_cmd)}"
             time_msg = f"⏳ This may take several minutes for image download and creation..."
@@ -160,10 +198,17 @@ class LocalImageBuilder:
             
             # Execute with progress monitoring (allow interactive sudo)
             if self.progress_manager:
-                result = self._run_command_with_progress(build_cmd, "Building VM image", timeout=600)
+                result = self._run_command_with_progress(build_cmd, "Building VM image", timeout=600, env=build_env)
             else:
                 # Use cached sudo authentication for virt-builder
-                result = subprocess.run(build_cmd, capture_output=True, text=True, timeout=600)
+                result = subprocess.run(build_cmd, capture_output=True, text=True, timeout=600, env=build_env)
+            
+            # Enhanced debugging: Log return code immediately
+            debug_msg = f"🔍 virt-builder completed with return code: {result.returncode}"
+            if self.progress_manager:
+                self.progress_manager.log_info(debug_msg)
+            else:
+                self.logger.info(debug_msg)
             
             # Log command output for debugging
             if result.stdout:
@@ -172,22 +217,40 @@ class LocalImageBuilder:
                 else:
                     self.logger.debug(f"virt-builder stdout: {result.stdout}")
             if result.stderr:
+                # Always log stderr for failed commands, regardless of whether it's treated as progress
+                stderr_msg = f"virt-builder stderr: {result.stderr[:500]}..."
                 if result.returncode == 0:
                     # virt-builder often outputs progress to stderr even on success
                     if self.progress_manager:
                         self.progress_manager.log_info(f"virt-builder progress: {result.stderr[:200]}...")
                     else:
-                        self.logger.debug(f"virt-builder stderr (non-error): {result.stderr}")
+                        self.logger.debug(stderr_msg)
                 else:
                     if self.progress_manager:
-                        self.progress_manager.log_error(f"virt-builder error: {result.stderr}")
+                        self.progress_manager.log_error(stderr_msg)
                     else:
-                        self.logger.error(f"virt-builder stderr: {result.stderr}")
+                        self.logger.error(stderr_msg)
             
-            if result.returncode != 0:
-                error_msg = f"virt-builder failed (exit code {result.returncode}): {result.stderr}"
+            # CRITICAL: Check for libguestfs/supermin errors even if return code is 0
+            has_libguestfs_error = (result.stderr and 
+                                  ('libguestfs error' in result.stderr or 
+                                   'supermin exited with error' in result.stderr or
+                                   'virt-resize: error' in result.stderr))
+            
+            if result.returncode != 0 or has_libguestfs_error:
+                error_reason = "exit code" if result.returncode != 0 else "libguestfs error"
+                error_msg = f"virt-builder failed ({error_reason} {result.returncode}): {result.stderr}"
                 if self.progress_manager:
                     self.progress_manager.log_error(error_msg)
+                    if has_libguestfs_error:
+                        self.progress_manager.log_error("🔧 Libguestfs troubleshooting:")
+                        self.progress_manager.log_error("   1. sudo apt-get update && sudo apt-get install libguestfs-tools supermin")
+                        self.progress_manager.log_error("   2. Run: libguestfs-test-tool (if available)")
+                        self.progress_manager.log_error("   3. Check /tmp permissions and disk space")
+                    else:
+                        self.progress_manager.log_error("💡 Try running: sudo apt-get update && sudo apt-get install libguestfs-tools")
+                else:
+                    self.logger.error(error_msg)
                 
                 return BuildResult(
                     success=False,
@@ -235,12 +298,27 @@ class LocalImageBuilder:
                     self.logger.info(no_tasks_msg)
             
             build_time = time.time() - start_time
-            completion_msg = f"🎉 Image build completed successfully in {build_time:.1f}s"
             
-            if self.progress_manager:
-                self.progress_manager.log_success(completion_msg)
+            if build_only:
+                # In build-only mode, provide clear success message and file location
+                completion_msg = f"🎉 Image build completed successfully in {build_time:.1f}s"
+                location_msg = f"📁 Image saved at: {image_path}"
+                preserve_msg = f"🔒 File preserved for later use (--build-only mode)"
+                
+                if self.progress_manager:
+                    self.progress_manager.log_success(completion_msg)
+                    self.progress_manager.log_success(location_msg)
+                    self.progress_manager.log_info(preserve_msg)
+                else:
+                    self.logger.info(completion_msg)
+                    self.logger.info(location_msg)
+                    self.logger.info(preserve_msg)
             else:
-                self.logger.info(completion_msg)
+                completion_msg = f"🎉 Image build completed successfully in {build_time:.1f}s"
+                if self.progress_manager:
+                    self.progress_manager.log_success(completion_msg)
+                else:
+                    self.logger.info(completion_msg)
             
             return BuildResult(
                 success=True,
@@ -273,7 +351,7 @@ class LocalImageBuilder:
                 build_time=time.time() - start_time
             )
     
-    def _run_command_with_progress(self, cmd: List[str], description: str, timeout: int = 300):
+    def _run_command_with_progress(self, cmd: List[str], description: str, timeout: int = 300, env=None):
         """Run a command with progress monitoring"""
         import threading
         
@@ -285,7 +363,8 @@ class LocalImageBuilder:
             stdin=None,  # Allow interactive password input
             text=True,
             bufsize=1,
-            universal_newlines=True
+            universal_newlines=True,
+            env=env
         )
         
         # Create a simple spinner effect for long-running commands
@@ -349,24 +428,50 @@ class LocalImageBuilder:
         # Check local tools
         deps = self.check_local_dependencies()
         if not deps.get('virt-builder', False):
-            self.logger.error("virt-builder not available locally")
+            error_msg = "virt-builder not available locally"
+            if self.progress_manager:
+                self.progress_manager.log_error(error_msg)
+                self.progress_manager.log_error("💡 Install: sudo apt-get install libguestfs-tools")
+            else:
+                self.logger.error(error_msg)
+            return False
+        
+        if not deps.get('supermin', False):
+            error_msg = "supermin not available - critical for libguestfs functionality"
+            if self.progress_manager:
+                self.progress_manager.log_error(error_msg)
+                self.progress_manager.log_error("💡 Install: sudo apt-get install supermin")
+            else:
+                self.logger.error(error_msg)
             return False
         
         if not deps.get('virt-customize', False):
-            self.logger.warning("virt-customize not available - tasks may not execute")
+            warning_msg = "virt-customize not available - tasks may not execute"
+            if self.progress_manager:
+                self.progress_manager.log_warning(warning_msg)
+            else:
+                self.logger.warning(warning_msg)
         
         # Check image availability
         available_images = self.get_available_images()
         if guest.image_name not in available_images:
-            self.logger.error(f"Image '{guest.image_name}' not available. "
-                            f"Available: {available_images[:5]}...")
+            error_msg = f"Image '{guest.image_name}' not available. Available: {available_images[:5]}..."
+            if self.progress_manager:
+                self.progress_manager.log_error(error_msg)
+                self.progress_manager.log_error("💡 Run 'virt-builder --list' to see all available images")
+            else:
+                self.logger.error(error_msg)
             return False
         
         # Validate required kvm-auto fields
         required_fields = ['image_name', 'vcpus', 'memory', 'disk_size']
         missing = [f for f in required_fields if not getattr(guest, f)]
         if missing:
-            self.logger.error(f"Missing required kvm-auto fields: {missing}")
+            error_msg = f"Missing required kvm-auto fields: {missing}"
+            if self.progress_manager:
+                self.progress_manager.log_error(error_msg)
+            else:
+                self.logger.error(error_msg)
             return False
         
         return True

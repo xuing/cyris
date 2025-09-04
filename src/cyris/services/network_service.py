@@ -5,7 +5,8 @@ Simple service to integrate network reliability improvements with CyRIS system.
 Follows KISS principle - provides only essential network management functionality.
 """
 
-import logging
+# import logging  # Replaced with unified logger
+from cyris.core.unified_logger import get_logger
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 
@@ -16,7 +17,7 @@ from ..core.network_reliability import (
 from ..core.exceptions import CyRISNetworkError, handle_exception, safe_execute
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__, "network_service")
 
 
 @dataclass
@@ -43,7 +44,7 @@ class NetworkService:
             config: Network service configuration
         """
         self.config = config or NetworkServiceConfig()
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__, "network_service")
         
         # Initialize components
         self.validator = NetworkValidator()

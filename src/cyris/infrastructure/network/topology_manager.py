@@ -5,7 +5,8 @@ This module handles the creation and management of network topologies
 for cyber ranges based on YAML specifications.
 """
 
-import logging
+# import logging  # Replaced with unified logger
+from cyris.core.unified_logger import get_logger
 import ipaddress
 import subprocess
 import json
@@ -38,7 +39,7 @@ class NetworkTopologyManager:
             libvirt_connection: Optional libvirt connection
         """
         self.libvirt_connection = libvirt_connection
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__, "topology_manager")
         self.networks = {}  # network_name -> network_info
         self.ip_assignments = {}  # guest_id -> ip_address
         self.discovered_ips = {}  # vm_name -> discovered_ip

@@ -13,7 +13,8 @@ import asyncio
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Union
 from datetime import datetime, timedelta
-import logging
+# import logging  # Replaced with unified logger
+from cyris.core.unified_logger import get_logger
 import tempfile
 import yaml
 
@@ -21,8 +22,8 @@ from .base_automation import (
     AutomationProvider, AutomationConfig, AutomationResult, 
     AutomationStatus, AutomationError
 )
-from ...config.automation_settings import PackerSettings
-from ...core.exceptions import CyRISVirtualizationError
+from cyris.config.automation_settings import PackerSettings
+from cyris.core.exceptions import CyRISVirtualizationError
 
 
 class PackerError(AutomationError):
