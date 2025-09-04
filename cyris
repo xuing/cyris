@@ -40,12 +40,23 @@ def main():
         '--help', '-h', '--version'
     }
     
-    first_arg = args[0]
+    # Global flags that can appear before commands
+    global_flags = {'--verbose', '-v', '--config', '-c'}
     
-    # If first argument is a modern command, use modern CLI
-    if first_arg in modern_commands:
+    # Find the first non-flag argument
+    first_command = None
+    for arg in args:
+        if not arg.startswith('-') and arg not in ['--verbose', '--config']:
+            first_command = arg
+            break
+        elif arg in ['--help', '-h', '--version']:
+            first_command = arg
+            break
+    
+    # If first command is a modern command, use modern CLI
+    if first_command in modern_commands or any(arg.startswith('-') and arg in global_flags for arg in args):
         with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
-            f.write(f"[DEBUG] Detected modern command: {first_arg}\n")
+            f.write(f"[DEBUG] Detected modern command: {first_command}\n")
             f.write(f"[DEBUG] Args: {args}\n")
             f.flush()
         

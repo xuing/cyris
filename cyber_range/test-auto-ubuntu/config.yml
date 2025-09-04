@@ -1,0 +1,39 @@
+---
+# Test Configuration 1: Basic Ubuntu Desktop with user accounts
+- host_settings:
+  - id: localhost
+    mgmt_addr: localhost
+    virbr_addr: 192.168.122.1
+    account: ubuntu
+
+- guest_settings:
+  - id: opensuse-desktop
+    basevm_type: kvm-auto
+    image_name: opensuse-tumbleweed
+    vcpus: 2
+    memory: 2048
+    disk_size: 20G
+    tasks:
+    - add_account:
+      - account: trainee
+        passwd: training123
+      - account: student
+        passwd: student456
+    - modify_account:
+      - account: root
+        new_passwd: newpass
+
+- clone_settings:
+  - range_id: test-auto-ubuntu
+    hosts:
+    - host_id: localhost
+      instance_number: 1
+      guests:
+      - guest_id: opensuse-desktop
+        number: 1
+        entry_point: yes
+      topology:
+      - type: custom
+        networks:
+        - name: internal
+          members: opensuse-desktop.eth0

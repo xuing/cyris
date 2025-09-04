@@ -1,0 +1,29 @@
+---
+- host_settings:
+  - id: host_1
+    mgmt_addr: localhost  
+    virbr_addr: 192.168.122.1
+    account: ubuntu
+
+- guest_settings:
+  - id: ubuntu_test
+    basevm_host: host_1
+    basevm_type: kvm-auto
+    image_name: ubuntu-20.04
+    vcpus: 2
+    memory: 2048
+    disk_size: 20G
+    tasks:
+      - add_account:
+          - account: trainee
+            passwd: training123
+
+- clone_settings:
+  - range_id: test_kvm_auto
+    hosts:
+    - host_id: host_1
+      instance_number: 1
+      guests:
+      - guest_id: ubuntu_test
+        number: 1
+        entry_point: yes
