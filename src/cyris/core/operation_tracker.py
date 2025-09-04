@@ -14,7 +14,8 @@ from typing import Any, List, Dict, Optional, Callable, Union, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
 from datetime import datetime
-import logging
+# import logging  # Replaced with unified logger
+from .unified_logger import get_logger
 
 
 class OperationType(Enum):
@@ -103,7 +104,8 @@ class AtomicOperation:
             self.rollback_function()
             return True
         except Exception as e:
-            logging.error(f"Rollback failed for {self.operation_id}: {e}")
+            logger = get_logger(__name__, "operation_tracker")
+            logger.error(f"Rollback failed for {self.operation_id}: {e}")
             return False
 
 
@@ -123,6 +125,7 @@ class AtomicOperationTracker:
         # Legacy-compatible response list for exit codes
         self._response_list: List[int] = []  # Like legacy RESPONSE_LIST
         self.comprehensive_log_file: Optional[Path] = None
+        self.logger = get_logger(__name__, "operation_tracker")
         
     def start_operation(
         self, 
@@ -333,11 +336,11 @@ class AtomicOperationTracker:
                             output=error_output
                         )
                         
-                        # Print error like legacy system
-                        print(f"* ERROR: cyris: Issue when executing command (exit status = {result.returncode}):")
-                        print(f"  {command_str}")
+                        # Log error like legacy system
+                        self.logger.error(f"Issue when executing command (exit status = {result.returncode}):")
+                        self.logger.error(f"  {command_str}")
                         if self.comprehensive_log_file:
-                            print(f"  Check the log file for details: {self.comprehensive_log_file}")
+                            self.logger.error(f"  Check the log file for details: {self.comprehensive_log_file}")
                         
                         # Return operation_id for tracking, but don't quit like legacy
                         return operation_id
@@ -346,16 +349,16 @@ class AtomicOperationTracker:
                     error_msg = f"Command timed out after {timeout} seconds"
                     operation.mark_failure(error_msg, exit_code=-1)
                     self._response_list.append(1)
-                    print(f"* ERROR: cyris: {error_msg}:")
-                    print(f"  {command_str}")
+                    self.logger.error(f"{error_msg}:")
+                    self.logger.error(f"  {command_str}")
                     return operation_id
                     
                 except Exception as e:
                     error_msg = f"Command execution failed: {str(e)}"
                     operation.mark_failure(error_msg, exit_code=-1)
                     self._response_list.append(1)
-                    print(f"* ERROR: cyris: {error_msg}:")
-                    print(f"  {command_str}")
+                    self.logger.error(f"{error_msg}:")
+                    self.logger.error(f"  {command_str}")
                     return operation_id
             
             return operation_id
@@ -399,7 +402,8 @@ class AtomicOperationTracker:
                 with open(self.comprehensive_log_file, 'a', encoding='utf-8') as f:
                     f.write(f"{message}\n")
             except Exception as e:
-                logging.error(f"Failed to write to log file {self.comprehensive_log_file}: {e}")
+                logger = get_logger(__name__, "operation_tracker")
+                logger.error(f"Failed to write to log file {self.comprehensive_log_file}: {e}")
 
 
 # Global operation tracker instance (similar to legacy RESPONSE_LIST)
@@ -487,18 +491,20 @@ def write_status_file(status_file: Union[str, Path]) -> None:
         with open(status_file, 'w', encoding='utf-8') as f:
             f.write(f"{result_str}\n")
     except Exception as e:
-        logging.error(f"Failed to write status file {status_file}: {e}")
+        logger = get_logger(__name__, "operation_tracker")
+        logger.error(f"Failed to write status file {status_file}: {e}")
 
 
 def handle_error_and_quit() -> None:
     """Handle error like legacy system (print error and quit)"""
+    logger = get_logger(__name__, "operation_tracker")
     status = get_comprehensive_status()
     if not status['overall_success']:
         failed_ops = GLOBAL_OPERATION_TRACKER.get_failed_operations()
-        print("* ERROR: cyris: Operation failed")
+        logger.error("Operation failed")
         for op in failed_ops:
             if op.error_message:
-                print(f"  {op.description}: {op.error_message}")
+                logger.error(f"  {op.description}: {op.error_message}")
         
         # In legacy system, this would call quit(-1)
         # For modern system, we'll raise an exception instead

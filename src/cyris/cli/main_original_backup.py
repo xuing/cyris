@@ -7,7 +7,8 @@ import sys
 import click
 from pathlib import Path
 from typing import Optional, Any, IO
-import logging
+# import logging  # Replaced with unified logger
+from cyris.core.unified_logger import get_logger
 import locale
 import os
 
@@ -29,7 +30,7 @@ logging.disable(logging.CRITICAL)
 # Create Rich consoles following best practices
 console = Console()
 error_console = Console(stderr=True, style="bold red")
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__, "main_original_backup")
 
 
 # Rich-based status indicators using proper Text objects

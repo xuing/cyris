@@ -1,0 +1,52 @@
+CyRIS Detailed Operation Log - test_kvm_auto
+Started at: 2025-09-05T01:37:58.153516
+====================================================================================================
+
+[2025-09-05 01:37:58.153] [INFO] [orchestrator] Starting range creation: Range test_kvm_auto
+
+[2025-09-05 01:37:58.153] [INFO] [cyris] [OP:range_creation] Starting operation: Create cyber range test_kvm_auto
+  Context: {
+  "operation_type": "RANGE_CREATE"
+}
+
+[2025-09-05 01:37:58.189] [ERROR] [cyris] [OP:range_creation] Completed operation: Create cyber range test_kvm_auto - Range creation failed with CyRIS exception
+  Context: {
+  "operation_type": "RANGE_CREATE",
+  "duration": 0.036068,
+  "success": false
+}
+
+[2025-09-05 01:37:58.190] [INFO] [cyris] Creation result: FAILURE (1 errors) (took 0.0s)
+
+[2025-09-05 01:37:58.190] [INFO] [cyris] Operation Summary: 0 successful, 1 failed
+  Context: {
+  "range_id": "test_kvm_auto",
+  "total_operations": 1,
+  "successful_operations": 0,
+  "failed_operations": 1,
+  "operation_sequence": [
+    "range_creation"
+  ],
+  "statistics": {
+    "total_entries": 4,
+    "entries_by_level": {
+      "DEBUG": 0,
+      "INFO": 4,
+      "WARNING": 0,
+      "ERROR": 1,
+      "CRITICAL": 0
+    },
+    "entries_by_source": {
+      "orchestrator": 1,
+      "cyris": 4
+    },
+    "commands_executed": 0,
+    "operations_tracked": 1
+  },
+  "log_files": {
+    "creation_log": "/home/ubuntu/cyris/cyber_range/test_kvm_auto/creation.log",
+    "detailed_log": "/home/ubuntu/cyris/cyber_range/test_kvm_auto/detailed.log",
+    "status_file": "/home/ubuntu/cyris/cyber_range/test_kvm_auto/cr_creation_status"
+  }
+}
+

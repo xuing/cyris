@@ -7,7 +7,8 @@ import sys
 import click
 from pathlib import Path
 from typing import Optional
-import logging
+# import logging  # Replaced with unified logger
+from cyris.core.unified_logger import get_logger
 
 from ..config.parser import parse_modern_config, ConfigurationError
 from ..config.settings import CyRISSettings

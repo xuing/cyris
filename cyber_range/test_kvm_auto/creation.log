@@ -1,0 +1,15 @@
+CyRIS Range Creation Log - test_kvm_auto
+Started at: 2025-09-05 01:37:58
+================================================================================
+
+[2025-09-05 01:37:58] * INFO: cyris: Starting range creation: Range test_kvm_auto
+[2025-09-05 01:37:58] * INFO: cyris: Initialize range creation
+[2025-09-05 01:37:58] * INFO: cyris: Starting operation: Create cyber range test_kvm_auto
+[2025-09-05 01:37:58] * INFO: cyris: Start the base VMs (1 hosts)
+[2025-09-05 01:37:58] * INFO: cyris: Check that the base VMs are up
+[2025-09-05 01:37:58] * INFO: cyris: Clone VMs and create the cyber range (1 VMs)
+[2025-09-05 01:37:58] * ERROR: cyris: Failed to create 1 guests
+[2025-09-05 01:37:58] * ERROR: cyris: Completed operation: Create cyber range test_kvm_auto - Range creation failed with CyRIS exception
+[2025-09-05 01:37:58] * INFO: cyris: Creation result: FAILURE (1 errors) (took 0.0s)
+[2025-09-05 01:37:58] * INFO: cyris: Operation Summary: 0 successful, 1 failed
+[2025-09-05 01:37:58] * ERROR: cyris: Range creation failed
