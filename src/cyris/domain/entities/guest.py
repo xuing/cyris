@@ -5,9 +5,13 @@ from typing import Optional, List, Dict, Any
 from enum import Enum
 from pathlib import Path
 import re
+import logging
 from pydantic import Field, field_validator, model_validator
 
 from .base import Entity
+
+
+logger = logging.getLogger(__name__)
 
 
 class BaseVMType(str, Enum):
@@ -149,6 +153,7 @@ class Guest(Entity):
             if not getattr(self, 'basevm_os_type', None):
                 raise ValueError("basevm_os_type is required for non kvm-auto types")
         
+        logger.debug(f"[DEBUG] Guest validation COMPLETE for {getattr(self, 'guest_id', 'no-id')}")
         return self
     
     def _derive_os_type_from_image(self, image_name: str) -> OSType:
