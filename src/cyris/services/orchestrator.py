@@ -28,6 +28,7 @@ from ..core.exceptions import (
     CyRISNetworkError, CyRISResourceError, GatewayError, handle_exception, safe_execute
 )
 from ..core.progress import create_progress_tracker, ProgressTracker
+from ..core.rich_progress import RichProgressManager
 from ..core.operation_tracker import (
     start_operation, complete_operation, fail_operation, OperationType,
     is_all_operations_successful, get_operation_summary, 
@@ -191,6 +192,9 @@ class RangeOrchestrator:
         self.provider = infrastructure_provider
         self.logger = logger or logging.getLogger(__name__)
         
+        # Rich progress manager (can be set by CLI)
+        self.progress_manager: Optional[RichProgressManager] = None
+        
         # Initialize exception handler
         self.exception_handler = ExceptionHandler(self.logger)
         
@@ -233,6 +237,13 @@ class RangeOrchestrator:
                 context={"component": "orchestrator", "operation": "initialization"},
                 reraise=True
             )
+    
+    def set_progress_manager(self, progress_manager: RichProgressManager) -> None:
+        """Set progress manager for rich progress reporting"""
+        self.progress_manager = progress_manager
+        # Also set it for the provider if it supports it
+        if hasattr(self.provider, 'set_progress_manager'):
+            self.provider.set_progress_manager(progress_manager)
     
     def create_range(
         self,
