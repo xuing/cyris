@@ -23,6 +23,21 @@ class BaseCommandHandler(ABC):
         self.verbose = verbose
         
         with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+            f.write(f"[DEBUG] About to initialize logger\n")
+            f.flush()
+        
+        # Initialize logger using unified logging system
+        try:
+            from cyris.core.unified_logger import get_logger
+            self.logger = get_logger(__name__, "base_command")
+        except Exception as e:
+            with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                f.write(f"[DEBUG] Failed to initialize logger: {e}\n")
+                f.flush()
+            # Fallback to None if logger creation fails
+            self.logger = None
+        
+        with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
             f.write(f"[DEBUG] About to call get_console()\n")
             f.flush()
         

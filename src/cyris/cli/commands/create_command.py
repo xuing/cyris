@@ -5,28 +5,34 @@ Handles cyber range creation logic with comprehensive validation
 
 from pathlib import Path
 from typing import Optional
+from cyris.core.unified_logger import get_logger
 
 from .base_command import BaseCommandHandler, ValidationMixin
 from cyris.cli.presentation import MessageFormatter
 from ..diagnostic_messages import DiagnosticMessageFormatter, get_diagnostic_pattern_help
-from ...tools.vm_diagnostics import VMDiagnostics
-from ...core.progress import get_progress_tracker
-from ...core.rich_progress import create_rich_progress_manager, ProgressLevel
-from ...core.operation_tracker import is_all_operations_successful
-from ...config.parser import ConfigurationError
+from cyris.tools.vm_diagnostics import VMDiagnostics
+from cyris.core.progress import get_progress_tracker
+from cyris.core.rich_progress import create_rich_progress_manager, ProgressLevel
+from cyris.core.operation_tracker import is_all_operations_successful
+from cyris.config.parser import ConfigurationError
 
 
 class CreateCommandHandler(BaseCommandHandler, ValidationMixin):
     """Create command handler - Create new cyber ranges with validation"""
     
     def execute(self, description_file: Path, range_id: Optional[int] = None,
-                dry_run: bool = False, network_mode: str = 'bridge',
-                enable_ssh: bool = True) -> bool:
+                dry_run: bool = False, build_only: bool = False, skip_builder: bool = False, 
+                network_mode: str = 'bridge', enable_ssh: bool = True) -> bool:
         """Execute create command with comprehensive validation and error handling"""
         
         with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
             f.write(f"[DEBUG] CreateCommandHandler.execute() START with file={description_file}\n")
+            f.write(f"[DEBUG] Parameters: dry_run={dry_run}, build_only={build_only}, skip_builder={skip_builder}\n")
             f.flush()
+        
+        # Debug print for parameter checking
+        self.logger.info(f"[DEBUG_PARAMS] execute() called with: dry_run={dry_run}, build_only={build_only}, skip_builder={skip_builder}")
+        self.console.print(f"[dim][DEBUG] Parameters: dry_run={dry_run}, build_only={build_only}, skip_builder={skip_builder}[/dim]")
         
         try:
             with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
@@ -80,7 +86,7 @@ class CreateCommandHandler(BaseCommandHandler, ValidationMixin):
             if dry_run:
                 return self._execute_dry_run(description_file, range_id, network_mode, enable_ssh)
             else:
-                return self._execute_actual_creation(description_file, range_id, network_mode, enable_ssh)
+                return self._execute_actual_creation(description_file, range_id, network_mode, enable_ssh, dry_run, build_only, skip_builder)
                 
         except Exception as e:
             self.handle_error(e, "create")
@@ -158,7 +164,8 @@ class CreateCommandHandler(BaseCommandHandler, ValidationMixin):
             return False
     
     def _execute_actual_creation(self, description_file: Path, range_id: Optional[int],
-                               network_mode: str, enable_ssh: bool) -> bool:
+                               network_mode: str, enable_ssh: bool, dry_run: bool = False, 
+                               build_only: bool = False, skip_builder: bool = False) -> bool:
         """Execute actual cyber range creation with simplified Rich display"""
         
         # Create simplified Rich progress manager (no Live display, no complex layouts)
@@ -252,7 +259,7 @@ class CreateCommandHandler(BaseCommandHandler, ValidationMixin):
                         progress_manager.start_step("parse", "Parsing YAML configuration...")
                         try:
                             progress_manager.log_info("[DEBUG] Importing CyRISConfigParser...")
-                            from ...config.parser import CyRISConfigParser
+                            from cyris.config.parser import CyRISConfigParser
                             progress_manager.log_info("[DEBUG] Creating parser instance...")
                             parser = CyRISConfigParser()
                             progress_manager.log_info(f"[DEBUG] About to call parse_file({description_file})...")
@@ -278,7 +285,10 @@ class CreateCommandHandler(BaseCommandHandler, ValidationMixin):
                         progress_manager.log_info(f"[DEBUG] About to call orchestrator.create_range_from_yaml({description_file}, {range_id})...")
                         result_range_id = orchestrator.create_range_from_yaml(
                             description_file,
-                            range_id
+                            range_id,
+                            dry_run=dry_run,
+                            build_only=build_only,
+                            skip_builder=skip_builder
                         )
                         progress_manager.log_info(f"[DEBUG] orchestrator.create_range_from_yaml returned: {result_range_id}")
                         
@@ -303,27 +313,40 @@ class CreateCommandHandler(BaseCommandHandler, ValidationMixin):
                             progress_manager.log_success(f"Cyber range '{result_range_id}' created successfully!")
                             progress_manager.log_info(f"Range ID: {result_range_id}")
                         
-                        # Post-creation validation with progress tracking
-                        validation_success = self._run_post_creation_validation_with_progress(
-                            result_range_id, orchestrator, progress_manager
-                        )
-                        
-                        if validation_success:
+                        # Post-creation validation with progress tracking (skip in build-only mode)
+                        if build_only:
+                            # Skip post-creation validation in build-only mode
+                            progress_manager.log_info("Skipping post-creation validation (build-only mode)")
                             progress_manager.complete_step("validate")
+                            validation_success = True
                         else:
-                            progress_manager.fail_step("validate", "Post-creation validation found issues")
+                            validation_success = self._run_post_creation_validation_with_progress(
+                                result_range_id, orchestrator, progress_manager
+                            )
+                            
+                            if validation_success:
+                                progress_manager.complete_step("validate")
+                            else:
+                                progress_manager.fail_step("validate", "Post-creation validation found issues")
                         
                         # Complete the overall operation
                         progress_manager.complete()
                         
                         # Final success display
                         if progress_manager.overall_success:
-                            self.console.print("\n" + MessageFormatter.success(
-                                f"🎉 Cyber range creation completed successfully!"
-                            ))
+                            self.console.print()  # Add blank line
+                            if build_only:
+                                self.console.print(MessageFormatter.success(
+                                    f"🎉 Image building completed successfully!"
+                                ))
+                            else:
+                                self.console.print(MessageFormatter.success(
+                                    f"🎉 Cyber range creation completed successfully!"
+                                ))
                             return True
                         else:
-                            self.console.print("\n" + MessageFormatter.error(
+                            self.console.print()  # Add blank line
+                            self.console.print(MessageFormatter.error(
                                 "⚠️ Cyber range created but with validation issues"
                             ))
                             return False
@@ -352,9 +375,10 @@ class CreateCommandHandler(BaseCommandHandler, ValidationMixin):
         # TEMPORARY FIX: Use simple console output instead of Rich progress manager
         # to avoid hanging issue. This bypasses the Rich Live display that's causing problems.
         class SimpleProgressManager:
-            def __init__(self, name):
+            def __init__(self, name, logger=None, console=None):
                 self.name = name
-                self.console = self.console if hasattr(self, 'console') else None
+                self.logger = logger
+                self.console = console
             
             def progress_context(self):
                 class DummyContext:
@@ -369,24 +393,42 @@ class CreateCommandHandler(BaseCommandHandler, ValidationMixin):
                 return DummyContext()
             
             def start_step(self, step_id, description):
-                print(f"🔄 {description}")
+                if self.logger:
+                    self.logger.info(f"🔄 {description}")
+                else:
+                    print(f"🔄 {description}")
                 
             def complete_step(self, step_id):
-                print(f"✅ Step '{step_id}' completed")
+                if self.logger:
+                    self.logger.info(f"✅ Step '{step_id}' completed")
+                else:
+                    print(f"✅ Step '{step_id}' completed")
                 
             def log_info(self, message):
-                print(f"ℹ️  {message}")
+                if self.logger:
+                    self.logger.info(f"ℹ️  {message}")
+                else:
+                    print(f"ℹ️  {message}")
                 
             def log_success(self, message):
-                print(f"✅ {message}")
+                if self.logger:
+                    self.logger.info(f"✅ {message}")
+                else:
+                    print(f"✅ {message}")
                 
             def log_error(self, message):
-                print(f"❌ {message}")
+                if self.logger:
+                    self.logger.info(f"❌ {message}")
+                else:
+                    print(f"❌ {message}")
                 
             def log_warning(self, message):
-                print(f"⚠️  {message}")
+                if self.logger:
+                    self.logger.info(f"⚠️  {message}")
+                else:
+                    print(f"⚠️  {message}")
         
-        check_progress = SimpleProgressManager("Pre-Creation Environment Checks")
+        check_progress = SimpleProgressManager("Pre-Creation Environment Checks", logger=self.logger, console=self.console)
         
         with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
             f.write("[DEBUG] Rich progress manager created\n")
@@ -414,8 +456,8 @@ class CreateCommandHandler(BaseCommandHandler, ValidationMixin):
                         f.flush()
                     
                     # Parse YAML to determine guest types
-                    from ...config.parser import CyRISConfigParser
-                    from ...domain.entities.guest import BaseVMType
+                    from cyris.config.parser import CyRISConfigParser
+                    from cyris.domain.entities.guest import BaseVMType
                     
                     with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
                         f.write("[DEBUG] Imports completed, creating parser instance\n")
@@ -588,9 +630,9 @@ class CreateCommandHandler(BaseCommandHandler, ValidationMixin):
         """Check kvm-auto specific requirements"""
         try:
             # Parse YAML to check for kvm-auto guests
-            from ...config.parser import CyRISConfigParser
-            from ...domain.entities.guest import BaseVMType
-            from ...infrastructure.image_builder import LocalImageBuilder
+            from cyris.config.parser import CyRISConfigParser
+            from cyris.domain.entities.guest import BaseVMType
+            from cyris.infrastructure.image_builder import LocalImageBuilder
             
             parser = CyRISConfigParser()
             config = parser.parse_file(description_file)
@@ -779,9 +821,9 @@ class CreateCommandHandler(BaseCommandHandler, ValidationMixin):
         """Check kvm-auto specific requirements with progress tracking"""
         try:
             # Parse YAML to check for kvm-auto guests
-            from ...config.parser import CyRISConfigParser
-            from ...domain.entities.guest import BaseVMType
-            from ...infrastructure.image_builder import LocalImageBuilder
+            from cyris.config.parser import CyRISConfigParser
+            from cyris.domain.entities.guest import BaseVMType
+            from cyris.infrastructure.image_builder import LocalImageBuilder
             
             parser = CyRISConfigParser()
             config = parser.parse_file(description_file)

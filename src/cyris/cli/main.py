@@ -7,14 +7,14 @@ import sys
 import click
 from pathlib import Path
 from typing import Optional
-import logging
+# import logging  # Replaced with unified logger
+from cyris.core.unified_logger import get_logger
 
 # Performance optimization: Use lazy imports for heavy modules
 # Only import configuration parsing when actually needed
 
 
-# Disable logging to prevent output mixing during startup
-logging.disable(logging.CRITICAL)
+# Note: logging module replaced with unified logger system
 
 
 def get_settings_lazy():
@@ -134,20 +134,27 @@ def cli(ctx, config: Optional[str], verbose: bool, version: bool):
 @click.argument('description_file', type=click.Path(exists=True, path_type=Path))
 @click.option('--range-id', type=int, help='Specify cyber range ID')
 @click.option('--dry-run', is_flag=True, help='Dry run mode, do not actually create')
+@click.option('--build-only', is_flag=True, help='Build images only, do not create VMs (saves to /tmp/cyris-builds/)')
+@click.option('--skip-builder', is_flag=True, help='Skip image building, use existing images in /tmp/cyris-builds/')
 @click.option('--network-mode', 
               type=click.Choice(['user', 'bridge'], case_sensitive=False),
               default='bridge',
               help='Network mode: user (isolated) or bridge (SSH accessible)')
 @click.option('--enable-ssh', is_flag=True, default=True, help='Enable SSH access (requires bridge networking)')
 @click.pass_context
-def create(ctx, description_file: Path, range_id: Optional[int], dry_run: bool, network_mode: str, enable_ssh: bool):
+def create(ctx, description_file: Path, range_id: Optional[int], dry_run: bool, build_only: bool, skip_builder: bool, network_mode: str, enable_ssh: bool):
     """Create a new cyber range
     
     DESCRIPTION_FILE: YAML format cyber range description file
     """
     with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
-        f.write(f"[DEBUG] create() called with file={description_file}, dry_run={dry_run}\n")
+        f.write(f"[DEBUG] create() called with file={description_file}, dry_run={dry_run}, build_only={build_only}, skip_builder={skip_builder}\n")
         f.flush()
+    
+    # Validate mutually exclusive options
+    if build_only and skip_builder:
+        click.echo("Error: --build-only and --skip-builder cannot be used together", err=True)
+        sys.exit(1)
     
     from .commands import CreateCommandHandler
     
@@ -172,6 +179,8 @@ def create(ctx, description_file: Path, range_id: Optional[int], dry_run: bool, 
         description_file=description_file,
         range_id=range_id,
         dry_run=dry_run,
+        build_only=build_only,
+        skip_builder=skip_builder,
         network_mode=network_mode,
         enable_ssh=enable_ssh
     )
@@ -405,18 +414,31 @@ def legacy_run(ctx, args):
 
 def main(args=None):
     """Main entry point"""
+    logger = None
+    try:
+        logger = get_logger(__name__, "cli_main")
+    except Exception as logger_error:
+        # If logger creation fails, continue without logging to avoid masking the real error
+        with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+            f.write(f"[DEBUG] Logger creation failed: {logger_error}\n")
+            f.flush()
+    
     with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
         f.write(f"[DEBUG] CLI main() called with args: {args}\n")
         f.flush()
     
-    print(f"[DEBUG] CLI main() called with args: {args}")
+    if logger:
+        logger.debug(f"CLI main() called with args: {args}")
+    
     try:
         with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
             f.write("[DEBUG] About to call cli()...\n")
             f.flush()
-        print("[DEBUG] About to call cli()...")
+        if logger:
+            logger.debug("About to call cli()...")
         cli(args)
-        print("[DEBUG] cli() completed successfully")
+        if logger:
+            logger.debug("cli() completed successfully")
         with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
             f.write("[DEBUG] cli() completed successfully\n")
             f.flush()
@@ -427,7 +449,13 @@ def main(args=None):
         with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
             f.write(f"[DEBUG] Exception in main(): {e}\n")
             f.flush()
-        print(f"[DEBUG] Exception in main(): {e}")
+        # Safe logger usage with fallback
+        if logger:
+            try:
+                logger.error(f"Exception in main(): {e}")
+            except Exception:
+                # If logger fails, just continue without logging
+                pass
         click.echo(f"[ERROR] Unexpected error: {e}", err=True)
         sys.exit(1)
 
