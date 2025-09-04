@@ -1,0 +1,34 @@
+---
+# Simple Ubuntu kvm-auto test configuration
+- host_settings:
+  - id: localhost
+    mgmt_addr: localhost
+    virbr_addr: 192.168.122.1
+    account: ubuntu
+
+- guest_settings:
+  - id: ubuntu-test
+    basevm_type: kvm-auto
+    image_name: ubuntu-20.04
+    vcpus: 1
+    memory: 1024
+    disk_size: 10G
+    tasks:
+    - add_account:
+      - account: testuser
+        passwd: test123
+
+- clone_settings:
+  - range_id: test-auto-ubuntu
+    hosts:
+    - host_id: localhost
+      instance_number: 1
+      guests:
+      - guest_id: ubuntu-test
+        number: 1
+        entry_point: yes
+      topology:
+      - type: custom
+        networks:
+        - name: internal
+          members: ubuntu-test.eth0
