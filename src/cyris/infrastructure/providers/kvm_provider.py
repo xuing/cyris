@@ -32,6 +32,7 @@ from .base_provider import (
 from ...domain.entities.host import Host
 from ...domain.entities.guest import Guest, BaseVMType
 from ..image_builder import LocalImageBuilder, BuildResult
+from ...core.rich_progress import RichProgressManager
 
 
 class KVMProvider(InfrastructureProvider):
@@ -86,8 +87,18 @@ class KVMProvider(InfrastructureProvider):
         # Initialize image builder for kvm-auto support
         self.image_builder = LocalImageBuilder()
         
+        # Rich progress manager (can be set by orchestrator)
+        self.progress_manager: Optional[RichProgressManager] = None
+        
         self.logger.info(f"KVMProvider initialized with URI: {self.libvirt_uri}")
         self.logger.info("Using native libvirt-python API")
+    
+    def set_progress_manager(self, progress_manager: RichProgressManager) -> None:
+        """Set progress manager for rich progress reporting"""
+        self.progress_manager = progress_manager
+        # Also set it for the image builder
+        if hasattr(self.image_builder, 'set_progress_manager'):
+            self.image_builder.set_progress_manager(progress_manager)
     
     def connect(self) -> None:
         """
@@ -289,53 +300,161 @@ class KVMProvider(InfrastructureProvider):
         return guest_ids
     
     def _create_kvm_auto_guests(self, guests: List[Guest], host_mapping: Dict[str, str]) -> List[str]:
-        """Create guests using kvm-auto workflow"""
-        self.logger.info(f"🤖 Starting kvm-auto workflow for {len(guests)} guests")
+        """Create guests using kvm-auto workflow with Rich progress tracking"""
+        if self.progress_manager:
+            self.progress_manager.log_info(f"🤖 Starting kvm-auto workflow for {len(guests)} guests")
+        else:
+            self.logger.info(f"🤖 Starting kvm-auto workflow for {len(guests)} guests")
+        
         guest_ids = []
         
         # Group guests by image configuration to avoid rebuilding same images
         image_groups = self._group_guests_by_image_config(guests)
         
-        self.logger.info(f"📦 Grouped guests into {len(image_groups)} image configurations")
+        if self.progress_manager:
+            self.progress_manager.log_info(f"📦 Grouped guests into {len(image_groups)} image configurations")
+        else:
+            self.logger.info(f"📦 Grouped guests into {len(image_groups)} image configurations")
+        
+        # Add progress step for image building and VM creation
+        if self.progress_manager:
+            self.progress_manager.start_step("kvm_auto", f"Building images and creating VMs...", total=len(guests))
+            completed_vms = 0
         for i, (image_config, guest_list) in enumerate(image_groups.items(), 1):
-            self.logger.info(f"🔨 Processing image group {i}/{len(image_groups)}: {image_config}")
-            self.logger.info(f"   📋 This group contains {len(guest_list)} guests: {[g.guest_id for g in guest_list]}")
+            group_msg = f"🔨 Processing image group {i}/{len(image_groups)}: {image_config}"
+            guest_list_msg = f"   📋 This group contains {len(guest_list)} guests: {[g.guest_id for g in guest_list]}"
+            
+            if self.progress_manager:
+                self.progress_manager.log_info(group_msg)
+                self.progress_manager.log_info(guest_list_msg)
+            else:
+                self.logger.info(group_msg)
+                self.logger.info(guest_list_msg)
             
             # Build image locally (use first guest as template)
             template_guest = guest_list[0]
-            self.logger.info(f"🧩 Using guest '{template_guest.guest_id}' as template for image building")
+            template_msg = f"🧩 Using guest '{template_guest.guest_id}' as template for image building"
+            
+            if self.progress_manager:
+                self.progress_manager.log_info(template_msg)
+                # Start image building sub-step
+                self.progress_manager.start_step(f"image_build_{i}", f"Building image for {template_guest.image_name}...")
+            else:
+                self.logger.info(template_msg)
             
             try:
                 build_result = self.image_builder.build_image_locally(template_guest)
                 
                 if not build_result.success:
-                    self.logger.error(f"❌ Image build failed: {build_result.error_message}")
-                    self.logger.error(f"   🚫 Skipping {len(guest_list)} guests in this group")
+                    error_msg = f"❌ Image build failed: {build_result.error_message}"
+                    skip_msg = f"   🚫 Skipping {len(guest_list)} guests in this group"
+                    
+                    if self.progress_manager:
+                        self.progress_manager.fail_step(f"image_build_{i}", f"Image build failed: {build_result.error_message}")
+                        self.progress_manager.log_error(skip_msg)
+                    else:
+                        self.logger.error(error_msg)
+                        self.logger.error(skip_msg)
                     continue
                 
-                self.logger.info(f"✅ Image built successfully in {build_result.build_time:.2f}s")
-                self.logger.info(f"   📁 Image path: {build_result.image_path}")
+                success_msg = f"✅ Image built successfully in {build_result.build_time:.2f}s"
+                path_msg = f"   📁 Image path: {build_result.image_path}"
+                
+                if self.progress_manager:
+                    self.progress_manager.complete_step(f"image_build_{i}")
+                    self.progress_manager.log_success(success_msg)
+                    self.progress_manager.log_info(path_msg)
+                else:
+                    self.logger.info(success_msg)
+                    self.logger.info(path_msg)
                 
                 # Create VMs from built image
-                self.logger.info(f"🚀 Creating {len(guest_list)} VMs from built image")
+                create_msg = f"🚀 Creating {len(guest_list)} VMs from built image"
+                
+                if self.progress_manager:
+                    self.progress_manager.log_info(create_msg)
+                else:
+                    self.logger.info(create_msg)
+                
                 for j, guest in enumerate(guest_list, 1):
-                    self.logger.info(f"   📱 Creating VM {j}/{len(guest_list)}: {guest.guest_id}")
-                    vm_id = self._create_vm_from_built_image(guest, build_result.image_path, host_mapping)
-                    if vm_id:
-                        guest_ids.append(vm_id)
-                        self.logger.info(f"   ✅ VM created successfully: {vm_id}")
+                    vm_msg = f"   📱 Creating VM {j}/{len(guest_list)}: {guest.guest_id}"
+                    
+                    if self.progress_manager:
+                        self.progress_manager.log_info(vm_msg)
                     else:
-                        self.logger.error(f"   ❌ Failed to create VM for guest: {guest.guest_id}")
+                        self.logger.info(vm_msg)
+                    
+                    # Add detailed logging before VM creation
+                    details = [
+                        f"   🔍 VM creation details:",
+                        f"      - Guest ID: {guest.guest_id}",
+                        f"      - Memory: {getattr(guest, 'memory', 'N/A')} MB",
+                        f"      - VCPUs: {getattr(guest, 'vcpus', 'N/A')}",
+                        f"      - Image path: {build_result.image_path}"
+                    ]
+                    
+                    if self.progress_manager:
+                        for detail in details:
+                            self.progress_manager.log_info(detail)
+                    else:
+                        for detail in details:
+                            self.logger.debug(detail)
+                    
+                    try:
+                        vm_id = self._create_vm_from_built_image(guest, build_result.image_path, host_mapping)
+                        if vm_id:
+                            guest_ids.append(vm_id)
+                            completed_vms += 1
+                            
+                            success_msg = f"   ✅ VM created successfully: {vm_id}"
+                            if self.progress_manager:
+                                self.progress_manager.log_success(success_msg)
+                                # Update overall progress
+                                self.progress_manager.update_step("kvm_auto", completed=completed_vms)
+                            else:
+                                self.logger.info(success_msg)
+                        else:
+                            error_msg1 = f"   ❌ VM creation returned None for guest: {guest.guest_id}"
+                            error_msg2 = f"      🔍 Check virt-install logs above for detailed error information"
+                            
+                            if self.progress_manager:
+                                self.progress_manager.log_error(error_msg1)
+                                self.progress_manager.log_error(error_msg2)
+                            else:
+                                self.logger.error(error_msg1)
+                                self.logger.error(error_msg2)
+                    except Exception as vm_e:
+                        error_msg1 = f"   💥 Exception during VM creation for {guest.guest_id}: {vm_e}"
+                        error_msg2 = f"      📋 Exception type: {type(vm_e).__name__}"
+                        
+                        if self.progress_manager:
+                            self.progress_manager.log_error(error_msg1)
+                            self.progress_manager.log_error(error_msg2)
+                        else:
+                            self.logger.error(error_msg1)
+                            self.logger.error(error_msg2)
+                            import traceback
+                            self.logger.error(f"      📋 Stack trace: {traceback.format_exc()}")
                 
             except Exception as e:
                 self.logger.error(f"💥 Exception during image group processing: {e}")
+                import traceback
+                self.logger.error(f"💥 Full traceback: {traceback.format_exc()}")
             finally:
                 # Cleanup build image after VM creation
                 if 'build_result' in locals() and build_result.image_path:
                     self.logger.info(f"🧹 Cleaning up temporary build image: {build_result.image_path}")
                     self.image_builder.cleanup_build_files(build_result.image_path)
         
-        self.logger.info(f"🏁 kvm-auto workflow completed: {len(guest_ids)} VMs created successfully")
+        # Complete the overall kvm-auto step
+        completion_msg = f"🏁 kvm-auto workflow completed: {len(guest_ids)} VMs created successfully"
+        
+        if self.progress_manager:
+            if hasattr(self.progress_manager, 'complete_step'):
+                self.progress_manager.complete_step("kvm_auto")
+            self.progress_manager.log_success(completion_msg)
+        else:
+            self.logger.info(completion_msg)
         return guest_ids
     
     def _group_guests_by_image_config(self, guests: List[Guest]) -> Dict[str, List[Guest]]:
@@ -464,19 +583,23 @@ class KVMProvider(InfrastructureProvider):
             
             # Log command output for debugging
             if result.stdout:
-                self.logger.debug(f"virt-install stdout: {result.stdout}")
+                self.logger.info(f"📄 virt-install stdout: {result.stdout}")
             if result.stderr:
                 if result.returncode == 0:
                     # virt-install may output non-error info to stderr
                     self.logger.debug(f"virt-install stderr (non-error): {result.stderr}")
                 else:
-                    self.logger.error(f"virt-install stderr: {result.stderr}")
+                    self.logger.error(f"❌ virt-install stderr: {result.stderr}")
             
             if result.returncode == 0:
                 self.logger.info(f"✅ VM '{vm_name}' created successfully with virt-install")
                 return vm_name
             else:
-                self.logger.error(f"❌ virt-install failed (exit code {result.returncode}): {result.stderr}")
+                self.logger.error(f"❌ virt-install failed (exit code {result.returncode})")
+                self.logger.error(f"   💥 Command that failed: {' '.join(virt_install_cmd)}")
+                self.logger.error(f"   💥 Error output: {result.stderr}")
+                if result.stdout:
+                    self.logger.error(f"   💥 Standard output: {result.stdout}")
                 return None
                 
         except subprocess.TimeoutExpired:

@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from ..domain.entities.guest import Guest
 from ..domain.entities.host import Host
 from ..core.exceptions import CyRISException
+from ..core.rich_progress import RichProgressManager
 from .providers.base_provider import ResourceCreationError
 
 @dataclass
@@ -42,6 +43,13 @@ class LocalImageBuilder:
         self.work_dir = work_dir or Path("/tmp/cyris-builds")
         self.work_dir.mkdir(parents=True, exist_ok=True)
         self.logger = logging.getLogger(__name__)
+        
+        # Rich progress manager (can be set by KVM provider)
+        self.progress_manager: Optional[RichProgressManager] = None
+    
+    def set_progress_manager(self, progress_manager: RichProgressManager) -> None:
+        """Set progress manager for rich progress reporting"""
+        self.progress_manager = progress_manager
     
     def check_local_dependencies(self) -> Dict[str, bool]:
         """Check availability of required tools on local machine"""
@@ -81,21 +89,37 @@ class LocalImageBuilder:
             return []
     
     def build_image_locally(self, guest: Guest) -> BuildResult:
-        """Build VM image locally using virt-builder"""
+        """Build VM image locally using virt-builder with Rich progress tracking"""
         start_time = time.time()
         
-        self.logger.info(f"🔧 Starting image build for guest '{guest.guest_id}'")
-        self.logger.info(f"📋 Build parameters: image={guest.image_name}, vcpus={guest.vcpus}, memory={guest.memory}, disk={guest.disk_size}")
+        start_msg = f"🔧 Starting image build for guest '{guest.guest_id}'"
+        params_msg = f"📋 Build parameters: image={guest.image_name}, vcpus={guest.vcpus}, memory={guest.memory}, disk={guest.disk_size}"
+        
+        if self.progress_manager:
+            self.progress_manager.log_info(start_msg)
+            self.progress_manager.log_info(params_msg)
+        else:
+            self.logger.info(start_msg)
+            self.logger.info(params_msg)
         
         if not self._validate_build_requirements(guest):
+            error_msg = "Build requirements validation failed"
+            if self.progress_manager:
+                self.progress_manager.log_error(error_msg)
+            
             return BuildResult(
                 success=False,
-                error_message="Build requirements validation failed",
+                error_message=error_msg,
                 build_time=time.time() - start_time
             )
         
         image_path = self.work_dir / f"{guest.guest_id}-{guest.image_name}.qcow2"
-        self.logger.info(f"📁 Output image path: {image_path}")
+        path_msg = f"📁 Output image path: {image_path}"
+        
+        if self.progress_manager:
+            self.progress_manager.log_info(path_msg)
+        else:
+            self.logger.info(path_msg)
         
         try:
             # Build base image with virt-builder
@@ -106,50 +130,101 @@ class LocalImageBuilder:
                 '--output', str(image_path)
             ]
             
-            self.logger.info(f"🚀 Executing virt-builder command:")
-            self.logger.info(f"    {' '.join(build_cmd)}")
-            self.logger.info(f"⏳ This may take several minutes for image download and creation...")
+            cmd_msg = f"🚀 Executing virt-builder command:"
+            cmd_detail = f"    {' '.join(build_cmd)}"
+            time_msg = f"⏳ This may take several minutes for image download and creation..."
             
-            result = subprocess.run(build_cmd, capture_output=True, text=True, timeout=600)
+            if self.progress_manager:
+                self.progress_manager.log_info(cmd_msg)
+                self.progress_manager.log_command(' '.join(build_cmd))
+                self.progress_manager.log_info(time_msg)
+            else:
+                self.logger.info(cmd_msg)
+                self.logger.info(cmd_detail)
+                self.logger.info(time_msg)
+            
+            # Execute with progress monitoring
+            if self.progress_manager:
+                result = self._run_command_with_progress(build_cmd, "Building VM image", timeout=600)
+            else:
+                result = subprocess.run(build_cmd, capture_output=True, text=True, timeout=600)
             
             # Log command output for debugging
             if result.stdout:
-                self.logger.debug(f"virt-builder stdout: {result.stdout}")
+                if self.progress_manager:
+                    self.progress_manager.log_info(f"virt-builder output: {result.stdout[:200]}...") 
+                else:
+                    self.logger.debug(f"virt-builder stdout: {result.stdout}")
             if result.stderr:
                 if result.returncode == 0:
                     # virt-builder often outputs progress to stderr even on success
-                    self.logger.debug(f"virt-builder stderr (non-error): {result.stderr}")
+                    if self.progress_manager:
+                        self.progress_manager.log_info(f"virt-builder progress: {result.stderr[:200]}...")
+                    else:
+                        self.logger.debug(f"virt-builder stderr (non-error): {result.stderr}")
                 else:
-                    self.logger.error(f"virt-builder stderr: {result.stderr}")
+                    if self.progress_manager:
+                        self.progress_manager.log_error(f"virt-builder error: {result.stderr}")
+                    else:
+                        self.logger.error(f"virt-builder stderr: {result.stderr}")
             
             if result.returncode != 0:
+                error_msg = f"virt-builder failed (exit code {result.returncode}): {result.stderr}"
+                if self.progress_manager:
+                    self.progress_manager.log_error(error_msg)
+                
                 return BuildResult(
                     success=False,
-                    error_message=f"virt-builder failed (exit code {result.returncode}): {result.stderr}",
+                    error_message=error_msg,
                     build_time=time.time() - start_time
                 )
             
             # Check if output file was created
             if not image_path.exists():
+                error_msg = f"virt-builder succeeded but output file not found: {image_path}"
+                if self.progress_manager:
+                    self.progress_manager.log_error(error_msg)
+                    
                 return BuildResult(
                     success=False,
-                    error_message=f"virt-builder succeeded but output file not found: {image_path}",
+                    error_message=error_msg,
                     build_time=time.time() - start_time
                 )
             
             image_size = image_path.stat().st_size
-            self.logger.info(f"✅ Base image built successfully: {image_path}")
-            self.logger.info(f"📏 Image size: {image_size / 1024 / 1024:.1f} MB")
+            success_msg = f"✅ Base image built successfully: {image_path}"
+            size_msg = f"📏 Image size: {image_size / 1024 / 1024:.1f} MB"
+            
+            if self.progress_manager:
+                self.progress_manager.log_success(success_msg)
+                self.progress_manager.log_info(size_msg)
+            else:
+                self.logger.info(success_msg)
+                self.logger.info(size_msg)
             
             # Execute build-time tasks
             if guest.tasks:
-                self.logger.info(f"📝 Executing {len(guest.tasks)} build-time tasks")
+                tasks_msg = f"📝 Executing {len(guest.tasks)} build-time tasks"
+                if self.progress_manager:
+                    self.progress_manager.log_info(tasks_msg)
+                else:
+                    self.logger.info(tasks_msg)
+                    
                 self._execute_build_time_tasks(image_path, guest.tasks)
             else:
-                self.logger.info(f"📝 No build-time tasks to execute")
+                no_tasks_msg = f"📝 No build-time tasks to execute"
+                if self.progress_manager:
+                    self.progress_manager.log_info(no_tasks_msg)
+                else:
+                    self.logger.info(no_tasks_msg)
             
             build_time = time.time() - start_time
-            self.logger.info(f"🎉 Image build completed successfully in {build_time:.1f}s")
+            completion_msg = f"🎉 Image build completed successfully in {build_time:.1f}s"
+            
+            if self.progress_manager:
+                self.progress_manager.log_success(completion_msg)
+            else:
+                self.logger.info(completion_msg)
             
             return BuildResult(
                 success=True,
@@ -158,19 +233,75 @@ class LocalImageBuilder:
             )
             
         except subprocess.TimeoutExpired:
-            self.logger.error(f"⏰ virt-builder timed out after 10 minutes")
+            timeout_msg = f"⏰ virt-builder timed out after 10 minutes"
+            if self.progress_manager:
+                self.progress_manager.log_error(timeout_msg)
+            else:
+                self.logger.error(timeout_msg)
+                
             return BuildResult(
                 success=False,
                 error_message="virt-builder timeout after 10 minutes",
                 build_time=time.time() - start_time
             )
         except Exception as e:
-            self.logger.error(f"💥 Build failed with exception: {str(e)}")
+            error_msg = f"💥 Build failed with exception: {str(e)}"
+            if self.progress_manager:
+                self.progress_manager.log_error(error_msg)
+            else:
+                self.logger.error(error_msg)
+                
             return BuildResult(
                 success=False,
                 error_message=f"Build failed: {str(e)}",
                 build_time=time.time() - start_time
             )
+    
+    def _run_command_with_progress(self, cmd: List[str], description: str, timeout: int = 300):
+        """Run a command with progress monitoring"""
+        import threading
+        
+        # Start process
+        process = subprocess.Popen(
+            cmd, 
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.PIPE, 
+            text=True,
+            bufsize=1,
+            universal_newlines=True
+        )
+        
+        # Create a simple spinner effect for long-running commands
+        if self.progress_manager:
+            # Add indeterminate progress step
+            step_id = f"cmd_{int(time.time())}"
+            self.progress_manager.start_step(step_id, description)
+        
+        # Wait for completion with timeout
+        try:
+            stdout, stderr = process.communicate(timeout=timeout)
+            
+            if self.progress_manager:
+                if process.returncode == 0:
+                    self.progress_manager.complete_step(step_id)
+                else:
+                    self.progress_manager.fail_step(step_id, f"Command failed with exit code {process.returncode}")
+            
+            # Create result object that matches subprocess.run
+            class CommandResult:
+                def __init__(self, returncode, stdout, stderr):
+                    self.returncode = returncode
+                    self.stdout = stdout
+                    self.stderr = stderr
+            
+            return CommandResult(process.returncode, stdout, stderr)
+            
+        except subprocess.TimeoutExpired:
+            process.kill()
+            if self.progress_manager:
+                self.progress_manager.fail_step(step_id, f"Command timed out after {timeout}s")
+            
+            raise subprocess.TimeoutExpired(cmd, timeout)
     
     def distribute_image_to_host(self, image_path: str, target_host: Host, 
                                remote_path: str) -> bool:
