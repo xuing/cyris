@@ -9,6 +9,11 @@ from pathlib import Path
 
 def main():
     """Main function"""
+    # Write debug log to file
+    with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+        f.write(f"\n[DEBUG] main() started with sys.argv: {sys.argv}\n")
+        f.flush()
+    
     args = sys.argv[1:]
     
     # If no arguments provided, show help
@@ -39,14 +44,47 @@ def main():
     
     # If first argument is a modern command, use modern CLI
     if first_arg in modern_commands:
+        with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+            f.write(f"[DEBUG] Detected modern command: {first_arg}\n")
+            f.write(f"[DEBUG] Args: {args}\n")
+            f.flush()
+        
         try:
+            print(f"[DEBUG] Starting modern CLI with args: {args}")
+            with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                f.write("[DEBUG] Starting modern CLI try block\n")
+                f.flush()
+            
             script_dir = Path(__file__).parent.resolve()
             src_dir = script_dir / 'src'
             sys.path.insert(0, str(src_dir))
+            print(f"[DEBUG] Added {src_dir} to Python path")
+            
+            with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                f.write(f"[DEBUG] About to import from {src_dir}\n")
+                f.flush()
             
             from cyris.cli.main import main as cli_main
+            print("[DEBUG] Successfully imported CLI main")
+            
+            with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                f.write("[DEBUG] Successfully imported CLI main\n")
+                f.flush()
+            
             sys.argv = ['cyris'] + args  # Reset argv
+            print(f"[DEBUG] Set sys.argv to: {sys.argv}")
+            print("[DEBUG] About to call cli_main()...")
+            
+            with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                f.write(f"[DEBUG] About to call cli_main with argv: {sys.argv}\n")
+                f.flush()
+            
             cli_main()
+            print("[DEBUG] cli_main() completed")
+            
+            with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                f.write("[DEBUG] cli_main() completed successfully\n")
+                f.flush()
         except ImportError:
             print("❌ Modern CLI unavailable, please ensure environment is properly set up")
             print("   Run: source .venv/bin/activate")

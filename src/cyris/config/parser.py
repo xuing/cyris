@@ -256,6 +256,8 @@ class CyRISConfigParser:
     
     def _parse_guest(self, guest_data: dict) -> Optional[Guest]:
         """Parse guest configuration from YAML data"""
+        guest_id = guest_data.get('id', guest_data.get('name', 'unknown'))
+        logger.debug(f"[DEBUG] _parse_guest START: id={guest_id}, basevm_type={guest_data.get('basevm_type', 'no-type')}")
         try:
             # Map common OS strings to OSType enum values
             os_type_mapping = {
@@ -291,8 +293,10 @@ class CyRISConfigParser:
             
             # For kvm-auto, some fields are optional, for others they are required
             if basevm_type == BaseVMType.KVM_AUTO:
+                logger.debug(f"[DEBUG] Creating KVM_AUTO guest with image_name={guest_data.get('image_name', 'no-image')}")
                 # kvm-auto specific validation will be done by Guest model validators
-                return Guest(
+                logger.debug(f"[DEBUG] About to instantiate Guest entity for kvm-auto")
+                guest_instance = Guest(
                     guest_id=guest_data.get('name', guest_data.get('id', 'unknown')),
                     basevm_host=guest_data.get('basevm_host'),  # Optional for kvm-auto
                     basevm_config_file=guest_data.get('basevm_config_file'),  # Optional for kvm-auto  
@@ -328,5 +332,8 @@ class CyRISConfigParser:
                     tasks=tasks
                 )
         except Exception as e:
-            logger.warning(f"Failed to parse guest: {e}")
+            logger.error(f"[ERROR] Failed to parse guest {guest_id}: {e}")
+            logger.error(f"[ERROR] Guest data was: {guest_data}")
+            import traceback
+            logger.error(f"[ERROR] Traceback:\n{traceback.format_exc()}")
             return None

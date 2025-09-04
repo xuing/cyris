@@ -50,20 +50,40 @@ def get_config(ctx):
 def cli(ctx, config: Optional[str], verbose: bool, version: bool):
     """CyRIS - Modern Cyber Security Training Environment Deployment Tool"""
     
+    with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+        f.write(f"[DEBUG] cli() called with config={config}, verbose={verbose}, version={version}\n")
+        f.flush()
+    
     if version:
+        with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+            f.write("[DEBUG] Showing version\n")
+            f.flush()
         click.echo("CyRIS v1.4.0 - Cyber Range Instantiation System")
         ctx.exit()
     
     # Initialize context
+    with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+        f.write("[DEBUG] Initializing context\n")
+        f.flush()
     ctx.ensure_object(dict)
     ctx.obj['verbose'] = verbose
     
     # Load configuration (optimized for fast startup)
+    with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+        f.write("[DEBUG] Loading configuration\n")
+        f.flush()
+    
     try:
         if config:
+            with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                f.write(f"[DEBUG] Using provided config: {config}\n")
+                f.flush()
             config_path = Path(config)
             settings = parse_config_lazy(config_path)
         else:
+            with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                f.write("[DEBUG] Looking for default config files\n")
+                f.flush()
             # Try default locations (minimal filesystem access)
             default_configs = [
                 Path.cwd() / 'config.yml',
@@ -73,16 +93,35 @@ def cli(ctx, config: Optional[str], verbose: bool, version: bool):
             
             settings = None
             for config_path in default_configs:
+                with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                    f.write(f"[DEBUG] Checking config file: {config_path}\n")
+                    f.flush()
                 if config_path.exists():
+                    with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                        f.write(f"[DEBUG] Found config file: {config_path}, parsing...\n")
+                        f.flush()
                     settings = parse_config_lazy(config_path)
                     break
             
             if settings is None:
+                with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                    f.write("[DEBUG] No config file found, using default settings\n")
+                    f.flush()
                 settings = get_settings_lazy()
         
+        with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+            f.write("[DEBUG] Configuration loaded successfully\n")
+            f.flush()
         ctx.obj['config'] = settings
         
+        with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+            f.write("[DEBUG] cli() function completed successfully\n")
+            f.flush()
+        
     except Exception as e:
+        with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+            f.write(f"[DEBUG] Exception in cli(): {e}\n")
+            f.flush()
         from ..config.parser import ConfigurationError
         if isinstance(e, ConfigurationError):
             click.echo(f"Configuration error: {e}", err=True)
@@ -106,12 +145,29 @@ def create(ctx, description_file: Path, range_id: Optional[int], dry_run: bool, 
     
     DESCRIPTION_FILE: YAML format cyber range description file
     """
+    with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+        f.write(f"[DEBUG] create() called with file={description_file}, dry_run={dry_run}\n")
+        f.flush()
+    
     from .commands import CreateCommandHandler
+    
+    with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+        f.write("[DEBUG] Imported CreateCommandHandler\n")
+        f.flush()
     
     config = get_config(ctx)
     verbose = ctx.obj['verbose']
     
+    with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+        f.write("[DEBUG] Got config and verbose, creating handler\n")
+        f.flush()
+    
     handler = CreateCommandHandler(config, verbose)
+    
+    with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+        f.write("[DEBUG] About to call handler.execute()\n")
+        f.flush()
+    
     success = handler.execute(
         description_file=description_file,
         range_id=range_id,
@@ -119,6 +175,10 @@ def create(ctx, description_file: Path, range_id: Optional[int], dry_run: bool, 
         network_mode=network_mode,
         enable_ssh=enable_ssh
     )
+    
+    with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+        f.write(f"[DEBUG] handler.execute() returned: {success}\n")
+        f.flush()
     
     if not success:
         sys.exit(1)
@@ -345,12 +405,29 @@ def legacy_run(ctx, args):
 
 def main(args=None):
     """Main entry point"""
+    with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+        f.write(f"[DEBUG] CLI main() called with args: {args}\n")
+        f.flush()
+    
+    print(f"[DEBUG] CLI main() called with args: {args}")
     try:
+        with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+            f.write("[DEBUG] About to call cli()...\n")
+            f.flush()
+        print("[DEBUG] About to call cli()...")
         cli(args)
+        print("[DEBUG] cli() completed successfully")
+        with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+            f.write("[DEBUG] cli() completed successfully\n")
+            f.flush()
     except KeyboardInterrupt:
         click.echo("\nOperation interrupted by user")
         sys.exit(1)
     except Exception as e:
+        with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+            f.write(f"[DEBUG] Exception in main(): {e}\n")
+            f.flush()
+        print(f"[DEBUG] Exception in main(): {e}")
         click.echo(f"[ERROR] Unexpected error: {e}", err=True)
         sys.exit(1)
 
