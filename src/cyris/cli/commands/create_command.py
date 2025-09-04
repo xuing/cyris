@@ -23,7 +23,16 @@ class CreateCommandHandler(BaseCommandHandler, ValidationMixin):
                 dry_run: bool = False, network_mode: str = 'bridge',
                 enable_ssh: bool = True) -> bool:
         """Execute create command with comprehensive validation and error handling"""
+        
+        with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+            f.write(f"[DEBUG] CreateCommandHandler.execute() START with file={description_file}\n")
+            f.flush()
+        
         try:
+            with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                f.write("[DEBUG] Starting input validation\n")
+                f.flush()
+            
             # Validate inputs
             if not self.validate_file_exists(description_file):
                 return False
@@ -34,8 +43,19 @@ class CreateCommandHandler(BaseCommandHandler, ValidationMixin):
             if not self.validate_network_mode(network_mode):
                 return False
             
+            with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                f.write("[DEBUG] Input validation completed successfully\n")
+                f.flush()
+            
             # Pre-creation environment checks
+            with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                f.write(f"[DEBUG] About to start pre-creation checks, dry_run={dry_run}\n")
+                f.flush()
+            
             if not dry_run:
+                with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                    f.write("[DEBUG] Calling _run_pre_creation_checks()\n")
+                    f.flush()
                 pre_check_passed = self._run_pre_creation_checks(description_file)
                 if not pre_check_passed:
                     self.console.print("[yellow]⚠️ Pre-checks failed. Creation may encounter issues.[/yellow]")
@@ -139,13 +159,80 @@ class CreateCommandHandler(BaseCommandHandler, ValidationMixin):
     
     def _execute_actual_creation(self, description_file: Path, range_id: Optional[int],
                                network_mode: str, enable_ssh: bool) -> bool:
-        """Execute actual cyber range creation with Rich progress display"""
+        """Execute actual cyber range creation with simplified Rich display"""
         
-        # Create Rich progress manager for the entire operation
-        progress_manager = create_rich_progress_manager(
-            "range_creation", 
-            f"Creating Cyber Range: {description_file.stem}"
-        )
+        # Create simplified Rich progress manager (no Live display, no complex layouts)
+        class SimplifiedRichProgressManager:
+            def __init__(self, operation_name):
+                from rich.console import Console
+                self.console = Console()
+                self.operation_name = operation_name
+                self.overall_success = True
+                
+            def progress_context(self):
+                class DummyContext:
+                    def __enter__(self): return None
+                    def __exit__(self, *args): pass
+                return DummyContext()
+                
+            def live_context(self):
+                class DummyContext:
+                    def __enter__(self): return None
+                    def __exit__(self, *args): pass
+                return DummyContext()
+                
+            def start_step(self, step_id, description, total=None):
+                self.console.print(f"[bold blue]🔄 {description}[/bold blue]")
+                # Add debug logging
+                with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                    f.write(f"[DEBUG] start_step({step_id}): {description} (total={total})\n")
+                    f.flush()
+                
+            def update_step(self, step_id, completed=None, total=None, description=None):
+                if completed is not None and total is not None:
+                    progress_pct = int((completed / total) * 100) if total > 0 else 0
+                    self.console.print(f"[blue]📊 {step_id}: {progress_pct}% ({completed}/{total})[/blue]")
+                with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                    f.write(f"[DEBUG] update_step({step_id}): completed={completed}, total={total}\n")
+                    f.flush()
+                    
+            def complete_step(self, step_id):
+                self.console.print(f"[bold green]✅ Step '{step_id}' completed[/bold green]")
+                with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                    f.write(f"[DEBUG] complete_step({step_id}) called\n")
+                    f.flush()
+                    
+            def fail_step(self, step_id, error):
+                self.console.print(f"[bold red]❌ Step '{step_id}' failed: {error}[/bold red]")
+                self.overall_success = False
+                with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                    f.write(f"[DEBUG] fail_step({step_id}): {error}\n")
+                    f.flush()
+                
+            def log_info(self, message):
+                self.console.print(f"[blue]ℹ️  {message}[/blue]")
+                with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                    f.write(f"[DEBUG] log_info: {message}\n")
+                    f.flush()
+                
+            def log_success(self, message):
+                self.console.print(f"[bold green]✅ {message}[/bold green]")
+                
+            def log_error(self, message):
+                self.console.print(f"[bold red]❌ {message}[/bold red]")
+                
+            def log_command(self, command):
+                self.console.print(f"[dim]💻 CMD: {command}[/dim]")
+                with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                    f.write(f"[DEBUG] log_command: {command}\n")
+                    f.flush()
+                
+            def complete(self):
+                with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                    f.write(f"[DEBUG] progress_manager.complete() called\n")
+                    f.flush()
+        
+        progress_manager = SimplifiedRichProgressManager(f"Creating Cyber Range: {description_file.stem}")
         
         try:
             # Start the main operation with Rich progress context
@@ -164,9 +251,13 @@ class CreateCommandHandler(BaseCommandHandler, ValidationMixin):
                         # Phase 2: Parse and validate configuration
                         progress_manager.start_step("parse", "Parsing YAML configuration...")
                         try:
+                            progress_manager.log_info("[DEBUG] Importing CyRISConfigParser...")
                             from ...config.parser import CyRISConfigParser
+                            progress_manager.log_info("[DEBUG] Creating parser instance...")
                             parser = CyRISConfigParser()
+                            progress_manager.log_info(f"[DEBUG] About to call parse_file({description_file})...")
                             config = parser.parse_file(description_file)
+                            progress_manager.log_info(f"[DEBUG] parse_file completed successfully!")
                             progress_manager.log_info(f"Found {len(config.hosts)} hosts and {len(config.guests)} guests")
                             progress_manager.complete_step("parse")
                         except Exception as e:
@@ -175,15 +266,21 @@ class CreateCommandHandler(BaseCommandHandler, ValidationMixin):
                         
                         # Phase 3: Create cyber range with orchestrator
                         progress_manager.start_step("create", "Creating cyber range infrastructure...", total=100)
+                        progress_manager.log_info("[DEBUG] Starting orchestrator phase...")
                         
                         # Pass progress manager to orchestrator for detailed progress updates
                         if hasattr(orchestrator, 'set_progress_manager'):
+                            progress_manager.log_info("[DEBUG] Setting progress manager on orchestrator...")
                             orchestrator.set_progress_manager(progress_manager)
+                        else:
+                            progress_manager.log_info("[DEBUG] Orchestrator does not have set_progress_manager method")
                         
+                        progress_manager.log_info(f"[DEBUG] About to call orchestrator.create_range_from_yaml({description_file}, {range_id})...")
                         result_range_id = orchestrator.create_range_from_yaml(
                             description_file,
                             range_id
                         )
+                        progress_manager.log_info(f"[DEBUG] orchestrator.create_range_from_yaml returned: {result_range_id}")
                         
                         if result_range_id:
                             progress_manager.complete_step("create")
@@ -243,119 +340,244 @@ class CreateCommandHandler(BaseCommandHandler, ValidationMixin):
     
     def _run_pre_creation_checks(self, description_file: Path) -> bool:
         """Run environment checks before VM creation with Rich progress"""
+        with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+            f.write("[DEBUG] _run_pre_creation_checks() START\n")
+            f.flush()
+        
         # Create progress manager for pre-checks
-        check_progress = create_rich_progress_manager(
-            "pre_checks", 
-            "Pre-Creation Environment Checks"
-        )
+        with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+            f.write("[DEBUG] About to create Rich progress manager (using simple fallback)\n")
+            f.flush()
+        
+        # TEMPORARY FIX: Use simple console output instead of Rich progress manager
+        # to avoid hanging issue. This bypasses the Rich Live display that's causing problems.
+        class SimpleProgressManager:
+            def __init__(self, name):
+                self.name = name
+                self.console = self.console if hasattr(self, 'console') else None
+            
+            def progress_context(self):
+                class DummyContext:
+                    def __enter__(self): return None
+                    def __exit__(self, *args): pass
+                return DummyContext()
+            
+            def live_context(self):
+                class DummyContext:
+                    def __enter__(self): return None
+                    def __exit__(self, *args): pass
+                return DummyContext()
+            
+            def start_step(self, step_id, description):
+                print(f"🔄 {description}")
+                
+            def complete_step(self, step_id):
+                print(f"✅ Step '{step_id}' completed")
+                
+            def log_info(self, message):
+                print(f"ℹ️  {message}")
+                
+            def log_success(self, message):
+                print(f"✅ {message}")
+                
+            def log_error(self, message):
+                print(f"❌ {message}")
+                
+            def log_warning(self, message):
+                print(f"⚠️  {message}")
+        
+        check_progress = SimpleProgressManager("Pre-Creation Environment Checks")
+        
+        with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+            f.write("[DEBUG] Rich progress manager created\n")
+            f.flush()
         
         all_checks_passed = True
         
-        with check_progress.progress_context():
-            with check_progress.live_context():
+        with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+            f.write("[DEBUG] About to enter progress context\n")
+            f.flush()
         
-        try:
-            # Parse YAML to determine guest types
-            from ...config.parser import CyRISConfigParser
-            from ...domain.entities.guest import BaseVMType
-            
-            parser = CyRISConfigParser()
-            config = parser.parse_file(description_file)
-            
-                # Step 1: Parse configuration
-                check_progress.start_step("config", "Parsing configuration...")
+        with check_progress.progress_context():
+            with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                f.write("[DEBUG] Entered progress context, about to enter live context\n")
+                f.flush()
                 
-                # Check if we have traditional KVM guests (need base images)
-                traditional_kvm_guests = [g for g in config.guests if g.basevm_type == BaseVMType.KVM]
-                kvm_auto_guests = [g for g in config.guests if g.basevm_type == BaseVMType.KVM_AUTO]
+            with check_progress.live_context():
+                with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                    f.write("[DEBUG] Entered live context, starting try block\n")
+                    f.flush()
                 
-                check_progress.log_info(f"Found {len(traditional_kvm_guests)} traditional KVM guests")
-                check_progress.log_info(f"Found {len(kvm_auto_guests)} kvm-auto guests")
-                check_progress.complete_step("config")
-                
-                # Step 2: Check base images (only if needed)
-                if traditional_kvm_guests:
-                    check_progress.start_step("base_images", "Checking base VM images...")
-                base_image_paths = [
-                    "/home/ubuntu/cyris/docs/images/basevm.qcow2",
-                    "/home/ubuntu/cyris/images/basevm.qcow2"
-                ]
-                
-                base_image_found = False
-                for base_path in base_image_paths:
-                    if Path(base_path).exists():
-                        # Validate base image
-                        diagnostics = VMDiagnostics()
-                        result = diagnostics._validate_image_with_qemu(base_path)
-                        if not result:  # No error means image is valid
-                            self.console.print(f"  ✅ Base image found and valid: {base_path}")
-                            base_image_found = True
-                            break
-                        else:
-                            self.console.print(f"  ❌ Base image invalid: {base_path}")
-                            self.console.print(f"     {result.message}")
+                try:
+                    with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                        f.write("[DEBUG] About to parse YAML and import config parser\n")
+                        f.flush()
+                    
+                    # Parse YAML to determine guest types
+                    from ...config.parser import CyRISConfigParser
+                    from ...domain.entities.guest import BaseVMType
+                    
+                    with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                        f.write("[DEBUG] Imports completed, creating parser instance\n")
+                        f.flush()
+                    
+                    parser = CyRISConfigParser()
+                    
+                    with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                        f.write("[DEBUG] Parser created, about to parse file\n")
+                        f.flush()
+                    
+                    config = parser.parse_file(description_file)
+                    
+                    with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                        f.write("[DEBUG] File parsed successfully, continuing with checks\n")
+                        f.flush()
+                    
+                    # Step 1: Parse configuration
+                    with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                        f.write("[DEBUG] About to call check_progress.start_step('config')\n")
+                        f.flush()
+                    
+                    check_progress.start_step("config", "Parsing configuration...")
+                    
+                    with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                        f.write("[DEBUG] start_step('config') completed\n")
+                        f.flush()
+                    
+                    # Check if we have traditional KVM guests (need base images)
+                    with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                        f.write("[DEBUG] About to access config.guests\n")
+                        f.flush()
+                    
+                    traditional_kvm_guests = [g for g in config.guests if g.basevm_type == BaseVMType.KVM]
+                    
+                    with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                        f.write(f"[DEBUG] traditional_kvm_guests created: {len(traditional_kvm_guests)}\n")
+                        f.flush()
+                    
+                    kvm_auto_guests = [g for g in config.guests if g.basevm_type == BaseVMType.KVM_AUTO]
+                    
+                    with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                        f.write(f"[DEBUG] kvm_auto_guests created: {len(kvm_auto_guests)}\n")
+                        f.flush()
+                    
+                    with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                        f.write("[DEBUG] About to log guest counts to progress\n")
+                        f.flush()
+                    
+                    check_progress.log_info(f"Found {len(traditional_kvm_guests)} traditional KVM guests")
+                    
+                    with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                        f.write("[DEBUG] Logged traditional KVM guests count\n")
+                        f.flush()
+                    
+                    check_progress.log_info(f"Found {len(kvm_auto_guests)} kvm-auto guests")
+                    
+                    with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                        f.write("[DEBUG] Logged kvm-auto guests count\n")
+                        f.flush()
+                    
+                    check_progress.complete_step("config")
+                    
+                    with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                        f.write("[DEBUG] complete_step('config') called\n")
+                        f.flush()
+                    
+                    # Step 2: Check base images (only if needed)
+                    if traditional_kvm_guests:
+                        check_progress.start_step("base_images", "Checking base VM images...")
+                        base_image_paths = [
+                            "/home/ubuntu/cyris/docs/images/basevm.qcow2",
+                            "/home/ubuntu/cyris/images/basevm.qcow2"
+                        ]
+                        
+                        base_image_found = False
+                        for base_path in base_image_paths:
+                            if Path(base_path).exists():
+                                # Validate base image
+                                diagnostics = VMDiagnostics()
+                                result = diagnostics._validate_image_with_qemu(base_path)
+                                if not result:  # No error means image is valid
+                                    check_progress.log_success(f"Base image found and valid: {base_path}")
+                                    base_image_found = True
+                                    break
+                                else:
+                                    check_progress.log_error(f"Base image invalid: {base_path} - {result.message}")
+                                    all_checks_passed = False
+                        
+                        if not base_image_found:
+                            check_progress.log_error("No valid base image found")
+                            check_progress.log_info("💡 Ensure basevm.qcow2 exists and is valid")
                             all_checks_passed = False
-                
-                if not base_image_found:
-                    self.console.print("  ❌ No valid base image found")
-                    self.console.print("     💡 Ensure basevm.qcow2 exists and is valid")
+                        
+                        check_progress.complete_step("base_images")
+                    else:
+                        # No traditional KVM guests, skip base image check
+                        if kvm_auto_guests:
+                            check_progress.log_success("Using kvm-auto guests (no base image required)")
+                        else:
+                            check_progress.log_warning("No KVM guests found in configuration")
+                    
+                    # Step 3: Check cloud-init.iso availability
+                    check_progress.start_step("cloud_init", "Checking cloud-init requirements...")
+                    cloud_init_paths = [
+                        "/home/ubuntu/cyris/docs/images/cloud-init.iso",
+                        "/home/ubuntu/cyris/images/cloud-init.iso"
+                    ]
+                    
+                    cloud_init_found = any(Path(p).exists() for p in cloud_init_paths)
+                    if cloud_init_found:
+                        check_progress.log_success("cloud-init.iso found")
+                    else:
+                        check_progress.log_warning("cloud-init.iso not found")
+                        check_progress.log_info("💡 VMs may fail to initialize properly")
+                        help_info = get_diagnostic_pattern_help("missing_cloud_init")
+                        check_progress.log_info(f"💡 {help_info['quick_fix']}")
+                        # Note: This is a warning, not a failure for kvm-auto
+                    check_progress.complete_step("cloud_init")
+                    
+                    # Step 4: Check libvirt connectivity
+                    check_progress.start_step("libvirt", "Testing libvirt connectivity...")
+                    try:
+                        import subprocess
+                        result = subprocess.run(['virsh', 'version'], capture_output=True, timeout=5)
+                        if result.returncode == 0:
+                            check_progress.log_success("libvirt connectivity confirmed")
+                        else:
+                            check_progress.log_error("libvirt not accessible")
+                            all_checks_passed = False
+                    except Exception as e:
+                        check_progress.log_error(f"libvirt check failed: {str(e)}")
+                        all_checks_passed = False
+                    check_progress.complete_step("libvirt")
+                    
+                    # Step 5: Check network configuration
+                    check_progress.start_step("network", "Checking network configuration...")
+                    try:
+                        import subprocess
+                        result = subprocess.run(['virsh', 'net-list', '--active'], capture_output=True, timeout=5)
+                        if result.returncode == 0 and b'default' in result.stdout:
+                            check_progress.log_success("Default network available")
+                        else:
+                            check_progress.log_warning("Default network may not be active")
+                            # This is a warning, not necessarily a failure
+                    except Exception as e:
+                        check_progress.log_warning(f"Network configuration check failed: {str(e)}")
+                    check_progress.complete_step("network")
+                    
+                    # Step 6: Check for kvm-auto requirements
+                    check_progress.start_step("kvm_auto", "Checking kvm-auto requirements...")
+                    kvm_auto_check_passed = self._check_kvm_auto_requirements(description_file)
+                    if kvm_auto_check_passed:
+                        check_progress.log_success("kvm-auto requirements satisfied")
+                    else:
+                        check_progress.log_error("kvm-auto requirements not met")
+                        all_checks_passed = False
+                    check_progress.complete_step("kvm_auto")
+                    
+                except Exception as e:
+                    check_progress.log_error(f"Pre-check failed: {str(e)}")
                     all_checks_passed = False
-            else:
-                # No traditional KVM guests, skip base image check
-                if kvm_auto_guests:
-                    self.console.print("  ✅ Using kvm-auto guests (no base image required)")
-                else:
-                    self.console.print("  ⚠️ No KVM guests found in configuration")
-            
-            # Check cloud-init.iso availability
-            cloud_init_paths = [
-                "/home/ubuntu/cyris/docs/images/cloud-init.iso",
-                "/home/ubuntu/cyris/images/cloud-init.iso"
-            ]
-            
-            cloud_init_found = any(Path(p).exists() for p in cloud_init_paths)
-            if cloud_init_found:
-                self.console.print("  ✅ cloud-init.iso found")
-            else:
-                self.console.print("  ⚠️ cloud-init.iso not found")
-                self.console.print("     💡 VMs may fail to initialize properly")
-                help_info = get_diagnostic_pattern_help("missing_cloud_init")
-                self.console.print(f"     💡 {help_info['quick_fix']}")
-                all_checks_passed = False
-            
-            # Check libvirt connectivity
-            try:
-                import subprocess
-                result = subprocess.run(['virsh', 'version'], capture_output=True, timeout=5)
-                if result.returncode == 0:
-                    self.console.print("  ✅ libvirt connectivity confirmed")
-                else:
-                    self.console.print("  ❌ libvirt not accessible")
-                    all_checks_passed = False
-            except:
-                self.console.print("  ❌ libvirt check failed")
-                all_checks_passed = False
-            
-            # Check network configuration
-            try:
-                result = subprocess.run(['virsh', 'net-list', '--active'], capture_output=True, timeout=5)
-                if result.returncode == 0 and 'default' in result.stdout:
-                    self.console.print("  ✅ Default network available")
-                else:
-                    self.console.print("  ⚠️ Default network may not be active")
-                    all_checks_passed = False
-            except:
-                self.console.print("  ⚠️ Network configuration check failed")
-                all_checks_passed = False
-            
-            # Check for kvm-auto requirements
-            kvm_auto_check_passed = self._check_kvm_auto_requirements(description_file)
-            if not kvm_auto_check_passed:
-                all_checks_passed = False
-            
-        except Exception as e:
-            self.console.print(f"  ❌ Pre-check failed: {str(e)}")
-            all_checks_passed = False
         
         if all_checks_passed:
             self.console.print("  🎉 All pre-checks passed!")
