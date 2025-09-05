@@ -25,3 +25,10 @@ images/user-data
 .coverage
 validation-report.txt
 cyber_range/test-demo/
+
+# Debug and test artifacts
+debug_*.log
+cyber_range/test*/
+cyber_range/test-*/
+cyber_range/*.log
+cyber_range/.cyris.lock
