@@ -71,7 +71,8 @@ class KVMProvider(InfrastructureProvider):
         self.storage_pool = config.get("storage_pool", "default")
         self.network_prefix = config.get("network_prefix", "cyris")
         self.vm_template_dir = Path(config.get("vm_template_dir", "/var/lib/libvirt/templates"))
-        self.base_image_dir = Path(config.get("base_image_dir", "/var/lib/libvirt/images"))
+        self.base_image_dir = Path(config.get("vm_storage_dir", "/var/lib/libvirt/images"))
+        self.build_storage_dir = Path(config.get("build_storage_dir", "/tmp/cyris-builds"))
         
         # Network configuration
         self.network_mode = config.get("network_mode", "user")  # "user" or "bridge"
@@ -85,8 +86,8 @@ class KVMProvider(InfrastructureProvider):
         # Initialize permission manager for automatic libvirt access
         self.permission_manager = PermissionManager()
         
-        # Initialize image builder for kvm-auto support
-        self.image_builder = LocalImageBuilder()
+        # Initialize image builder for kvm-auto support with configurable build directory
+        self.image_builder = LocalImageBuilder(work_dir=self.build_storage_dir)
         
         # Rich progress manager (can be set by orchestrator)
         self.progress_manager: Optional[RichProgressManager] = None
@@ -346,7 +347,7 @@ class KVMProvider(InfrastructureProvider):
             try:
                 if skip_builder:
                     # Skip image building, use existing image
-                    expected_image_path = f"/tmp/cyris-builds/{template_guest.guest_id}-{template_guest.image_name}.qcow2"
+                    expected_image_path = str(self.build_storage_dir / f"{template_guest.guest_id}-{template_guest.image_name}.qcow2")
                     if Path(expected_image_path).exists():
                         skip_msg = f"🏃‍♂️ Skipping image building (--skip-builder), using existing image: {expected_image_path}"
                         if self.progress_manager:

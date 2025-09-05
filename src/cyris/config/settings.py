@@ -48,7 +48,18 @@ class CyRISSettings(BaseSettings):
         description="User email address"
     )
     
-    @field_validator('cyris_path', 'cyber_range_dir')
+    # Storage configuration
+    build_storage_dir: Path = Field(
+        default=Path.cwd() / "images" / "builds",
+        description="Directory for storing built VM images"
+    )
+    
+    vm_storage_dir: Path = Field(
+        default=Path.cwd() / "images" / "vms",
+        description="Directory for VM disk files"
+    )
+    
+    @field_validator('cyris_path', 'cyber_range_dir', 'build_storage_dir', 'vm_storage_dir')
     @classmethod
     def ensure_absolute_path(cls, v):
         """Ensure path is absolute"""
@@ -60,6 +71,13 @@ class CyRISSettings(BaseSettings):
     @classmethod
     def ensure_cyber_range_dir_exists(cls, v):
         """Ensure cyber range directory exists"""
+        v.mkdir(parents=True, exist_ok=True)
+        return v
+    
+    @field_validator('build_storage_dir', 'vm_storage_dir')
+    @classmethod
+    def ensure_storage_dirs_exist(cls, v):
+        """Ensure storage directories exist"""
         v.mkdir(parents=True, exist_ok=True)
         return v
     

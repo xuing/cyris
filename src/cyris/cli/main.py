@@ -134,8 +134,8 @@ def cli(ctx, config: Optional[str], verbose: bool, version: bool):
 @click.argument('description_file', type=click.Path(exists=True, path_type=Path))
 @click.option('--range-id', type=int, help='Specify cyber range ID')
 @click.option('--dry-run', is_flag=True, help='Dry run mode, do not actually create')
-@click.option('--build-only', is_flag=True, help='Build images only, do not create VMs (saves to /tmp/cyris-builds/)')
-@click.option('--skip-builder', is_flag=True, help='Skip image building, use existing images in /tmp/cyris-builds/')
+@click.option('--build-only', is_flag=True, help='Build images only, do not create VMs (saves to build_storage_dir)')
+@click.option('--skip-builder', is_flag=True, help='Skip image building, use existing images in build_storage_dir')
 @click.option('--network-mode', 
               type=click.Choice(['user', 'bridge'], case_sensitive=False),
               default='bridge',

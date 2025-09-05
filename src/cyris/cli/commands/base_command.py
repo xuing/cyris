@@ -143,7 +143,9 @@ class BaseCommandHandler(ABC):
                 'libvirt_uri': libvirt_uri,
                 'base_path': str(self.config.cyber_range_dir),
                 'network_mode': network_mode,
-                'enable_ssh': enable_ssh
+                'enable_ssh': enable_ssh,
+                'build_storage_dir': str(self.config.build_storage_dir),
+                'vm_storage_dir': str(self.config.vm_storage_dir)
             }
             
             with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:

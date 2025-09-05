@@ -5,3 +5,7 @@ gw_inside_addr: null
 gw_mgmt_addr: null
 gw_mode: false
 user_email: null
+
+# Storage directories for VM images and builds
+build_storage_dir: ./images/builds
+vm_storage_dir: ./images/vms
