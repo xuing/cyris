@@ -19,6 +19,7 @@ import yaml
 import re
 import socket
 import ipaddress
+import hashlib
 
 # Import permission manager for automatic libvirt access setup
 from ..permissions import PermissionManager
@@ -149,6 +150,106 @@ class KVMProvider(InfrastructureProvider):
         """Check if provider is connected and ready"""
         return self._connection is not None and self._connection.isAlive()
     
+    def list_vms_by_pattern(self, pattern: str) -> List[str]:
+        """
+        List all VMs matching a pattern.
+        
+        Args:
+            pattern: Pattern to match VM names against
+            
+        Returns:
+            List of VM names matching the pattern
+        """
+        if not self.is_connected():
+            self.connect()
+        
+        matching_vms = []
+        try:
+            # List all running domains
+            for domain_id in self._connection.listDomainsID():
+                try:
+                    domain = self._connection.lookupByID(domain_id)
+                    if domain.name().startswith(pattern):
+                        matching_vms.append(domain.name())
+                except libvirt.libvirtError:
+                    continue
+            
+            # Also check defined but not running domains
+            for domain_name in self._connection.listDefinedDomains():
+                if domain_name.startswith(pattern):
+                    if domain_name not in matching_vms:
+                        matching_vms.append(domain_name)
+                    
+        except Exception as e:
+            self.logger.warning(f"Error listing VMs by pattern '{pattern}': {e}")
+        
+        return matching_vms
+    
+    def vm_exists(self, vm_name: str) -> bool:
+        """
+        Check if a VM with the exact name exists.
+        
+        Args:
+            vm_name: Exact name of the VM to check
+            
+        Returns:
+            True if VM exists, False otherwise
+        """
+        if not self.is_connected():
+            self.connect()
+        
+        try:
+            self._connection.lookupByName(vm_name)
+            return True
+        except libvirt.libvirtError:
+            return False
+    
+    def _is_vm_running(self, vm_name: str) -> bool:
+        """
+        Check if a VM is currently running.
+        
+        Args:
+            vm_name: Name of the VM to check
+            
+        Returns:
+            True if VM is running, False otherwise
+        """
+        if not self.is_connected():
+            self.connect()
+        
+        try:
+            domain = self._connection.lookupByName(vm_name)
+            state, _ = domain.state()
+            return state == libvirt.VIR_DOMAIN_RUNNING
+        except libvirt.libvirtError:
+            return False
+    
+    def _start_vm(self, vm_name: str) -> bool:
+        """
+        Start a stopped VM.
+        
+        Args:
+            vm_name: Name of the VM to start
+            
+        Returns:
+            True if VM was started successfully, False otherwise
+        """
+        if not self.is_connected():
+            self.connect()
+        
+        try:
+            domain = self._connection.lookupByName(vm_name)
+            if not domain.isActive():
+                domain.create()
+                self.logger.info(f"Started VM {vm_name}")
+                return True
+            else:
+                self.logger.info(f"VM {vm_name} is already running")
+                return True
+        except libvirt.libvirtError as e:
+            self.logger.error(f"Failed to start VM {vm_name}: {e}")
+            return False
+    
     def create_hosts(self, hosts: List[Host]) -> List[str]:
         """
         Create physical hosts (for KVM, this is mainly network setup).
@@ -203,7 +304,44 @@ class KVMProvider(InfrastructureProvider):
         
         return host_ids
     
-    def create_guests(self, guests: List[Guest], host_mapping: Dict[str, str], build_only: bool = False, skip_builder: bool = False) -> List[str]:
+    def _generate_deterministic_vm_name(self, guest: Guest) -> str:
+        """
+        Generate deterministic VM name based on guest configuration.
+        This ensures idempotency - same configuration will always produce the same VM name.
+        
+        Args:
+            guest: Guest entity with configuration
+            
+        Returns:
+            Deterministic VM name string
+        """
+        # Create a deterministic hash from key guest configuration attributes
+        config_data = {
+            'guest_id': guest.guest_id,
+            'image_name': getattr(guest, 'image_name', None),
+            'vcpus': getattr(guest, 'vcpus', None),
+            'memory': getattr(guest, 'memory', None),
+            'disk_size': getattr(guest, 'disk_size', None),
+            'basevm_type': str(getattr(guest, 'basevm_type', '')),
+            'basevm_os_type': str(getattr(guest, 'basevm_os_type', '')),
+            'basevm_config_file': getattr(guest, 'basevm_config_file', None),
+            # Include current range context if available for additional uniqueness
+            'range_context': getattr(self, '_current_range_id', 'default')
+        }
+        
+        # Create stable JSON representation
+        config_json = json.dumps(config_data, sort_keys=True)
+        
+        # Generate hash (use first 8 characters for readability, like the original UUID)
+        config_hash = hashlib.md5(config_json.encode()).hexdigest()[:8]
+        
+        # Create VM name with deterministic hash
+        guest_id = getattr(guest, 'guest_id', None) or str(getattr(guest, 'id', 'unknown'))
+        vm_name = f"{self.network_prefix}-{guest_id}-{config_hash}"
+        
+        return vm_name
+    
+    def create_guests(self, guests: List[Guest], host_mapping: Dict[str, str], build_only: bool = False, skip_builder: bool = False, recreate: bool = False) -> List[str]:
         """
         Create virtual machines with support for kvm-auto type.
         
@@ -229,29 +367,84 @@ class KVMProvider(InfrastructureProvider):
         # Handle kvm-auto guests
         if kvm_auto_guests:
             self.logger.info(f"Creating {len(kvm_auto_guests)} kvm-auto guests")
-            auto_guest_ids = self._create_kvm_auto_guests(kvm_auto_guests, host_mapping, build_only, skip_builder)
+            auto_guest_ids = self._create_kvm_auto_guests(kvm_auto_guests, host_mapping, build_only, skip_builder, recreate)
             guest_ids.extend(auto_guest_ids)
         
         # Handle regular guests with existing logic
         if regular_guests:
             self.logger.info(f"Creating {len(regular_guests)} regular guests")
-            regular_guest_ids = self._create_regular_guests(regular_guests, host_mapping)
+            regular_guest_ids = self._create_regular_guests(regular_guests, host_mapping, recreate)
             guest_ids.extend(regular_guest_ids)
         
         return guest_ids
     
-    def _create_regular_guests(self, guests: List[Guest], host_mapping: Dict[str, str]) -> List[str]:
-        """Create regular guests using existing VM cloning logic"""
+    def _create_regular_guests(self, guests: List[Guest], host_mapping: Dict[str, str], recreate: bool = False) -> List[str]:
+        """Create regular guests using existing VM cloning logic with idempotency"""
         guest_ids = []
         
         for guest in guests:
             try:
                 # Get guest ID - prefer guest_id over id to avoid UUID conflicts
                 guest_id = getattr(guest, 'guest_id', None) or str(getattr(guest, 'id', 'unknown'))
-                self.logger.info(f"Creating VM for guest {guest_id}")
+                self.logger.info(f"Processing guest {guest_id}")
                 
-                # Generate unique VM name
-                vm_name = f"{self.network_prefix}-{guest_id}-{str(uuid.uuid4())[:8]}"
+                # Generate deterministic VM name for idempotency
+                vm_name = self._generate_deterministic_vm_name(guest)
+                
+                # Check if VM already exists (idempotency)
+                if self.vm_exists(vm_name):
+                    if recreate:
+                        # Force recreate: destroy existing VM first
+                        self.logger.info(f"VM {vm_name} exists, destroying for recreation")
+                        self._destroy_vm(vm_name)
+                    elif self._is_vm_running(vm_name):
+                        self.logger.info(f"VM {vm_name} already exists and is running, skipping creation")
+                        guest_ids.append(vm_name)
+                        
+                        # Register as existing resource
+                        guest_resource = ResourceInfo(
+                            resource_id=vm_name,
+                            resource_type="guest",
+                            name=guest_id,
+                            status=ResourceStatus.ACTIVE,
+                            metadata={
+                                "provider": "kvm",
+                                "guest_id": guest_id,
+                                "vm_name": vm_name,
+                                "reused": True
+                            },
+                            created_at=time.strftime("%Y-%m-%d %H:%M:%S")
+                        )
+                        self._register_resource(guest_resource)
+                        continue
+                    else:
+                        self.logger.info(f"VM {vm_name} exists but is not running, starting it")
+                        if self._start_vm(vm_name):
+                            guest_ids.append(vm_name)
+                            
+                            # Register as existing resource that was started
+                            guest_resource = ResourceInfo(
+                                resource_id=vm_name,
+                                resource_type="guest",
+                                name=guest_id,
+                                status=ResourceStatus.ACTIVE,
+                                metadata={
+                                    "provider": "kvm",
+                                    "guest_id": guest_id,
+                                    "vm_name": vm_name,
+                                    "reused": True,
+                                    "restarted": True
+                                },
+                                created_at=time.strftime("%Y-%m-%d %H:%M:%S")
+                            )
+                            self._register_resource(guest_resource)
+                            continue
+                        else:
+                            self.logger.error(f"Failed to start existing VM {vm_name}")
+                            raise ResourceCreationError(f"Could not start existing VM {vm_name}", "kvm", guest_id)
+                
+                # VM doesn't exist, create it
+                self.logger.info(f"Creating new VM {vm_name} for guest {guest_id}")
                 
                 # Create VM disk from base image
                 disk_path = self._create_vm_disk(vm_name, guest)
@@ -301,7 +494,7 @@ class KVMProvider(InfrastructureProvider):
         
         return guest_ids
     
-    def _create_kvm_auto_guests(self, guests: List[Guest], host_mapping: Dict[str, str], build_only: bool = False, skip_builder: bool = False) -> List[str]:
+    def _create_kvm_auto_guests(self, guests: List[Guest], host_mapping: Dict[str, str], build_only: bool = False, skip_builder: bool = False, recreate: bool = False) -> List[str]:
         """Create guests using kvm-auto workflow with Rich progress tracking"""
         if self.progress_manager:
             self.progress_manager.log_info(f"🤖 Starting kvm-auto workflow for {len(guests)} guests")
@@ -363,14 +556,27 @@ class KVMProvider(InfrastructureProvider):
                             'build_time': 0.0
                         })()
                     else:
+                        # Enhanced error messaging for missing images
                         error_msg = f"❌ Skip-builder enabled but image not found: {expected_image_path}"
+                        available_images_dir = self.build_storage_dir
+                        if available_images_dir.exists():
+                            available_images = list(available_images_dir.glob("*.qcow2"))
+                            if available_images:
+                                help_msg = f"   💡 Available images in {available_images_dir}: {[img.name for img in available_images[:3]]}"
+                            else:
+                                help_msg = f"   💡 No images found in {available_images_dir}. Run without --skip-builder first."
+                        else:
+                            help_msg = f"   💡 Build directory {available_images_dir} doesn't exist. Run without --skip-builder first."
+                        
                         skip_msg = f"   🚫 Skipping {len(guest_list)} guests in this group"
                         
                         if self.progress_manager:
                             self.progress_manager.fail_step(f"image_build_{i}", f"Image not found: {expected_image_path}")
+                            self.progress_manager.log_error(help_msg)
                             self.progress_manager.log_error(skip_msg)
                         else:
                             self.logger.error(error_msg)
+                            self.logger.error(help_msg)
                             self.logger.error(skip_msg)
                         continue
                 else:
@@ -440,7 +646,7 @@ class KVMProvider(InfrastructureProvider):
                             self.logger.debug(detail)
                     
                     try:
-                        vm_id = self._create_vm_from_built_image(guest, build_result.image_path, host_mapping)
+                        vm_id = self._create_vm_from_built_image(guest, build_result.image_path, host_mapping, recreate)
                         if vm_id:
                             guest_ids.append(vm_id)
                             completed_vms += 1
@@ -480,12 +686,13 @@ class KVMProvider(InfrastructureProvider):
                 import traceback
                 self.logger.error(f"💥 Full traceback: {traceback.format_exc()}")
             finally:
-                # Cleanup build image after VM creation (unless build_only mode)
-                if 'build_result' in locals() and build_result.image_path and not build_only:
-                    self.logger.info(f"🧹 Cleaning up temporary build image: {build_result.image_path}")
-                    self.image_builder.cleanup_build_files(build_result.image_path)
-                elif 'build_result' in locals() and build_result.image_path and build_only:
-                    self.logger.info(f"🔒 Preserving build image for later use: {build_result.image_path}")
+                # Always preserve build images for development efficiency
+                if 'build_result' in locals() and build_result.image_path:
+                    if build_only:
+                        reason = "build-only mode"
+                    else:
+                        reason = "default preservation for development"
+                    self.logger.info(f"🔒 Preserving build image for later use ({reason}): {build_result.image_path}")
         
         # Complete the overall kvm-auto step
         completion_msg = f"🏁 kvm-auto workflow completed: {len(guest_ids)} VMs created successfully"
@@ -509,13 +716,75 @@ class KVMProvider(InfrastructureProvider):
         return groups
     
     def _create_vm_from_built_image(self, guest: Guest, local_image_path: str, 
-                                  host_mapping: Dict[str, str]) -> Optional[str]:
-        """Create VM from locally built image"""
+                                  host_mapping: Dict[str, str], recreate: bool = False) -> Optional[str]:
+        """Create VM from locally built image with idempotency"""
         # CRITICAL DEBUG: Add log statement to confirm method is called
         self.logger.debug(f"_create_vm_from_built_image called with guest={guest.guest_id if hasattr(guest, 'guest_id') else 'unknown'}, image_path={local_image_path}")
         try:
             guest_id = guest.guest_id
-            self.logger.info(f"Creating VM from built image for guest {guest_id}")
+            self.logger.info(f"Processing VM for guest {guest_id}")
+            
+            # Generate deterministic VM name for idempotency
+            vm_name = self._generate_deterministic_vm_name(guest)
+            self.logger.info(f"🔧 [DEBUG] Generated VM name: {vm_name}")
+            
+            # Check if VM already exists (idempotency)
+            if self.vm_exists(vm_name):
+                if recreate:
+                    # Force recreate: destroy existing VM first
+                    self.logger.info(f"VM {vm_name} exists, destroying for recreation")
+                    self._destroy_vm(vm_name)
+                elif self._is_vm_running(vm_name):
+                    self.logger.info(f"VM {vm_name} already exists and is running, skipping creation")
+                    
+                    # Register as existing resource
+                    guest_resource = ResourceInfo(
+                        resource_id=vm_name,
+                        resource_type="guest",
+                        name=guest_id,
+                        status=ResourceStatus.ACTIVE,
+                        metadata={
+                            "provider": "kvm-auto",
+                            "guest_id": guest_id,
+                            "vm_name": vm_name,
+                            "reused": True,
+                            "image_name": guest.image_name,
+                            "memory_mb": guest.memory,
+                            "vcpus": guest.vcpus
+                        },
+                        created_at=time.strftime("%Y-%m-%d %H:%M:%S")
+                    )
+                    self._register_resource(guest_resource)
+                    return vm_name
+                else:
+                    self.logger.info(f"VM {vm_name} exists but is not running, starting it")
+                    if self._start_vm(vm_name):
+                        # Register as existing resource that was started
+                        guest_resource = ResourceInfo(
+                            resource_id=vm_name,
+                            resource_type="guest",
+                            name=guest_id,
+                            status=ResourceStatus.ACTIVE,
+                            metadata={
+                                "provider": "kvm-auto",
+                                "guest_id": guest_id,
+                                "vm_name": vm_name,
+                                "reused": True,
+                                "restarted": True,
+                                "image_name": guest.image_name,
+                                "memory_mb": guest.memory,
+                                "vcpus": guest.vcpus
+                            },
+                            created_at=time.strftime("%Y-%m-%d %H:%M:%S")
+                        )
+                        self._register_resource(guest_resource)
+                        return vm_name
+                    else:
+                        self.logger.error(f"Failed to start existing VM {vm_name}")
+                        return None
+            
+            # VM doesn't exist, create it
+            self.logger.info(f"Creating new VM {vm_name} from built image for guest {guest_id}")
             self.logger.info(f"🔧 [DEBUG] Source image path: {local_image_path}")
             
             # Verify source image exists
@@ -523,10 +792,6 @@ class KVMProvider(InfrastructureProvider):
             if not Path(local_image_path).exists():
                 self.logger.error(f"❌ [ERROR] Source image does not exist: {local_image_path}")
                 return None
-            
-            # Generate unique VM name
-            vm_name = f"{self.network_prefix}-{guest_id}-{str(uuid.uuid4())[:8]}"
-            self.logger.info(f"🔧 [DEBUG] Generated VM name: {vm_name}")
             
             # Create final disk path for this VM
             vm_disk_path = self.base_image_dir / f"{vm_name}.qcow2"
@@ -834,6 +1099,53 @@ class KVMProvider(InfrastructureProvider):
             except Exception as e:
                 self.logger.error(f"Failed to destroy host {host_id}: {e}")
                 raise ResourceDestructionError(f"Host destruction failed: {e}", "kvm", host_id)
+    
+    def _destroy_vm(self, vm_name: str) -> bool:
+        """
+        Destroy a single VM by name.
+        Used for recreate functionality.
+        
+        Args:
+            vm_name: Name of the VM to destroy
+            
+        Returns:
+            True if destroyed successfully, False otherwise
+        """
+        try:
+            self.logger.info(f"Destroying VM {vm_name} for recreation")
+            
+            # Get the domain
+            try:
+                domain = self._connection.lookupByName(vm_name)
+                self.logger.debug(f"Found VM {vm_name}, state: {domain.state()[0]}")
+            except libvirt.libvirtError as e:
+                self.logger.warning(f"VM {vm_name} not found: {e}")
+                return False
+            
+            # Force stop if running
+            if domain.isActive():
+                self.logger.info(f"VM {vm_name} is active, forcing stop")
+                domain.destroy()  # Force stop
+                
+                # Wait for VM to stop
+                try:
+                    self._wait_for_vm_state(domain, libvirt.VIR_DOMAIN_SHUTOFF, timeout=30)
+                    self.logger.debug(f"VM {vm_name} reached shutoff state")
+                except Exception as e:
+                    self.logger.warning(f"VM {vm_name} failed to reach shutoff state: {e}")
+            
+            # Undefine the VM
+            domain.undefine()
+            self.logger.info(f"VM {vm_name} undefined successfully")
+            
+            # Unregister from resources
+            self._unregister_resource(vm_name)
+            
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Failed to destroy VM {vm_name}: {e}")
+            return False
     
     def destroy_guests(self, guest_ids: List[str]) -> None:
         """

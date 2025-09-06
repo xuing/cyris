@@ -166,6 +166,15 @@ class LocalImageBuilder:
         else:
             self.logger.info(path_msg)
         
+        # Check if image already exists and prompt user for action
+        if image_path.exists():
+            action = self._prompt_for_existing_image_action(image_path, guest)
+            if action == 'skip':
+                return self._create_reuse_result(image_path, start_time)
+            elif action == 'overwrite':
+                image_path.unlink()  # Remove existing image
+            # Continue with normal build if overwrite chosen
+        
         try:
             # Build base image with virt-builder (using cached sudo authentication)
             build_cmd = [
@@ -561,3 +570,57 @@ class LocalImageBuilder:
             self.logger.debug(f"Cleaned up build file: {image_path}")
         except Exception as e:
             self.logger.warning(f"Failed to cleanup {image_path}: {e}")
+
+    def _prompt_for_existing_image_action(self, image_path: Path, guest) -> str:
+        """Prompt user for action when existing image is found"""
+        try:
+            import time
+            from datetime import datetime
+            
+            file_stat = image_path.stat()
+            file_size_gb = file_stat.st_size / (1024**3)
+            modified_time = datetime.fromtimestamp(file_stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+            
+            if self.progress_manager:
+                self.progress_manager.log_info(f"🖼️  Existing image found: {image_path.name}")
+                self.progress_manager.log_info(f"   📏 Size: {file_size_gb:.1f} GB")
+                self.progress_manager.log_info(f"   📅 Modified: {modified_time}")
+            else:
+                self.logger.info(f"🖼️  Existing image found: {image_path.name}")
+                self.logger.info(f"   📏 Size: {file_size_gb:.1f} GB") 
+                self.logger.info(f"   📅 Modified: {modified_time}")
+            
+            while True:
+                try:
+                    choice = input("Action [S]kip build (reuse existing) / [O]verwrite [S/O]: ").strip().upper()
+                    if choice in ['S', 'SKIP', '']:
+                        return 'skip'
+                    elif choice in ['O', 'OVERWRITE']:
+                        return 'overwrite'
+                    else:
+                        print("Please enter S or O")
+                except (EOFError, KeyboardInterrupt):
+                    # Non-interactive mode or user interruption - default to skip
+                    print("\nDefaulting to skip (reuse existing image)")
+                    return 'skip'
+        except Exception as e:
+            self.logger.warning(f"Error checking existing image: {e}, proceeding with overwrite")
+            return 'overwrite'
+
+    def _create_reuse_result(self, image_path: Path, start_time: float):
+        """Create BuildResult for reused existing image"""
+        import time
+        
+        reuse_time = time.time() - start_time
+        reuse_msg = f"♻️  Reusing existing image (saved ~2-3 minutes build time)"
+        
+        if self.progress_manager:
+            self.progress_manager.log_success(reuse_msg)
+        else:
+            self.logger.info(reuse_msg)
+        
+        return BuildResult(
+            success=True,
+            image_path=str(image_path),
+            build_time=reuse_time
+        )
