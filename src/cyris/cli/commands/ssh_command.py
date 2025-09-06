@@ -3,11 +3,11 @@ SSH Info Command Handler
 Handles SSH connection information display logic
 """
 
-from .base_command import BaseCommandHandler, ServiceMixin
+from .base_command import BaseCommandHandler
 from cyris.cli.presentation import MessageFormatter
 
 
-class SSHInfoCommandHandler(BaseCommandHandler, ServiceMixin):
+class SSHInfoCommandHandler(BaseCommandHandler):
     """SSH info command handler - Display SSH connection information for ranges"""
     
     def execute(self, range_id: str) -> bool:

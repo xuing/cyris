@@ -5,13 +5,13 @@ Handles cyber range list display logic with auto-discovery
 
 from typing import Optional
 
-from .base_command import BaseCommandHandler, ServiceMixin
+from .base_command import BaseCommandHandler
 from cyris.cli.presentation import RangeDisplayManager
 from ..diagnostic_messages import DiagnosticMessageFormatter
 from ...tools.vm_diagnostics import quick_vm_health_check
 
 
-class ListCommandHandler(BaseCommandHandler, ServiceMixin):
+class ListCommandHandler(BaseCommandHandler):
     """List command handler - Display cyber range list with auto-discovery"""
     
     def __init__(self, config, verbose: bool = False):

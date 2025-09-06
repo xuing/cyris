@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Optional
 from cyris.core.unified_logger import get_logger
 
-from .base_command import BaseCommandHandler, ValidationMixin
+from .base_command import BaseCommandHandler
 from cyris.cli.presentation import MessageFormatter
 from ..diagnostic_messages import DiagnosticMessageFormatter, get_diagnostic_pattern_help
 from cyris.tools.vm_diagnostics import VMDiagnostics
@@ -17,7 +17,7 @@ from cyris.core.operation_tracker import is_all_operations_successful
 from cyris.config.parser import ConfigurationError
 
 
-class CreateCommandHandler(BaseCommandHandler, ValidationMixin):
+class CreateCommandHandler(BaseCommandHandler):
     """Create command handler - Create new cyber ranges with validation"""
     
     def execute(self, description_file: Path, range_id: Optional[int] = None,
@@ -26,19 +26,15 @@ class CreateCommandHandler(BaseCommandHandler, ValidationMixin):
                 recreate: bool = False) -> bool:
         """Execute create command with comprehensive validation and error handling"""
         
-        with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
-            f.write(f"[DEBUG] CreateCommandHandler.execute() START with file={description_file}\n")
-            f.write(f"[DEBUG] Parameters: dry_run={dry_run}, build_only={build_only}, skip_builder={skip_builder}, recreate={recreate}\n")
-            f.flush()
+        self.logger.debug(f"CreateCommandHandler.execute() START with file={description_file}")
+        self.logger.debug(f"Parameters: dry_run={dry_run}, build_only={build_only}, skip_builder={skip_builder}, recreate={recreate}")
         
         # Debug print for parameter checking
         self.logger.info(f"[DEBUG_PARAMS] execute() called with: dry_run={dry_run}, build_only={build_only}, skip_builder={skip_builder}, recreate={recreate}")
         self.console.print(f"[dim][DEBUG] Parameters: dry_run={dry_run}, build_only={build_only}, skip_builder={skip_builder}, recreate={recreate}[/dim]")
         
         try:
-            with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
-                f.write("[DEBUG] Starting input validation\n")
-                f.flush()
+            self.logger.debug("Starting input validation")
             
             # Validate inputs
             if not self.validate_file_exists(description_file):
@@ -50,19 +46,13 @@ class CreateCommandHandler(BaseCommandHandler, ValidationMixin):
             if not self.validate_network_mode(network_mode):
                 return False
             
-            with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
-                f.write("[DEBUG] Input validation completed successfully\n")
-                f.flush()
+            self.logger.debug("Input validation completed successfully")
             
             # Pre-creation environment checks
-            with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
-                f.write(f"[DEBUG] About to start pre-creation checks, dry_run={dry_run}\n")
-                f.flush()
+            self.logger.debug(f"About to start pre-creation checks, dry_run={dry_run}")
             
             if not dry_run:
-                with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
-                    f.write("[DEBUG] Calling _run_pre_creation_checks()\n")
-                    f.flush()
+                self.logger.debug("Calling _run_pre_creation_checks()")
                 pre_check_passed = self._run_pre_creation_checks(description_file)
                 if not pre_check_passed:
                     self.console.print("[yellow]⚠️ Pre-checks failed. Creation may encounter issues.[/yellow]")
@@ -95,7 +85,7 @@ class CreateCommandHandler(BaseCommandHandler, ValidationMixin):
     
     def _execute_dry_run(self, description_file: Path, range_id: Optional[int],
                         network_mode: str, enable_ssh: bool) -> bool:
-        """执行干运行模式"""
+        """Execute dry run mode - validate configuration without creating resources"""
         self.console.print("[bold yellow]Dry run mode - will not actually create cyber range[/bold yellow]")
         
         try:

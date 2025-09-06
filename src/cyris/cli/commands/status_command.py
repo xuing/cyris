@@ -11,12 +11,12 @@ from rich.console import Group
 from rich.text import Text
 from rich.markup import escape
 
-from .base_command import BaseCommandHandler, ServiceMixin
+from .base_command import BaseCommandHandler
 from ..diagnostic_messages import DiagnosticMessageFormatter
 from ...tools.vm_diagnostics import quick_vm_health_check
 
 
-class StatusCommandHandler(BaseCommandHandler, ServiceMixin):
+class StatusCommandHandler(BaseCommandHandler):
     """Status command handler - Display cyber range status with detailed VM information"""
     
     def execute(self, range_id: str, verbose: bool = False) -> bool:

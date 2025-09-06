@@ -321,6 +321,7 @@ class CyRISConfigParser:
                     cpu_model=guest_data.get('cpu_model'),
                     extra_args=guest_data.get('extra_args')
                 )
+                return guest_instance  # Fix: Return the created guest instance
             else:
                 # Regular guest types - use defaults for missing required fields
                 return Guest(

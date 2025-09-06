@@ -1,6 +1,6 @@
 """
-Legacy命令处理器
-处理传统CyRIS命令兼容性
+Legacy Command Handler
+Handles traditional CyRIS command compatibility
 """
 
 import subprocess
@@ -13,10 +13,10 @@ from cyris.cli.presentation import MessageFormatter
 
 
 class LegacyCommandHandler(BaseCommandHandler):
-    """Legacy命令处理器 - 传统CyRIS命令兼容性"""
+    """Legacy command handler - Traditional CyRIS command compatibility"""
     
     def execute(self, args: Tuple[str, ...]) -> bool:
-        """执行legacy命令"""
+        """Execute legacy command"""
         try:
             if not args:
                 self.console.print("[yellow]Usage: cyris legacy <description_file> <config_file> [options][/yellow]")
@@ -56,7 +56,7 @@ class LegacyCommandHandler(BaseCommandHandler):
             return False
     
     def _execute_legacy_command(self, legacy_script: Path, args: Tuple[str, ...]) -> bool:
-        """执行传统命令"""
+        """Execute traditional command"""
         try:
             # Build command
             cmd = ['python3', str(legacy_script)] + list(args)
@@ -104,7 +104,7 @@ class LegacyCommandHandler(BaseCommandHandler):
             return False
     
     def _validate_legacy_args(self, args: Tuple[str, ...]) -> bool:
-        """验证传统命令参数"""
+        """Validate traditional command arguments"""
         if len(args) < 2:
             self.console.print("[yellow]Legacy commands require at least 2 arguments: <description_file> <config_file>[/yellow]")
             return False

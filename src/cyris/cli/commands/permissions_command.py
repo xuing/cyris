@@ -1,6 +1,6 @@
 """
-权限设置命令处理器
-处理libvirt权限配置逻辑
+Permissions Setup Command Handler
+Handles libvirt permission configuration logic
 """
 
 import os
@@ -12,10 +12,10 @@ from cyris.cli.presentation import MessageFormatter
 
 
 class PermissionsCommandHandler(BaseCommandHandler):
-    """权限设置命令处理器 - 配置libvirt权限"""
+    """Permission setup command handler - Configure libvirt permissions"""
     
     def execute(self, dry_run: bool = False) -> bool:
-        """执行setup-permissions命令"""
+        """Execute setup-permissions command"""
         try:
             self.console.print("[bold blue]Setting up libvirt permissions for CyRIS environment[/bold blue]")
             

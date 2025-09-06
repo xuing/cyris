@@ -6,9 +6,8 @@ It coordinates between infrastructure providers, configuration management, and
 monitoring services.
 """
 
-# import logging  # Replaced with unified logger
 from cyris.core.unified_logger import get_logger, RangeLoggingContext, LoggerFactory
-import logging  # Keep for type annotations
+import logging
 import time
 import json
 import fcntl
@@ -43,24 +42,11 @@ from ..core.log_aggregator import (
 from ..core.command_executor import (
     execute_command_safe, execute_command_with_retry, set_global_log_file
 )
+from ..core.sudo_manager import SudoPermissionManager
 
-# Import both modern and legacy entities for compatibility
-from ..domain.entities.host import Host as ModernHost
-from ..domain.entities.guest import Guest as ModernGuest
-
-# Import legacy entities for YAML parsing
-import sys
-import os
-legacy_path = os.path.join(os.path.dirname(__file__), '../../..', 'main')
-if legacy_path not in sys.path:
-    sys.path.insert(0, legacy_path)
-
-try:
-    from entities import Host, Guest
-except ImportError:
-    # Fallback to modern entities if legacy not available
-    Host = ModernHost
-    Guest = ModernGuest
+# Use modern entities - they are backward-compatible with legacy formats
+from ..domain.entities.host import Host
+from ..domain.entities.guest import Guest
 
 
 class RangeStatus(Enum):
@@ -197,6 +183,9 @@ class RangeOrchestrator:
         # Rich progress manager (can be set by CLI)
         self.progress_manager: Optional[RichProgressManager] = None
         
+        # Initialize sudo permission manager
+        self.sudo_manager = SudoPermissionManager(progress_manager=self.progress_manager)
+        
         # Initialize exception handler
         self.exception_handler = ExceptionHandler(self.logger)
         
@@ -246,6 +235,8 @@ class RangeOrchestrator:
         # Also set it for the provider if it supports it
         if hasattr(self.provider, 'set_progress_manager'):
             self.provider.set_progress_manager(progress_manager)
+        # Update sudo manager progress manager
+        self.sudo_manager.progress_manager = progress_manager
     
     def create_range(
         self,
@@ -1188,6 +1179,9 @@ class RangeOrchestrator:
                 self.logger.info(f"DRY RUN: Would create range {range_id_str} with {len(hosts)} hosts and {len(guests)} guests")
                 return range_id_str
             
+            # Check for kvm-auto guests and ensure sudo access if needed
+            self._ensure_kvm_auto_requirements(guests)
+            
             # Create the range using existing method
             self.logger.debug(f"About to call create_range with range_id={range_id_str}, build_only={build_only}, skip_builder={skip_builder}, recreate={recreate}")
             result = self.create_range(
@@ -2121,3 +2115,96 @@ class RangeOrchestrator:
             time.sleep(10)  # Wait 10 seconds before retrying
         
         return False
+    
+    def _ensure_kvm_auto_requirements(self, guests: List[Guest]) -> None:
+        """
+        Check for kvm-auto guests and ensure sudo requirements are met.
+        
+        Args:
+            guests: List of guest configurations to check
+            
+        Raises:
+            CyRISResourceError: If sudo requirements cannot be satisfied
+        """
+        from ..domain.entities.guest import BaseVMType
+        
+        # Check if any guests are kvm-auto type
+        kvm_auto_guests = [g for g in guests if getattr(g, 'basevm_type', None) == BaseVMType.KVM_AUTO]
+        
+        if not kvm_auto_guests:
+            self.logger.debug("No kvm-auto guests found, skipping sudo check")
+            return
+        
+        self.logger.info(f"🤖 Detected {len(kvm_auto_guests)} kvm-auto guests")
+        if self.progress_manager:
+            self.progress_manager.log_info(f"🤖 Detected {len(kvm_auto_guests)} kvm-auto guests requiring image building")
+        
+        # Check that required tools are available (without sudo verification)
+        self.logger.info("🔧 Checking kvm-auto tool requirements (sudo verification will happen during execution)")
+        
+        # Check virt-builder availability without sudo
+        from ..infrastructure.image_builder import LocalImageBuilder
+        image_builder = LocalImageBuilder()
+        deps = image_builder.check_local_dependencies()
+        
+        missing_tools = []
+        if not deps.get('virt-builder', False):
+            missing_tools.append('virt-builder')
+        if not deps.get('virt-customize', False):
+            missing_tools.append('virt-customize') 
+        if not deps.get('virt-install', False):
+            missing_tools.append('virt-install')
+            
+        if missing_tools:
+            error_msg = f"❌ Missing required tools: {', '.join(missing_tools)}"
+            self.logger.error(error_msg)
+            if self.progress_manager:
+                self.progress_manager.log_error(error_msg)
+                self.progress_manager.log_info("💡 Install with: sudo apt install libguestfs-tools virtinst")
+            
+            raise CyRISResourceError(
+                f"Missing kvm-auto tools: {', '.join(missing_tools)}",
+                operation="ensure_kvm_auto_requirements", 
+                context={"missing_tools": missing_tools}
+            )
+        
+        # Validate image names are available
+        if deps.get('virt-builder', False):
+            try:
+                available_images = image_builder.get_available_images()
+                for guest in kvm_auto_guests:
+                    image_name = getattr(guest, 'image_name', None)
+                    if image_name and image_name not in available_images:
+                        error_msg = f"❌ Image '{image_name}' not available"
+                        self.logger.error(error_msg)
+                        if self.progress_manager:
+                            self.progress_manager.log_error(error_msg)
+                            self.progress_manager.log_info(f"💡 Available images: {', '.join(available_images[:5])}...")
+                        
+                        raise CyRISResourceError(
+                            f"Image '{image_name}' not available",
+                            operation="ensure_kvm_auto_requirements",
+                            context={"invalid_image": image_name, "available_images": available_images[:10]}
+                        )
+            except Exception as e:
+                self.logger.warning(f"Could not verify image availability: {e}")
+                # Continue anyway - image validation will happen during execution
+        
+        # Show success message (no sudo verification at this stage)
+        success_msg = "✅ kvm-auto tools available (sudo access will be requested during image building)"
+        self.logger.info(success_msg)
+        if self.progress_manager:
+            self.progress_manager.log_success("✅ Required kvm-auto tools found")
+            self.progress_manager.log_info("🚀 Ready to start kvm-auto workflow (sudo will be requested when needed)...")
+                
+        # Log the guests that will be processed
+        guest_info = []
+        for guest in kvm_auto_guests:
+            info = f"{guest.guest_id} ({getattr(guest, 'image_name', 'N/A')})"
+            guest_info.append(info)
+        
+        self.logger.info(f"📋 kvm-auto guests to build: {', '.join(guest_info)}")
+        if self.progress_manager:
+            for i, guest in enumerate(kvm_auto_guests, 1):
+                guest_msg = f"   {i}. {guest.guest_id} - image: {getattr(guest, 'image_name', 'N/A')}"
+                self.progress_manager.log_info(guest_msg)

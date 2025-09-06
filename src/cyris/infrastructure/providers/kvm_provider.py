@@ -7,6 +7,7 @@ implementing the infrastructure provider interface for local virtualization.
 
 # import logging  # Replaced with unified logger
 from cyris.core.unified_logger import get_logger
+from cyris.core.streaming_executor import StreamingCommandExecutor
 import subprocess
 import xml.etree.ElementTree as ET
 from typing import Dict, List, Optional, Any
@@ -93,6 +94,12 @@ class KVMProvider(InfrastructureProvider):
         # Rich progress manager (can be set by orchestrator)
         self.progress_manager: Optional[RichProgressManager] = None
         
+        # Initialize streaming command executor for virt-install and other commands
+        self.command_executor = StreamingCommandExecutor(
+            progress_manager=self.progress_manager,
+            logger=self.logger
+        )
+        
         self.logger.info(f"KVMProvider initialized with URI: {self.libvirt_uri}")
         self.logger.info("Using native libvirt-python API")
     
@@ -102,6 +109,8 @@ class KVMProvider(InfrastructureProvider):
         # Also set it for the image builder
         if hasattr(self.image_builder, 'set_progress_manager'):
             self.image_builder.set_progress_manager(progress_manager)
+        # Update command executor with progress manager
+        self.command_executor.set_progress_manager(progress_manager)
     
     def connect(self) -> None:
         """
@@ -975,8 +984,13 @@ class KVMProvider(InfrastructureProvider):
                 f.write(f"Disk exists: {disk_file.exists()}\n\n")
                 f.flush()
             
-            # Execute the command
-            result = subprocess.run(virt_install_cmd, capture_output=True, text=True, timeout=300)
+            # Execute the command with streaming output
+            result = self.command_executor.execute_with_realtime_output(
+                cmd=virt_install_cmd,
+                description=f"Creating VM '{vm_name}' with virt-install",
+                timeout=300,
+                merge_streams=True
+            )
             
             # Detailed result logging
             self.logger.info(f"📊 [DEBUG] virt-install execution completed:")

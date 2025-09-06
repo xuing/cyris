@@ -19,6 +19,8 @@ from ..domain.entities.guest import Guest
 from ..domain.entities.host import Host
 from ..core.exceptions import CyRISException
 from ..core.rich_progress import RichProgressManager
+from ..core.streaming_executor import StreamingCommandExecutor
+from ..core.sudo_manager import SudoPermissionManager
 from .providers.base_provider import ResourceCreationError
 
 @dataclass
@@ -48,36 +50,42 @@ class LocalImageBuilder:
         
         # Rich progress manager (can be set by KVM provider)
         self.progress_manager: Optional[RichProgressManager] = None
+        
+        # Initialize streaming command executor
+        self.command_executor = StreamingCommandExecutor(
+            progress_manager=self.progress_manager,
+            logger=self.logger
+        )
+        
+        # Initialize sudo permission manager
+        self.sudo_manager = SudoPermissionManager(
+            progress_manager=self.progress_manager
+        )
     
     def set_progress_manager(self, progress_manager: RichProgressManager) -> None:
         """Set progress manager for rich progress reporting"""
         self.progress_manager = progress_manager
+        # Update command executor with new progress manager
+        self.command_executor.set_progress_manager(progress_manager)
+        # Update sudo manager with new progress manager
+        self.sudo_manager.progress_manager = progress_manager
     
     def check_local_dependencies(self) -> Dict[str, bool]:
-        """Check availability of required tools on local machine"""
+        """Check availability of required tools on local machine (without sudo verification)"""
         tools = {}
         
-        # First, ensure sudo authentication is cached
-        try:
-            self.logger.info("🔐 Checking sudo authentication for virt-builder tools...")
-            self.logger.info("💡 You may be prompted for your password to run virt-builder commands.")
-            result = subprocess.run(['sudo', '-v'], timeout=30)
-            if result.returncode != 0:
-                self.logger.error("Failed to authenticate with sudo")
-                return {tool: False for tool in ['virt-builder', 'virt-install', 'virt-customize', 'supermin']}
-        except subprocess.SubprocessError:
-            self.logger.error("Failed to check sudo authentication")
-            return {tool: False for tool in ['virt-builder', 'virt-install', 'virt-customize', 'supermin']}
-        
-        # Check libguestfs tools
+        # Check libguestfs tools using 'which' (no sudo needed for basic availability check)
         libguestfs_tools = ['virt-builder', 'virt-install', 'virt-customize']
         for tool in libguestfs_tools:
             try:
-                # Use non-interactive sudo (should work with cached authentication)
-                result = subprocess.run(['sudo', '-n', tool, '--version'], 
-                                      capture_output=True, timeout=10)
+                # Use 'which' to check if tool exists in PATH
+                result = subprocess.run(['which', tool], 
+                                      capture_output=True, timeout=5)
                 tools[tool] = result.returncode == 0
-                self.logger.debug(f"Tool {tool}: {'available' if tools[tool] else 'not available'}")
+                if tools[tool]:
+                    self.logger.debug(f"Tool {tool}: available")
+                else:
+                    self.logger.debug(f"Tool {tool}: not found in PATH")
             except (subprocess.SubprocessError, FileNotFoundError):
                 tools[tool] = False
                 self.logger.debug(f"Tool {tool}: not found")
@@ -110,10 +118,10 @@ class LocalImageBuilder:
         return tools
     
     def get_available_images(self) -> List[str]:
-        """Get list of available virt-builder images"""
+        """Get list of available virt-builder images (without sudo for basic listing)"""
         try:
-            # Use cached sudo authentication for virt-builder --list
-            result = subprocess.run(['sudo', '-n', 'virt-builder', '--list'], 
+            # Try virt-builder --list without sudo first (many systems allow this)
+            result = subprocess.run(['virt-builder', '--list'], 
                                   capture_output=True, text=True, timeout=30)
             if result.returncode == 0:
                 # Parse virt-builder --list output
@@ -176,9 +184,9 @@ class LocalImageBuilder:
             # Continue with normal build if overwrite chosen
         
         try:
-            # Build base image with virt-builder (using cached sudo authentication)
+            # Build base image with virt-builder (StreamingExecutor will handle sudo intelligently)
             build_cmd = [
-                'sudo', '-n', 'virt-builder', guest.image_name,
+                'sudo', 'virt-builder', guest.image_name,
                 '--size', guest.disk_size,
                 '--format', 'qcow2',
                 '--output', str(image_path)
@@ -361,52 +369,16 @@ class LocalImageBuilder:
             )
     
     def _run_command_with_progress(self, cmd: List[str], description: str, timeout: int = 300, env=None):
-        """Run a command with progress monitoring"""
-        import threading
-        
-        # Start process (allow interactive sudo password input)
-        process = subprocess.Popen(
-            cmd, 
-            stdout=subprocess.PIPE, 
-            stderr=subprocess.PIPE, 
-            stdin=None,  # Allow interactive password input
-            text=True,
-            bufsize=1,
-            universal_newlines=True,
-            env=env
+        """Run a command with real-time output streaming using StreamingCommandExecutor"""
+        return self.command_executor.execute_with_realtime_output(
+            cmd=cmd,
+            description=description,
+            timeout=timeout,
+            env=env,
+            merge_streams=True,  # Merge stderr into stdout for unified display
+            use_pty=True,  # Use PTY for better progress bar behavior
+            allow_password_prompt=True  # Allow sudo password prompts when needed
         )
-        
-        # Create a simple spinner effect for long-running commands
-        if self.progress_manager:
-            # Add indeterminate progress step
-            step_id = f"cmd_{int(time.time())}"
-            self.progress_manager.start_step(step_id, description)
-        
-        # Wait for completion with timeout
-        try:
-            stdout, stderr = process.communicate(timeout=timeout)
-            
-            if self.progress_manager:
-                if process.returncode == 0:
-                    self.progress_manager.complete_step(step_id)
-                else:
-                    self.progress_manager.fail_step(step_id, f"Command failed with exit code {process.returncode}")
-            
-            # Create result object that matches subprocess.run
-            class CommandResult:
-                def __init__(self, returncode, stdout, stderr):
-                    self.returncode = returncode
-                    self.stdout = stdout
-                    self.stderr = stderr
-            
-            return CommandResult(process.returncode, stdout, stderr)
-            
-        except subprocess.TimeoutExpired:
-            process.kill()
-            if self.progress_manager:
-                self.progress_manager.fail_step(step_id, f"Command timed out after {timeout}s")
-            
-            raise subprocess.TimeoutExpired(cmd, timeout)
     
     def distribute_image_to_host(self, image_path: str, target_host: Host, 
                                remote_path: str) -> bool:
@@ -517,9 +489,9 @@ class LocalImageBuilder:
             return
         
         try:
-            # Create user and set password (using cached sudo authentication)
+            # Create user and set password (will use cached sudo authentication if available)
             cmd = [
-                'sudo', '-n', 'virt-customize', '-a', str(image_path),
+                'sudo', 'virt-customize', '-a', str(image_path),
                 '--run-command', f'useradd -m {account}',
                 '--password', f'{account}:password:{passwd}'
             ]
