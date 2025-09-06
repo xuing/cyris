@@ -317,3 +317,4 @@ Priority order: `topology → libvirt → virsh → arp → dhcp → bridge`
 - **[INITIALIZATION]** Updated CLAUDE.md with comprehensive module structure and navigation
 - **[ARCHITECTURE]** Added Mermaid module structure diagram for improved project visualization  
 - **[DOCUMENTATION]** Enhanced module index with detailed responsibility mapping and coverage status
+- 执行任何python代码前，保证激活了.venv的环境。
