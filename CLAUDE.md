@@ -2,6 +2,44 @@
 
 Guidance for Claude Code when working with this repository.
 
+项目命令要具有幂等性。参考docker-compose等知名项目的指导思想。
+     │ 核心设计原则 (参考Kubernetes/Terraform)                                                                │
+     │                                                                                                        │
+     │ 1. 声明式资源管理                                                                                      │
+     │                                                                                                        │
+     │ 设计思路: 用户描述"想要什么"，系统确保"达到目标状态"                                                   │
+     │ - Range ID作为唯一标识符                                                                               │
+     │ - 配置哈希作为版本指纹                                                                                 │
+     │ - 状态比较和差量更新                                                                                   │
+     │                                                                                                        │
+     │ 2. 资源生命周期管理                                                                                    │
+     │                                                                                                        │
+     │ 借鉴Docker/K8s模式:                                                                                    │
+     │ - CREATE: 仅创建新资源，存在则报错                                                                     │
+     │ - CREATE_OR_UPDATE: 创建或更新到目标状态 (默认)                                                        │
+     │ - RECREATE: 强制删除重建                                                                               │
+     │ - SKIP_EXISTING: 跳过已存在资源                                                                        │
+     │                                                                                                        │
+     │ 3. 分层幂等性保证                                                                                      │
+     │                                                                                                        │
+     │ Level 1 - Range级别: Range ID + 配置fingerprint                                                        │
+     │ Level 2 - VM级别: VM name + 镜像checksumLevel 3 - 资源级别: 网络/存储的状态检查                        │
+     │                                                                                                        │
+     │ 具体实现方案                                                                                           │
+     │                                                                                                        │
+     │ A. CLI参数扩展                                                                                         │
+     │                                                                                                        │
+     │ # 默认模式：智能创建或更新                                                                             │
+     │ ./cyris create config.yml                                                                              │
+     │                                                                                                        │
+     │ # 严格模式：仅创建新的，存在则失败                                                                     │
+     │ ./cyris create config.yml --mode=create-only                                                           │
+     │                                                                                                        │
+     │ # 强制模式：删除重建                                                                                   │
+     │ ./cyris create config.yml --mode=recreate                                                              │
+     │                                                                                                        │
+     │ # 跳过模式：保留现有资源                                                                               │
+     │ ./cyris create config.yml --mode=skip-existing
 ## Change Log (Changelog)
 
 ### 2025-09-01
