@@ -2,11 +2,12 @@
   "range_id": "test-auto-ubuntu",
   "name": "Range test-auto-ubuntu",
   "description": "Range created from test-kvm-auto.yml",
-  "created_at": "2025-09-05T03:28:57.260829",
+  "created_at": "2025-09-05T16:40:11.468272",
   "status": "active",
-  "last_modified": "2025-09-05T03:31:07.836008",
+  "last_modified": "2025-09-05T16:41:03.161094",
   "owner": null,
   "tags": {
-    "source_file": "test-kvm-auto.yml"
+    "source_file": "test-kvm-auto.yml",
+    "ip_assignments": "{\"opensuse-desktop\": \"192.168.122.210\"}"
   }
 }

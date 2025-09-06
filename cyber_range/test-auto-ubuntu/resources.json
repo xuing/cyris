@@ -2,5 +2,7 @@
   "hosts": [
     "localhost"
   ],
-  "guests": []
+  "guests": [
+    "cyris-opensuse-desktop-2e4573bc"
+  ]
 }

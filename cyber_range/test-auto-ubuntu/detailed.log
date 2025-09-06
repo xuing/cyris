@@ -1,29 +1,29 @@
 CyRIS Detailed Operation Log - test-auto-ubuntu
-Started at: 2025-09-05T03:31:36.961298
+Started at: 2025-09-05T16:40:11.467374
 ====================================================================================================
 
-[2025-09-05 03:31:36.961] [INFO] [orchestrator] Starting range creation: Range test-auto-ubuntu
+[2025-09-05 16:40:11.467] [INFO] [orchestrator] Starting range creation: Range test-auto-ubuntu
 
-[2025-09-05 03:31:36.961] [INFO] [cyris] [OP:range_creation] Starting operation: Create cyber range test-auto-ubuntu
+[2025-09-05 16:40:11.468] [INFO] [cyris] [OP:range_creation] Starting operation: Create cyber range test-auto-ubuntu
   Context: {
   "operation_type": "RANGE_CREATE"
 }
 
-[2025-09-05 03:31:37.032] [ERROR] [cyris] [OP:range_creation] Completed operation: Create cyber range test-auto-ubuntu - Range creation failed with CyRIS exception
+[2025-09-05 16:41:03.163] [INFO] [cyris] [OP:range_creation] Completed operation: Create cyber range test-auto-ubuntu - Range test-auto-ubuntu created successfully
   Context: {
   "operation_type": "RANGE_CREATE",
-  "duration": 0.070497,
-  "success": false
+  "duration": 51.695183,
+  "success": true
 }
 
-[2025-09-05 03:31:37.033] [INFO] [cyris] Creation result: FAILURE (1 errors) (took 0.1s)
+[2025-09-05 16:41:03.164] [INFO] [cyris] Creation result: SUCCESS (took 51.7s)
 
-[2025-09-05 03:31:37.033] [INFO] [cyris] Operation Summary: 0 successful, 1 failed
+[2025-09-05 16:41:03.165] [INFO] [cyris] Operation Summary: 1 successful, 0 failed
   Context: {
   "range_id": "test-auto-ubuntu",
   "total_operations": 1,
-  "successful_operations": 0,
-  "failed_operations": 1,
+  "successful_operations": 1,
+  "failed_operations": 0,
   "operation_sequence": [
     "range_creation"
   ],
@@ -31,9 +31,9 @@ Started at: 2025-09-05T03:31:36.961298
     "total_entries": 4,
     "entries_by_level": {
       "DEBUG": 0,
-      "INFO": 4,
+      "INFO": 5,
       "WARNING": 0,
-      "ERROR": 1,
+      "ERROR": 0,
       "CRITICAL": 0
     },
     "entries_by_source": {
@@ -49,4 +49,6 @@ Started at: 2025-09-05T03:31:36.961298
     "status_file": "/home/ubuntu/cyris/cyber_range/test-auto-ubuntu/cr_creation_status"
   }
 }
+
+[2025-09-05 16:41:03.165] [INFO] [orchestrator] Range creation completed successfully: 0 tasks executed
 

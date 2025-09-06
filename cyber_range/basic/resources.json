@@ -1,4 +1,8 @@
 {
-  "hosts": [],
-  "guests": []
+  "hosts": [
+    "host_1"
+  ],
+  "guests": [
+    "cyris-desktop-0a5fdced"
+  ]
 }
