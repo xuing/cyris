@@ -22,17 +22,18 @@ class CreateCommandHandler(BaseCommandHandler, ValidationMixin):
     
     def execute(self, description_file: Path, range_id: Optional[int] = None,
                 dry_run: bool = False, build_only: bool = False, skip_builder: bool = False, 
-                network_mode: str = 'bridge', enable_ssh: bool = True) -> bool:
+                network_mode: str = 'bridge', enable_ssh: bool = True, 
+                recreate: bool = False) -> bool:
         """Execute create command with comprehensive validation and error handling"""
         
         with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
             f.write(f"[DEBUG] CreateCommandHandler.execute() START with file={description_file}\n")
-            f.write(f"[DEBUG] Parameters: dry_run={dry_run}, build_only={build_only}, skip_builder={skip_builder}\n")
+            f.write(f"[DEBUG] Parameters: dry_run={dry_run}, build_only={build_only}, skip_builder={skip_builder}, recreate={recreate}\n")
             f.flush()
         
         # Debug print for parameter checking
-        self.logger.info(f"[DEBUG_PARAMS] execute() called with: dry_run={dry_run}, build_only={build_only}, skip_builder={skip_builder}")
-        self.console.print(f"[dim][DEBUG] Parameters: dry_run={dry_run}, build_only={build_only}, skip_builder={skip_builder}[/dim]")
+        self.logger.info(f"[DEBUG_PARAMS] execute() called with: dry_run={dry_run}, build_only={build_only}, skip_builder={skip_builder}, recreate={recreate}")
+        self.console.print(f"[dim][DEBUG] Parameters: dry_run={dry_run}, build_only={build_only}, skip_builder={skip_builder}, recreate={recreate}[/dim]")
         
         try:
             with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
@@ -86,7 +87,7 @@ class CreateCommandHandler(BaseCommandHandler, ValidationMixin):
             if dry_run:
                 return self._execute_dry_run(description_file, range_id, network_mode, enable_ssh)
             else:
-                return self._execute_actual_creation(description_file, range_id, network_mode, enable_ssh, dry_run, build_only, skip_builder)
+                return self._execute_actual_creation(description_file, range_id, network_mode, enable_ssh, dry_run, build_only, skip_builder, recreate)
                 
         except Exception as e:
             self.handle_error(e, "create")
@@ -165,7 +166,7 @@ class CreateCommandHandler(BaseCommandHandler, ValidationMixin):
     
     def _execute_actual_creation(self, description_file: Path, range_id: Optional[int],
                                network_mode: str, enable_ssh: bool, dry_run: bool = False, 
-                               build_only: bool = False, skip_builder: bool = False) -> bool:
+                               build_only: bool = False, skip_builder: bool = False, recreate: bool = False) -> bool:
         """Execute actual cyber range creation with simplified Rich display"""
         
         # Create simplified Rich progress manager (no Live display, no complex layouts)
@@ -228,6 +229,12 @@ class CreateCommandHandler(BaseCommandHandler, ValidationMixin):
             def log_error(self, message):
                 self.console.print(f"[bold red]❌ {message}[/bold red]")
                 
+            def log_warning(self, message):
+                self.console.print(f"[yellow]⚠️  {message}[/yellow]")
+                with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                    f.write(f"[DEBUG] log_warning: {message}\n")
+                    f.flush()
+                
             def log_command(self, command):
                 self.console.print(f"[dim]💻 CMD: {command}[/dim]")
                 with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
@@ -283,12 +290,14 @@ class CreateCommandHandler(BaseCommandHandler, ValidationMixin):
                             progress_manager.log_info("[DEBUG] Orchestrator does not have set_progress_manager method")
                         
                         progress_manager.log_info(f"[DEBUG] About to call orchestrator.create_range_from_yaml({description_file}, {range_id})...")
+                        progress_manager.log_info(f"[DEBUG] Using recreate flag: {recreate}")
                         result_range_id = orchestrator.create_range_from_yaml(
                             description_file,
                             range_id,
                             dry_run=dry_run,
                             build_only=build_only,
-                            skip_builder=skip_builder
+                            skip_builder=skip_builder,
+                            recreate=recreate
                         )
                         progress_manager.log_info(f"[DEBUG] orchestrator.create_range_from_yaml returned: {result_range_id}")
                         
@@ -538,7 +547,7 @@ class CreateCommandHandler(BaseCommandHandler, ValidationMixin):
                             if Path(base_path).exists():
                                 # Validate base image
                                 diagnostics = VMDiagnostics()
-                                result = diagnostics._validate_image_with_qemu(base_path)
+                                result = diagnostics.validate_image_smart(base_path)
                                 if not result:  # No error means image is valid
                                     check_progress.log_success(f"Base image found and valid: {base_path}")
                                     base_image_found = True

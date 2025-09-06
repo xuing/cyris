@@ -141,8 +141,9 @@ def cli(ctx, config: Optional[str], verbose: bool, version: bool):
               default='bridge',
               help='Network mode: user (isolated) or bridge (SSH accessible)')
 @click.option('--enable-ssh', is_flag=True, default=True, help='Enable SSH access (requires bridge networking)')
+@click.option('--recreate', is_flag=True, help='Force recreate existing range (destroy and rebuild)')
 @click.pass_context
-def create(ctx, description_file: Path, range_id: Optional[int], dry_run: bool, build_only: bool, skip_builder: bool, network_mode: str, enable_ssh: bool):
+def create(ctx, description_file: Path, range_id: Optional[int], dry_run: bool, build_only: bool, skip_builder: bool, network_mode: str, enable_ssh: bool, recreate: bool):
     """Create a new cyber range
     
     DESCRIPTION_FILE: YAML format cyber range description file
@@ -182,7 +183,8 @@ def create(ctx, description_file: Path, range_id: Optional[int], dry_run: bool, 
         build_only=build_only,
         skip_builder=skip_builder,
         network_mode=network_mode,
-        enable_ssh=enable_ssh
+        enable_ssh=enable_ssh,
+        recreate=recreate
     )
     
     with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
