@@ -258,10 +258,11 @@ class RangeOrchestrator:
         owner: Optional[str] = None,
         tags: Optional[Dict[str, str]] = None,
         build_only: bool = False,
-        skip_builder: bool = False
+        skip_builder: bool = False,
+        recreate: bool = False
     ) -> RangeMetadata:
         """
-        Create a new cyber range instance with legacy-style progress reporting.
+        Create a new cyber range instance with idempotency support.
         
         Args:
             range_id: Unique identifier for the range
@@ -269,18 +270,55 @@ class RangeOrchestrator:
             description: Range description
             hosts: List of host configurations
             guests: List of guest VM configurations
+            topology_config: Optional network topology configuration
             owner: Optional owner identifier
             tags: Optional metadata tags
+            build_only: Build images only, don't create VMs
+            skip_builder: Skip image building phase
+            recreate: Force recreate existing range
         
         Returns:
             RangeMetadata for the created range
             
         Raises:
-            ValueError: If range_id already exists
             RuntimeError: If creation fails
         """
-        if range_id in self._ranges:
-            self.logger.warning(f"Range ID {range_id} already exists")
+        # Check for existing range and VMs
+        existing_vms = self._discover_existing_vms(range_id)
+        
+        if recreate and existing_vms:
+            self.logger.info(f"Force recreating range {range_id}")
+            self._cleanup_range_resources(range_id)
+            # Continue to create new range
+        elif existing_vms:
+            # Check health of existing VMs
+            health_status = self._check_vms_health(existing_vms)
+            if health_status['all_healthy']:
+                self.logger.info(f"Range '{range_id}' already running ({len(existing_vms)} VMs healthy)")
+                # Return existing metadata if available
+                if range_id in self._ranges:
+                    return self._ranges[range_id]
+                else:
+                    # Create metadata for existing range
+                    metadata = RangeMetadata(
+                        range_id=range_id,
+                        name=name,
+                        description=description,
+                        created_at=datetime.now(),
+                        status=RangeStatus.ACTIVE,
+                        owner=owner,
+                        tags=tags or {},
+                    )
+                    self._ranges[range_id] = metadata
+                    self._range_resources[range_id] = {"hosts": [], "guests": existing_vms}
+                    return metadata
+            else:
+                self.logger.warning(f"Range '{range_id}' exists but has unhealthy VMs")
+                self.logger.info(f"  Healthy: {health_status['healthy']}/{health_status['total']} VMs")
+                self.logger.info("  Use --recreate to rebuild the range")
+                return None
+        
+        self.logger.info(f"Creating new range {range_id}")
         
         # Setup comprehensive logging system for this range
         log_aggregator = get_range_log_aggregator(range_id, self.ranges_dir)
@@ -383,7 +421,7 @@ class RangeOrchestrator:
             try:
                 guest_ids = safe_execute(
                     self.provider.create_guests,
-                    guests, host_mapping, build_only, skip_builder,
+                    guests, host_mapping, build_only, skip_builder, recreate,
                     context={
                         "component": "orchestrator",
                         "operation": "create_guests", 
@@ -835,6 +873,66 @@ class RangeOrchestrator:
             self.logger.error(f"Failed to remove range {range_id}: {e}")
             return False
     
+    def _discover_existing_vms(self, range_id: str) -> List[str]:
+        """
+        Discover existing VMs for a given range ID.
+        
+        Args:
+            range_id: Range identifier
+            
+        Returns:
+            List of VM names belonging to this range
+        """
+        try:
+            # Pattern for VM names: {prefix}-{range_id}-*
+            # Note: network_prefix defaults to 'cyris' in most cases
+            prefix = getattr(self.settings, 'network_prefix', 'cyris')
+            pattern = f"{prefix}-{range_id}-"
+            
+            # Use provider to list VMs by pattern
+            if hasattr(self.provider, 'list_vms_by_pattern'):
+                return self.provider.list_vms_by_pattern(pattern)
+            else:
+                # Fallback: check from stored resources
+                if range_id in self._range_resources:
+                    return self._range_resources[range_id].get("guests", [])
+                return []
+        except Exception as e:
+            self.logger.warning(f"Error discovering VMs for range {range_id}: {e}")
+            return []
+    
+    def _check_vms_health(self, vm_names: List[str]) -> Dict[str, Any]:
+        """
+        Check health status of VMs.
+        
+        Args:
+            vm_names: List of VM names to check
+            
+        Returns:
+            Dictionary with health status information
+        """
+        from ..tools.vm_diagnostics import VMDiagnostics
+        diagnostics = VMDiagnostics()
+        
+        healthy_count = 0
+        total = len(vm_names)
+        
+        for vm_name in vm_names:
+            try:
+                if diagnostics._is_vm_running_successfully(vm_name):
+                    healthy_count += 1
+            except Exception as e:
+                self.logger.debug(f"VM {vm_name} health check failed: {e}")
+                # Consider failed check as unhealthy
+                pass
+        
+        return {
+            'total': total,
+            'healthy': healthy_count,
+            'unhealthy': total - healthy_count,
+            'all_healthy': (healthy_count == total and total > 0)
+        }
+    
     def _cleanup_range_resources(self, range_id: str) -> None:
         """Clean up infrastructure resources for a range"""
         resources = self._range_resources.get(range_id, {})
@@ -853,6 +951,65 @@ class RangeOrchestrator:
         
         # Clear resource tracking
         self._range_resources[range_id] = {"hosts": [], "guests": []}
+    
+    def _is_range_healthy_and_compatible(self, range_id: str, hosts: List[Host], guests: List[Guest]) -> bool:
+        """
+        Check if existing range is healthy and compatible with requested configuration.
+        
+        Args:
+            range_id: Range to check
+            hosts: Requested host configuration
+            guests: Requested guest configuration
+            
+        Returns:
+            True if range can be reused, False if it needs recreation
+        """
+        try:
+            # Check if range exists in our registry
+            if range_id not in self._ranges:
+                return False
+            
+            existing_range = self._ranges[range_id]
+            
+            # Check if range status is healthy
+            if existing_range.status not in [RangeStatus.ACTIVE]:
+                self.logger.info(f"Range {range_id} status is {existing_range.status.value}, not healthy for reuse")
+                return False
+            
+            # Check if VMs are actually running
+            range_resources = self._range_resources.get(range_id, {})
+            guest_vms = range_resources.get("guests", [])
+            
+            if not guest_vms:
+                self.logger.info(f"Range {range_id} has no VMs, cannot reuse")
+                return False
+            
+            # Check if number of VMs matches requested configuration
+            if len(guest_vms) != len(guests):
+                self.logger.info(f"Range {range_id} has {len(guest_vms)} VMs, but {len(guests)} requested")
+                return False
+            
+            # Check VM health using diagnostics
+            from ..tools.vm_diagnostics import VMDiagnostics
+            diagnostics = VMDiagnostics()
+            
+            healthy_vms = 0
+            for vm_name in guest_vms:
+                if diagnostics._is_vm_running_successfully(vm_name):
+                    healthy_vms += 1
+            
+            # At least 80% of VMs should be healthy for reuse
+            health_ratio = healthy_vms / len(guest_vms) if guest_vms else 0
+            if health_ratio < 0.8:
+                self.logger.info(f"Range {range_id} only has {health_ratio:.1%} healthy VMs, not suitable for reuse")
+                return False
+            
+            self.logger.info(f"Range {range_id} is healthy with {healthy_vms}/{len(guest_vms)} VMs running")
+            return True
+            
+        except Exception as e:
+            self.logger.warning(f"Error checking range {range_id} health: {e}")
+            return False
     
     def get_range_resources(self, range_id: str) -> Optional[Dict[str, List[str]]]:
         """Get resource IDs for a range"""
@@ -885,7 +1042,8 @@ class RangeOrchestrator:
         range_id: Optional[int] = None,
         dry_run: bool = False,
         build_only: bool = False,
-        skip_builder: bool = False
+        skip_builder: bool = False,
+        recreate: bool = False
     ) -> Optional[str]:
         """
         Create a cyber range from a YAML description file.
@@ -894,12 +1052,14 @@ class RangeOrchestrator:
             description_file: Path to YAML description file
             range_id: Optional specific range ID
             dry_run: If True, validate but don't create
+            build_only: Build images only, don't create VMs
             skip_builder: Skip image building phase (use existing images)
+            recreate: Force recreate existing range
         
         Returns:
             Range ID if successful, None if failed
         """
-        self.logger.debug(f"create_range_from_yaml called with dry_run={dry_run}, build_only={build_only}, skip_builder={skip_builder}")
+        self.logger.debug(f"create_range_from_yaml called with dry_run={dry_run}, build_only={build_only}, skip_builder={skip_builder}, recreate={recreate}")
         
         # Add debug before main logic 
         self.logger.debug("About to start YAML parsing and range creation flow")
@@ -1029,7 +1189,7 @@ class RangeOrchestrator:
                 return range_id_str
             
             # Create the range using existing method
-            self.logger.debug(f"About to call create_range with range_id={range_id_str}, build_only={build_only}, skip_builder={skip_builder}")
+            self.logger.debug(f"About to call create_range with range_id={range_id_str}, build_only={build_only}, skip_builder={skip_builder}, recreate={recreate}")
             result = self.create_range(
                 range_id=range_id_str,
                 name=f"Range {range_id_str}",
@@ -1039,9 +1199,15 @@ class RangeOrchestrator:
                 topology_config=topology_config,
                 tags={"source_file": str(description_file)},
                 build_only=build_only,
-                skip_builder=skip_builder
+                skip_builder=skip_builder,
+                recreate=recreate
             )
             self.logger.debug(f"create_range returned successfully: {result.range_id if result else None}")
+            
+            # Handle the case where range exists but is unhealthy
+            if result is None:
+                self.logger.warning(f"Range {range_id_str} exists but has issues. Use --recreate to force rebuild.")
+                return None
             
             # Save YAML config to range directory after creation
             self._save_range_metadata(range_id_str, yaml_config_path=description_file)

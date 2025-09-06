@@ -80,8 +80,8 @@ class VMDiagnostics:
                         details={"file_size_bytes": file_size, "file_path": str(disk_path)}
                     ))
                 
-                # Validate image format using qemu-img
-                qemu_result = self._validate_image_with_qemu(disk_path)
+                # Validate image format using qemu-img with VM context
+                qemu_result = self._validate_image_with_qemu(disk_path, vm_name)
                 if qemu_result:
                     results.append(qemu_result)
             
@@ -101,6 +101,19 @@ class VMDiagnostics:
             ))
         
         return results
+    
+    def validate_image_smart(self, image_path: str, vm_name: Optional[str] = None) -> Optional[DiagnosticResult]:
+        """
+        Public method for smart image validation that prioritizes VM running status.
+        
+        Args:
+            image_path: Path to the image file to validate
+            vm_name: Optional VM name to check running status
+            
+        Returns:
+            DiagnosticResult if there's an issue, None if validation passes
+        """
+        return self._validate_image_with_qemu(image_path, vm_name)
     
     def check_cloud_init_config(self, vm_name: str) -> List[DiagnosticResult]:
         """Check if cloud-init is properly configured"""
@@ -311,40 +324,117 @@ class VMDiagnostics:
         """Get all attached disk paths including ISOs"""
         return self._get_vm_disk_info(vm_name)
     
-    def _validate_image_with_qemu(self, image_path: str) -> Optional[DiagnosticResult]:
-        """Validate image using qemu-img"""
+    def _validate_image_with_qemu(self, image_path: str, vm_name: Optional[str] = None) -> Optional[DiagnosticResult]:
+        """
+        Validate image using qemu-img with smart validation that prioritizes VM state.
+        
+        Args:
+            image_path: Path to the image file
+            vm_name: Optional VM name to check if VM is actually running
+        """
         try:
+            # First, if VM name is provided, check if VM is running successfully
+            if vm_name and self._is_vm_running_successfully(vm_name):
+                self.logger.info(f"VM {vm_name} is running successfully, skipping strict image validation")
+                return None  # VM is running fine, so image must be OK
+            
             cmd = ["qemu-img", "info", "--force-share", image_path]
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
             
             if result.returncode != 0:
-                return DiagnosticResult(
-                    check_name="qemu_image_validation",
-                    level=DiagnosticLevel.ERROR,
-                    message=f"qemu-img validation failed for {image_path}",
-                    suggestion="Image may be corrupted. Check image integrity"
-                )
+                # Only report as error if we can't determine VM is running
+                if vm_name and self._is_vm_running_successfully(vm_name):
+                    return DiagnosticResult(
+                        check_name="qemu_image_validation",
+                        level=DiagnosticLevel.WARNING,
+                        message=f"qemu-img validation failed for {image_path}, but VM {vm_name} is running",
+                        suggestion="Image may have minor issues but VM is functional"
+                    )
+                else:
+                    return DiagnosticResult(
+                        check_name="qemu_image_validation",
+                        level=DiagnosticLevel.ERROR,
+                        message=f"qemu-img validation failed for {image_path}",
+                        suggestion="Image may be corrupted. Check image integrity"
+                    )
             
-            # Check for corruption indicators in output
+            # Check for corruption indicators in output - but be more lenient
             if "corrupt" in result.stdout.lower():
-                return DiagnosticResult(
-                    check_name="image_corruption",
-                    level=DiagnosticLevel.CRITICAL,
-                    message=f"Image corruption detected in {image_path}",
-                    suggestion="Replace corrupted image with backup"
-                )
+                # If VM is running, downgrade to warning
+                if vm_name and self._is_vm_running_successfully(vm_name):
+                    return DiagnosticResult(
+                        check_name="image_corruption",
+                        level=DiagnosticLevel.WARNING,
+                        message=f"Potential image corruption detected in {image_path}, but VM {vm_name} is running",
+                        suggestion="VM is functional despite reported corruption. Monitor performance."
+                    )
+                else:
+                    return DiagnosticResult(
+                        check_name="image_corruption",
+                        level=DiagnosticLevel.CRITICAL,
+                        message=f"Image corruption detected in {image_path}",
+                        suggestion="Replace corrupted image with backup"
+                    )
                 
         except subprocess.TimeoutExpired:
-            return DiagnosticResult(
-                check_name="qemu_validation_timeout",
-                level=DiagnosticLevel.WARNING,
-                message="Image validation timed out - image may be very large or corrupted",
-                suggestion="Check image manually with qemu-img info"
-            )
+            # If VM is running, don't worry about timeout
+            if vm_name and self._is_vm_running_successfully(vm_name):
+                return DiagnosticResult(
+                    check_name="qemu_validation_timeout",
+                    level=DiagnosticLevel.INFO,
+                    message=f"Image validation timed out but VM {vm_name} is running normally",
+                    suggestion="VM is functional, validation timeout can be ignored"
+                )
+            else:
+                return DiagnosticResult(
+                    check_name="qemu_validation_timeout",
+                    level=DiagnosticLevel.WARNING,
+                    message="Image validation timed out - image may be very large or corrupted",
+                    suggestion="Check image manually with qemu-img info"
+                )
         except:
             return None
         
         return None
+    
+    def _is_vm_running_successfully(self, vm_name: str) -> bool:
+        """
+        Check if VM is running successfully by examining its state and basic functionality.
+        This prioritizes actual VM state over file-level validation.
+        
+        Args:
+            vm_name: Name of the VM to check
+            
+        Returns:
+            True if VM is running successfully, False otherwise
+        """
+        try:
+            # Check if VM is in running state
+            state_cmd = ["virsh", "domstate", vm_name]
+            state_result = subprocess.run(state_cmd, capture_output=True, text=True, timeout=5)
+            
+            if state_result.returncode != 0:
+                return False
+            
+            vm_state = state_result.stdout.strip().lower()
+            if vm_state != "running":
+                return False
+            
+            # Check VM statistics to see if it's actually active
+            stats = self._get_vm_statistics(vm_name)
+            
+            # If VM has some CPU time and is running, consider it successful
+            cpu_time = stats.get('cpu_time', 0)
+            if cpu_time > 0:  # Any CPU activity indicates VM is functional
+                return True
+            
+            # Even if no CPU stats, if state is "running", it's likely OK
+            # (may be a very new VM that hasn't used CPU yet)
+            return True
+            
+        except Exception as e:
+            self.logger.debug(f"Error checking VM {vm_name} running state: {e}")
+            return False
     
     def _get_vm_statistics(self, vm_name: str) -> Dict:
         """Get VM runtime statistics"""

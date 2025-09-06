@@ -7,7 +7,7 @@ from pathlib import Path
 import re
 # import logging  # Replaced with unified logger
 from cyris.core.unified_logger import get_logger
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, validator, field_validator, model_validator
 
 from .base import Entity
 
