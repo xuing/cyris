@@ -9,7 +9,7 @@
 - guest_settings:
   - id: ubuntu-test
     basevm_type: kvm-auto
-    image_name: ubuntu-20.04
+    image_name: ubuntu-24.04
     vcpus: 1
     memory: 1024
     disk_size: 10G

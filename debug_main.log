@@ -15761,3 +15761,154 @@ sudo: a password is required...
 [DEBUG] Logged traditional KVM guests count
 [DEBUG] Logged kvm-auto guests count
 [DEBUG] complete_step('config') called
+
+[DEBUG] main() started with sys.argv: ['./cyris', 'create', 'test-kvm-auto-ubuntu.yml']
+[DEBUG] Detected modern command: create
+[DEBUG] Args: ['create', 'test-kvm-auto-ubuntu.yml']
+[DEBUG] Starting modern CLI try block
+[DEBUG] About to import from /home/ubuntu/cyris/src
+[DEBUG] Successfully imported CLI main
+[DEBUG] About to call cli_main with argv: ['cyris', 'create', 'test-kvm-auto-ubuntu.yml']
+[DEBUG] CLI main() called with args: None
+[DEBUG] About to call cli()...
+[DEBUG] cli() called with config=None, verbose=False, version=False
+[DEBUG] Initializing context
+[DEBUG] Loading configuration
+[DEBUG] Looking for default config files
+[DEBUG] Checking config file: /home/ubuntu/cyris/config.yml
+[DEBUG] Found config file: /home/ubuntu/cyris/config.yml, parsing...
+[DEBUG] Configuration loaded successfully
+[DEBUG] cli() function completed successfully
+[DEBUG] create() called with file=test-kvm-auto-ubuntu.yml, dry_run=False, build_only=False, skip_builder=False
+[DEBUG] Imported CreateCommandHandler
+[DEBUG] Got config and verbose, creating handler
+[DEBUG] About to call handler.execute()
+[DEBUG] _run_pre_creation_checks() START
+[DEBUG] About to create Rich progress manager (using simple fallback)
+[DEBUG] Rich progress manager created
+[DEBUG] About to enter progress context
+[DEBUG] Entered progress context, about to enter live context
+[DEBUG] Entered live context, starting try block
+[DEBUG] About to parse YAML and import config parser
+[DEBUG] Imports completed, creating parser instance
+[DEBUG] Parser created, about to parse file
+[DEBUG] File parsed successfully, continuing with checks
+[DEBUG] About to call check_progress.start_step('config')
+[DEBUG] start_step('config') completed
+[DEBUG] About to access config.guests
+[DEBUG] traditional_kvm_guests created: 0
+[DEBUG] kvm_auto_guests created: 1
+[DEBUG] About to log guest counts to progress
+[DEBUG] Logged traditional KVM guests count
+[DEBUG] Logged kvm-auto guests count
+[DEBUG] complete_step('config') called
+[DEBUG] start_step(init): Initializing orchestrator... (total=None)
+[DEBUG] complete_step(init) called
+[DEBUG] start_step(parse): Parsing YAML configuration... (total=None)
+[DEBUG] log_info: [DEBUG] Importing CyRISConfigParser...
+[DEBUG] log_info: [DEBUG] Creating parser instance...
+[DEBUG] log_info: [DEBUG] About to call parse_file(test-kvm-auto-ubuntu.yml)...
+[DEBUG] log_info: [DEBUG] parse_file completed successfully!
+[DEBUG] log_info: Found 1 hosts and 1 guests
+[DEBUG] complete_step(parse) called
+[DEBUG] start_step(create): Creating cyber range infrastructure... (total=100)
+[DEBUG] log_info: [DEBUG] Starting orchestrator phase...
+[DEBUG] log_info: [DEBUG] Setting progress manager on orchestrator...
+[DEBUG] log_info: [DEBUG] About to call orchestrator.create_range_from_yaml(test-kvm-auto-ubuntu.yml, None)...
+[DEBUG] log_info: [DEBUG] Using recreate flag: False
+[DEBUG] log_info: 🤖 Detected 1 kvm-auto guests requiring image building
+[DEBUG] log_info: 🚀 Ready to start kvm-auto workflow (sudo will be requested when needed)...
+[DEBUG] log_info:    1. ubuntu-test - image: ubuntu-20.04
+[DEBUG] log_info: 🤖 Starting kvm-auto workflow for 1 guests
+[DEBUG] log_info: 📦 Grouped guests into 1 image configurations
+[DEBUG] start_step(kvm_auto): Building images and creating VMs... (total=1)
+[DEBUG] log_info: 🔨 Processing image group 1/1: ubuntu-20.04_1_1024_10G
+[DEBUG] log_info:    📋 This group contains 1 guests: ['ubuntu-test']
+[DEBUG] log_info: 🧩 Using guest 'ubuntu-test' as template for image building
+[DEBUG] start_step(image_build_1): Building image for ubuntu-20.04... (total=None)
+[DEBUG] log_info: 🔧 Starting image build for guest 'ubuntu-test'
+[DEBUG] log_info: 📋 Build parameters: image=ubuntu-20.04, vcpus=1, memory=1024, disk=10G
+[DEBUG] log_info: 📁 Output image path: /home/ubuntu/cyris/images/builds/ubuntu-test-ubuntu-20.04.qcow2
+[DEBUG] log_info: 🚀 Executing virt-builder command:
+[DEBUG] log_command: sudo virt-builder ubuntu-20.04 --size 10G --format qcow2 --output /home/ubuntu/cyris/images/builds/ubuntu-test-ubuntu-20.04.qcow2
+[DEBUG] log_info: ⏳ This may take several minutes for image download and creation...
+[DEBUG] start_step(cmd_1757260383): Building VM image (total=None)
+[DEBUG] start_step(cmd_pipe_1757260383): Building VM image (total=None)
+[DEBUG] fail_step(cmd_pipe_1757260383): Command failed: '>' not supported between instances of 'float' and 'NoneType'
+[DEBUG] fail_step(image_build_1): Image build failed: Build failed: '>' not supported between instances of 'float' and 'NoneType'
+[DEBUG] complete_step(kvm_auto) called
+[DEBUG] fail_step(error): Unexpected error: Failed to create guests for range test-auto-ubuntu
+[DEBUG] progress_manager.complete() called
+[DEBUG] handler.execute() returned: False
+
+[DEBUG] main() started with sys.argv: ['./cyris', 'create', 'test-kvm-auto-ubuntu.yml']
+[DEBUG] Detected modern command: create
+[DEBUG] Args: ['create', 'test-kvm-auto-ubuntu.yml']
+[DEBUG] Starting modern CLI try block
+[DEBUG] About to import from /home/ubuntu/cyris/src
+[DEBUG] Successfully imported CLI main
+[DEBUG] About to call cli_main with argv: ['cyris', 'create', 'test-kvm-auto-ubuntu.yml']
+[DEBUG] CLI main() called with args: None
+[DEBUG] About to call cli()...
+[DEBUG] cli() called with config=None, verbose=False, version=False
+[DEBUG] Initializing context
+[DEBUG] Loading configuration
+[DEBUG] Looking for default config files
+[DEBUG] Checking config file: /home/ubuntu/cyris/config.yml
+[DEBUG] Found config file: /home/ubuntu/cyris/config.yml, parsing...
+[DEBUG] Configuration loaded successfully
+[DEBUG] cli() function completed successfully
+[DEBUG] create() called with file=test-kvm-auto-ubuntu.yml, dry_run=False, build_only=False, skip_builder=False
+[DEBUG] Imported CreateCommandHandler
+[DEBUG] Got config and verbose, creating handler
+[DEBUG] About to call handler.execute()
+[DEBUG] _run_pre_creation_checks() START
+[DEBUG] About to create Rich progress manager (using simple fallback)
+[DEBUG] Rich progress manager created
+[DEBUG] About to enter progress context
+[DEBUG] Entered progress context, about to enter live context
+[DEBUG] Entered live context, starting try block
+[DEBUG] About to parse YAML and import config parser
+[DEBUG] Imports completed, creating parser instance
+[DEBUG] Parser created, about to parse file
+[DEBUG] File parsed successfully, continuing with checks
+[DEBUG] About to call check_progress.start_step('config')
+[DEBUG] start_step('config') completed
+[DEBUG] About to access config.guests
+[DEBUG] traditional_kvm_guests created: 0
+[DEBUG] kvm_auto_guests created: 1
+[DEBUG] About to log guest counts to progress
+[DEBUG] Logged traditional KVM guests count
+[DEBUG] Logged kvm-auto guests count
+[DEBUG] complete_step('config') called
+[DEBUG] start_step(init): Initializing orchestrator... (total=None)
+[DEBUG] complete_step(init) called
+[DEBUG] start_step(parse): Parsing YAML configuration... (total=None)
+[DEBUG] log_info: [DEBUG] Importing CyRISConfigParser...
+[DEBUG] log_info: [DEBUG] Creating parser instance...
+[DEBUG] log_info: [DEBUG] About to call parse_file(test-kvm-auto-ubuntu.yml)...
+[DEBUG] log_info: [DEBUG] parse_file completed successfully!
+[DEBUG] log_info: Found 1 hosts and 1 guests
+[DEBUG] complete_step(parse) called
+[DEBUG] start_step(create): Creating cyber range infrastructure... (total=100)
+[DEBUG] log_info: [DEBUG] Starting orchestrator phase...
+[DEBUG] log_info: [DEBUG] Setting progress manager on orchestrator...
+[DEBUG] log_info: [DEBUG] About to call orchestrator.create_range_from_yaml(test-kvm-auto-ubuntu.yml, None)...
+[DEBUG] log_info: [DEBUG] Using recreate flag: False
+[DEBUG] log_info: 🤖 Detected 1 kvm-auto guests requiring image building
+[DEBUG] log_info: 🚀 Ready to start kvm-auto workflow (sudo will be requested when needed)...
+[DEBUG] log_info:    1. ubuntu-test - image: ubuntu-20.04
+[DEBUG] log_info: 🤖 Starting kvm-auto workflow for 1 guests
+[DEBUG] log_info: 📦 Grouped guests into 1 image configurations
+[DEBUG] start_step(kvm_auto): Building images and creating VMs... (total=1)
+[DEBUG] log_info: 🔨 Processing image group 1/1: ubuntu-20.04_1_1024_10G
+[DEBUG] log_info:    📋 This group contains 1 guests: ['ubuntu-test']
+[DEBUG] log_info: 🧩 Using guest 'ubuntu-test' as template for image building
+[DEBUG] start_step(image_build_1): Building image for ubuntu-20.04... (total=None)
+[DEBUG] log_info: 🔧 Starting image build for guest 'ubuntu-test'
+[DEBUG] log_info: 📋 Build parameters: image=ubuntu-20.04, vcpus=1, memory=1024, disk=10G
+[DEBUG] log_info: 📁 Output image path: /home/ubuntu/cyris/images/builds/ubuntu-test-ubuntu-20.04.qcow2
+[DEBUG] log_info: 🚀 Executing virt-builder command:
+[DEBUG] log_command: sudo virt-builder ubuntu-20.04 --size 10G --format qcow2 --output /home/ubuntu/cyris/images/builds/ubuntu-test-ubuntu-20.04.qcow2
+[DEBUG] log_info: ⏳ This may take several minutes for image download and creation...
+[DEBUG] start_step(cmd_1757260566): Building VM image (total=None)

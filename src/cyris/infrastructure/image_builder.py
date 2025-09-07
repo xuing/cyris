@@ -215,10 +215,10 @@ class LocalImageBuilder:
             
             # Execute with progress monitoring (allow interactive sudo)
             if self.progress_manager:
-                result = self._run_command_with_progress(build_cmd, "Building VM image", timeout=600, env=build_env)
+                result = self._run_command_with_progress(build_cmd, "Building VM image", timeout=3600, env=build_env)
             else:
                 # Use cached sudo authentication for virt-builder
-                result = subprocess.run(build_cmd, capture_output=True, text=True, timeout=600, env=build_env)
+                result = subprocess.run(build_cmd, capture_output=True, text=True, timeout=None, env=build_env)
             
             # Enhanced debugging: Log return code immediately
             debug_msg = f"🔍 virt-builder completed with return code: {result.returncode}"
@@ -368,7 +368,7 @@ class LocalImageBuilder:
                 build_time=time.time() - start_time
             )
     
-    def _run_command_with_progress(self, cmd: List[str], description: str, timeout: int = 300, env=None):
+    def _run_command_with_progress(self, cmd: List[str], description: str, timeout = 300, env=None):
         """Run a command with real-time output streaming using StreamingCommandExecutor"""
         return self.command_executor.execute_with_realtime_output(
             cmd=cmd,
