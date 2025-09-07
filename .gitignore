@@ -28,6 +28,7 @@ cyber_range/test-demo/
 
 # Debug and test artifacts
 debug_*.log
+logs/                   # Unified logs directory structure
 cyber_range/test*/
 cyber_range/test-*/
 cyber_range/*.log

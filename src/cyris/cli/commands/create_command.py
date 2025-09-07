@@ -5,7 +5,7 @@ Handles cyber range creation logic with comprehensive validation
 
 from pathlib import Path
 from typing import Optional
-from cyris.core.unified_logger import get_logger
+from cyris.core.unified_logger import get_logger, get_main_debug_log_path
 
 from .base_command import BaseCommandHandler
 from cyris.cli.presentation import MessageFormatter
@@ -15,6 +15,9 @@ from cyris.core.progress import get_progress_tracker
 from cyris.core.rich_progress import create_rich_progress_manager, ProgressLevel
 from cyris.core.operation_tracker import is_all_operations_successful
 from cyris.config.parser import ConfigurationError
+
+# Initialize unified debug log path
+debug_log_path = get_main_debug_log_path()
 
 
 class CreateCommandHandler(BaseCommandHandler):
@@ -182,7 +185,7 @@ class CreateCommandHandler(BaseCommandHandler):
             def start_step(self, step_id, description, total=None):
                 self.console.print(f"[bold blue]🔄 {description}[/bold blue]")
                 # Add debug logging
-                with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                with open(debug_log_path, 'a') as f:
                     f.write(f"[DEBUG] start_step({step_id}): {description} (total={total})\n")
                     f.flush()
                 
@@ -190,26 +193,26 @@ class CreateCommandHandler(BaseCommandHandler):
                 if completed is not None and total is not None:
                     progress_pct = int((completed / total) * 100) if total > 0 else 0
                     self.console.print(f"[blue]📊 {step_id}: {progress_pct}% ({completed}/{total})[/blue]")
-                with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                with open(debug_log_path, 'a') as f:
                     f.write(f"[DEBUG] update_step({step_id}): completed={completed}, total={total}\n")
                     f.flush()
                     
             def complete_step(self, step_id):
                 self.console.print(f"[bold green]✅ Step '{step_id}' completed[/bold green]")
-                with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                with open(debug_log_path, 'a') as f:
                     f.write(f"[DEBUG] complete_step({step_id}) called\n")
                     f.flush()
                     
             def fail_step(self, step_id, error):
                 self.console.print(f"[bold red]❌ Step '{step_id}' failed: {error}[/bold red]")
                 self.overall_success = False
-                with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                with open(debug_log_path, 'a') as f:
                     f.write(f"[DEBUG] fail_step({step_id}): {error}\n")
                     f.flush()
                 
             def log_info(self, message):
                 self.console.print(f"[blue]ℹ️  {message}[/blue]")
-                with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                with open(debug_log_path, 'a') as f:
                     f.write(f"[DEBUG] log_info: {message}\n")
                     f.flush()
                 
@@ -221,18 +224,18 @@ class CreateCommandHandler(BaseCommandHandler):
                 
             def log_warning(self, message):
                 self.console.print(f"[yellow]⚠️  {message}[/yellow]")
-                with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                with open(debug_log_path, 'a') as f:
                     f.write(f"[DEBUG] log_warning: {message}\n")
                     f.flush()
                 
             def log_command(self, command):
                 self.console.print(f"[dim]💻 CMD: {command}[/dim]")
-                with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                with open(debug_log_path, 'a') as f:
                     f.write(f"[DEBUG] log_command: {command}\n")
                     f.flush()
                 
             def complete(self):
-                with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                with open(debug_log_path, 'a') as f:
                     f.write(f"[DEBUG] progress_manager.complete() called\n")
                     f.flush()
         
@@ -445,12 +448,12 @@ class CreateCommandHandler(BaseCommandHandler):
                 f.flush()
                 
             with check_progress.live_context():
-                with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                with open(debug_log_path, 'a') as f:
                     f.write("[DEBUG] Entered live context, starting try block\n")
                     f.flush()
                 
                 try:
-                    with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                    with open(debug_log_path, 'a') as f:
                         f.write("[DEBUG] About to parse YAML and import config parser\n")
                         f.flush()
                     
@@ -458,69 +461,69 @@ class CreateCommandHandler(BaseCommandHandler):
                     from cyris.config.parser import CyRISConfigParser
                     from cyris.domain.entities.guest import BaseVMType
                     
-                    with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                    with open(debug_log_path, 'a') as f:
                         f.write("[DEBUG] Imports completed, creating parser instance\n")
                         f.flush()
                     
                     parser = CyRISConfigParser()
                     
-                    with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                    with open(debug_log_path, 'a') as f:
                         f.write("[DEBUG] Parser created, about to parse file\n")
                         f.flush()
                     
                     config = parser.parse_file(description_file)
                     
-                    with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                    with open(debug_log_path, 'a') as f:
                         f.write("[DEBUG] File parsed successfully, continuing with checks\n")
                         f.flush()
                     
                     # Step 1: Parse configuration
-                    with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                    with open(debug_log_path, 'a') as f:
                         f.write("[DEBUG] About to call check_progress.start_step('config')\n")
                         f.flush()
                     
                     check_progress.start_step("config", "Parsing configuration...")
                     
-                    with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                    with open(debug_log_path, 'a') as f:
                         f.write("[DEBUG] start_step('config') completed\n")
                         f.flush()
                     
                     # Check if we have traditional KVM guests (need base images)
-                    with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                    with open(debug_log_path, 'a') as f:
                         f.write("[DEBUG] About to access config.guests\n")
                         f.flush()
                     
                     traditional_kvm_guests = [g for g in config.guests if g.basevm_type == BaseVMType.KVM]
                     
-                    with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                    with open(debug_log_path, 'a') as f:
                         f.write(f"[DEBUG] traditional_kvm_guests created: {len(traditional_kvm_guests)}\n")
                         f.flush()
                     
                     kvm_auto_guests = [g for g in config.guests if g.basevm_type == BaseVMType.KVM_AUTO]
                     
-                    with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                    with open(debug_log_path, 'a') as f:
                         f.write(f"[DEBUG] kvm_auto_guests created: {len(kvm_auto_guests)}\n")
                         f.flush()
                     
-                    with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                    with open(debug_log_path, 'a') as f:
                         f.write("[DEBUG] About to log guest counts to progress\n")
                         f.flush()
                     
                     check_progress.log_info(f"Found {len(traditional_kvm_guests)} traditional KVM guests")
                     
-                    with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                    with open(debug_log_path, 'a') as f:
                         f.write("[DEBUG] Logged traditional KVM guests count\n")
                         f.flush()
                     
                     check_progress.log_info(f"Found {len(kvm_auto_guests)} kvm-auto guests")
                     
-                    with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                    with open(debug_log_path, 'a') as f:
                         f.write("[DEBUG] Logged kvm-auto guests count\n")
                         f.flush()
                     
                     check_progress.complete_step("config")
                     
-                    with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+                    with open(debug_log_path, 'a') as f:
                         f.write("[DEBUG] complete_step('config') called\n")
                         f.flush()
                     

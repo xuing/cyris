@@ -9,8 +9,21 @@ from pathlib import Path
 
 def main():
     """Main function"""
-    # Write debug log to file
-    with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+    # Import unified logging functions
+    script_dir = Path(__file__).parent.resolve()
+    src_dir = script_dir / 'src'
+    sys.path.insert(0, str(src_dir))
+    
+    try:
+        from cyris.core.unified_logger import get_main_debug_log_path
+        debug_log_path = get_main_debug_log_path()
+    except ImportError:
+        # Fallback to old path if import fails
+        debug_log_path = Path('/home/ubuntu/cyris/logs/main/debug_main.log')
+        debug_log_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Write debug log to file using unified path
+    with open(debug_log_path, 'a') as f:
         f.write(f"\n[DEBUG] main() started with sys.argv: {sys.argv}\n")
         f.flush()
     
@@ -55,14 +68,14 @@ def main():
     
     # If first command is a modern command, use modern CLI
     if first_command in modern_commands or any(arg.startswith('-') and arg in global_flags for arg in args):
-        with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+        with open(debug_log_path, 'a') as f:
             f.write(f"[DEBUG] Detected modern command: {first_command}\n")
             f.write(f"[DEBUG] Args: {args}\n")
             f.flush()
         
         try:
             print(f"[DEBUG] Starting modern CLI with args: {args}")
-            with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+            with open(debug_log_path, 'a') as f:
                 f.write("[DEBUG] Starting modern CLI try block\n")
                 f.flush()
             
@@ -71,14 +84,14 @@ def main():
             sys.path.insert(0, str(src_dir))
             print(f"[DEBUG] Added {src_dir} to Python path")
             
-            with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+            with open(debug_log_path, 'a') as f:
                 f.write(f"[DEBUG] About to import from {src_dir}\n")
                 f.flush()
             
             from cyris.cli.main import main as cli_main
             print("[DEBUG] Successfully imported CLI main")
             
-            with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+            with open(debug_log_path, 'a') as f:
                 f.write("[DEBUG] Successfully imported CLI main\n")
                 f.flush()
             
@@ -86,14 +99,14 @@ def main():
             print(f"[DEBUG] Set sys.argv to: {sys.argv}")
             print("[DEBUG] About to call cli_main()...")
             
-            with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+            with open(debug_log_path, 'a') as f:
                 f.write(f"[DEBUG] About to call cli_main with argv: {sys.argv}\n")
                 f.flush()
             
             cli_main()
             print("[DEBUG] cli_main() completed")
             
-            with open('/home/ubuntu/cyris/debug_main.log', 'a') as f:
+            with open(debug_log_path, 'a') as f:
                 f.write("[DEBUG] cli_main() completed successfully\n")
                 f.flush()
         except ImportError:

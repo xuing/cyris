@@ -6,7 +6,7 @@ implementing the infrastructure provider interface for local virtualization.
 """
 
 # import logging  # Replaced with unified logger
-from cyris.core.unified_logger import get_logger
+from cyris.core.unified_logger import get_logger, get_virt_install_debug_log_path
 from cyris.core.streaming_executor import StreamingCommandExecutor
 import subprocess
 import xml.etree.ElementTree as ET
@@ -24,6 +24,9 @@ import hashlib
 
 # Import permission manager for automatic libvirt access setup
 from ..permissions import PermissionManager
+
+# Initialize unified debug log path
+debug_virt_install_log_path = get_virt_install_debug_log_path()
 
 import libvirt
 
@@ -976,7 +979,7 @@ class KVMProvider(InfrastructureProvider):
             self.logger.info(f"⏳ [DEBUG] VM creation may take 1-2 minutes...")
             
             # Write command to debug log file for manual testing
-            with open('/home/ubuntu/cyris/debug_virt_install.log', 'a') as f:
+            with open(debug_virt_install_log_path, 'a') as f:
                 f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] virt-install command:\n")
                 f.write(f"{cmd_str}\n")
                 f.write(f"Working directory: {Path.cwd()}\n")
@@ -1019,7 +1022,7 @@ class KVMProvider(InfrastructureProvider):
                 self.logger.info(f"📄 [DEBUG] virt-install stderr: (empty)")
             
             # Write detailed results to debug log
-            with open('/home/ubuntu/cyris/debug_virt_install.log', 'a') as f:
+            with open(debug_virt_install_log_path, 'a') as f:
                 f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] virt-install result:\n")
                 f.write(f"Return code: {result.returncode}\n")
                 f.write(f"Stdout:\n{result.stdout}\n")

@@ -27,6 +27,20 @@ import json
 # Thread-local storage for logger contexts
 _logger_context = threading.local()
 
+# Global project root path detection
+def _get_project_root() -> Path:
+    """Automatically detect CyRIS project root directory"""
+    current = Path(__file__).resolve()
+    for parent in [current] + list(current.parents):
+        if (parent / 'pyproject.toml').exists() and (parent / 'CLAUDE.md').exists():
+            return parent
+    # Fallback to /home/ubuntu/cyris if detection fails
+    return Path('/home/ubuntu/cyris')
+
+# Project-wide log directory configuration
+_PROJECT_ROOT = _get_project_root()
+_PROJECT_LOG_DIR = _PROJECT_ROOT / 'logs'
+
 
 class LogFormat(Enum):
     """Supported log output formats"""
@@ -405,6 +419,48 @@ class LoggerFactory:
 def get_logger(name: str, component: Optional[str] = None) -> UnifiedLogger:
     """Convenience function to get a logger - replaces logging.getLogger()"""
     return LoggerFactory.get_logger(name, component)
+
+
+def get_project_log_path(log_name: str, subdir: Optional[str] = None) -> Path:
+    """
+    Get standardized log file path within project logs directory.
+    
+    Args:
+        log_name: Name of the log file (e.g., 'debug_main.log')
+        subdir: Optional subdirectory (e.g., 'main', 'infrastructure', 'debug')
+    
+    Returns:
+        Path: Full path to the log file within project logs directory
+    """
+    # Ensure logs directory exists
+    if subdir:
+        log_dir = _PROJECT_LOG_DIR / subdir
+    else:
+        log_dir = _PROJECT_LOG_DIR
+    
+    log_dir.mkdir(parents=True, exist_ok=True)
+    return log_dir / log_name
+
+
+def get_main_debug_log_path() -> Path:
+    """Get path for main debug log file"""
+    return get_project_log_path('debug_main.log', 'main')
+
+
+def get_parser_debug_log_path() -> Path:
+    """Get path for parser debug log file"""  
+    return get_project_log_path('debug_parser.log', 'main')
+
+
+def get_virt_install_debug_log_path() -> Path:
+    """Get path for virt-install debug log file"""
+    return get_project_log_path('debug_virt_install.log', 'infrastructure')
+
+
+def get_creation_log_path(suffix: str = '') -> Path:
+    """Get path for creation log files"""
+    log_name = f'create{suffix}.log' if suffix else 'create.log'
+    return get_project_log_path(log_name, 'operations')
 
 
 def print_replacement(*args, **kwargs) -> None:
