@@ -44,18 +44,6 @@
 
 ---
 
-### 3. **Automation Framework Integration** (HIGH)
-**Issue ID**: Documented in automation assessment  
-**Impact**: Advanced automation capabilities inaccessible  
-
-**Status**: 
-- ✅ Core automation components fully implemented (73 tests passing)
-- ❌ Zero integration with user-facing systems
-- ❌ No CLI access to automation features
-- ❌ No YAML syntax extensions for automation
-
-**Business Impact**: 🟡 **HIGH** - Investment in automation has zero user impact
-
 ---
 
 ## 🔍 Now Investigating: Network Topology Layer 3 Configuration
@@ -78,14 +66,13 @@
 3. **clone_vm Integration** - ✅ **FIXED** - Now working correctly
 
 ### Priority 2 (High - Next Sprint)  
-1. **Automation Framework Integration** - Make existing investment usable
-2. **Automatic User Account Generation** - Restore UX parity with legacy
-3. **Network Topology Layer 3** - Under investigation
+1. **Automatic User Account Generation** - Restore UX parity with legacy
+2. **Network Topology Layer 3** - Under investigation
 
 ### Priority 3 (Medium - Future)
 1. Enhanced monitoring and status reporting
 2. Performance optimization
-3. Advanced automation features
+3. Enhanced error handling and recovery
 
 ---
 
@@ -96,7 +83,6 @@
 | VM Clone Integration | ✅ Working | ✅ **FIXED** | Resolved | ✅ Complete |
 | Multi-host Base Distribution | ✅ Full Implementation | ❌ Missing | 🔴 Critical | P1 |
 | Auto User Generation | ✅ Zero-config | ❌ Manual Config | 🟡 High UX Impact | P2 |
-| Automation Framework | ✅ N/A (Legacy) | ❌ No Integration | 🟡 High ROI Loss | P2 |
 | Network Topology L3 | ✅ Implemented | ❓ **Under Investigation** | ❓ TBD | P2 |
 
 ---

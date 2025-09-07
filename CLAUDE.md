@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**CyRIS (Cyber Range Instantiation System)** v1.4.0 automatically creates and manages cybersecurity training ranges from YAML descriptions. Supports **KVM/libvirt** and **AWS** with integrated **Packer/Terraform** automation.
+**CyRIS (Cyber Range Instantiation System)** v1.4.0 automatically creates and manages cybersecurity training ranges from YAML descriptions. Supports **KVM/libvirt** and **AWS** cloud platforms.
 
 **Core Design Principle**: Idempotent operations following Kubernetes/Terraform patterns:
 - Declarative resource management with Range ID as unique identifier
@@ -26,11 +26,6 @@ Modern layered architecture with legacy compatibility:
 - **Configuration Layer**: Settings and YAML parsing (`src/cyris/config/`)
 - **Core Layer**: Exceptions, logging, concurrency (`src/cyris/core/`)
 
-### Automation Framework 🤖
-- **Packer Integration**: Automated VM image building (22 tests)
-- **Terraform Integration**: Infrastructure-as-code for libvirt (23 tests)
-- **AWS Integration**: Cloud deployment automation (28 tests)
-- **Total**: 73 tests, 100% pass rate, eliminates manual provisioning
 
 ### Legacy Compatibility
 - **Legacy Main**: Original implementation (`legacy/main/cyris.py`)

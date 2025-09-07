@@ -51,21 +51,6 @@
       "documentation": "src/cyris/infrastructure/CLAUDE.md"
     },
     {
-      "path": "src/cyris/infrastructure/automation",
-      "type": "automation",
-      "status": "new_feature",
-      "coverage": "complete",
-      "entry_points": ["packer_builder.py", "terraform_builder.py", "aws_builder.py"],
-      "interfaces": ["Packer Integration", "Terraform Integration", "AWS Automation"],
-      "test_coverage": 73,
-      "test_breakdown": {
-        "packer": 22,
-        "terraform": 23, 
-        "aws": 28
-      },
-      "documentation": "src/cyris/infrastructure/CLAUDE.md"
-    },
-    {
       "path": "src/cyris/domain",
       "type": "domain_entities",
       "status": "active",
@@ -135,8 +120,7 @@
       "test_count": {
         "unit": 60,
         "integration": 15,
-        "e2e": 10,
-        "automation": 73
+        "e2e": 10
       },
       "dependencies": ["pytest", "testcontainers"],
       "documentation": "tests/CLAUDE.md"
@@ -166,18 +150,17 @@
     "cyber_range/test*/", "wget-log*"
   ],
   "coverage_summary": {
-    "total_modules": 13,
-    "complete_coverage": 8,
+    "total_modules": 12,
+    "complete_coverage": 7,
     "partial_coverage": 2, 
     "basic_coverage": 2,
-    "new_features": 1
+    "new_features": 0
   },
   "gaps": [
     "docs/ module needs enhanced documentation coverage",
     "legacy/ modules maintained for compatibility only"
   ],
   "next_steps": [
-    "Monitor automation framework integration", 
     "Expand documentation coverage for docs/ module",
     "Continue maintaining legacy compatibility"
   ],
