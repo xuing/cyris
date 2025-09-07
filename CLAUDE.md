@@ -1,320 +1,316 @@
 # CLAUDE.md
 
-Guidance for Claude Code when working with this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 项目命令要具有幂等性。参考docker-compose等知名项目的指导思想。
-     │ 核心设计原则 (参考Kubernetes/Terraform)                                                                │
-     │                                                                                                        │
-     │ 1. 声明式资源管理                                                                                      │
-     │                                                                                                        │
-     │ 设计思路: 用户描述"想要什么"，系统确保"达到目标状态"                                                   │
-     │ - Range ID作为唯一标识符                                                                               │
-     │ - 配置哈希作为版本指纹                                                                                 │
-     │ - 状态比较和差量更新                                                                                   │
-     │                                                                                                        │
-     │ 2. 资源生命周期管理                                                                                    │
-     │                                                                                                        │
-     │ 借鉴Docker/K8s模式:                                                                                    │
-     │ - CREATE: 仅创建新资源，存在则报错                                                                     │
-     │ - CREATE_OR_UPDATE: 创建或更新到目标状态 (默认)                                                        │
-     │ - RECREATE: 强制删除重建                                                                               │
-     │ - SKIP_EXISTING: 跳过已存在资源                                                                        │
-     │                                                                                                        │
-     │ 3. 分层幂等性保证                                                                                      │
-     │                                                                                                        │
-     │ Level 1 - Range级别: Range ID + 配置fingerprint                                                        │
-     │ Level 2 - VM级别: VM name + 镜像checksumLevel 3 - 资源级别: 网络/存储的状态检查                        │
-     │                                                                                                        │
-     │ 具体实现方案                                                                                           │
-     │                                                                                                        │
-     │ A. CLI参数扩展                                                                                         │
-     │                                                                                                        │
-     │ # 默认模式：智能创建或更新                                                                             │
-     │ ./cyris create config.yml                                                                              │
-     │                                                                                                        │
-     │ # 严格模式：仅创建新的，存在则失败                                                                     │
-     │ ./cyris create config.yml --mode=create-only                                                           │
-     │                                                                                                        │
-     │ # 强制模式：删除重建                                                                                   │
-     │ ./cyris create config.yml --mode=recreate                                                              │
-     │                                                                                                        │
-     │ # 跳过模式：保留现有资源                                                                               │
-     │ ./cyris create config.yml --mode=skip-existing
-## Change Log (Changelog)
 
-### 2025-09-01
-- **[INITIALIZATION]** Updated CLAUDE.md with comprehensive module structure and navigation
-- **[ARCHITECTURE]** Added Mermaid module structure diagram for improved project visualization
-- **[DOCUMENTATION]** Enhanced module index with detailed responsibility mapping and coverage status
+## Project Overview
 
----
+**CyRIS (Cyber Range Instantiation System)** v1.4.0 automatically creates and manages cybersecurity training ranges from YAML descriptions. Supports **KVM/libvirt** and **AWS** with integrated **Packer/Terraform** automation.
 
-## Project Vision
+**Core Design Principle**: Idempotent operations following Kubernetes/Terraform patterns:
+- Declarative resource management with Range ID as unique identifier
+- Resource lifecycle management: CREATE, CREATE_OR_UPDATE, RECREATE, SKIP_EXISTING
+- Multi-layer reliability guarantees at Range/VM/Resource levels
 
-**CyRIS (Cyber Range Instantiation System)** automatically creates and manages cybersecurity training ranges from YAML descriptions. Supports **KVM** and **AWS**.
+## Architecture
 
-**Goal:** Reproducible pipeline from **YAML → Resource Creation → Task Execution → Verification**.
+Modern layered architecture with legacy compatibility:
 
-**Mission:** Enable cybersecurity education through automated, scalable, and reliable training environment deployment.
+### Modern Stack (src/cyris/)
+- **CLI Layer**: Click-based interface with Rich UI (`src/cyris/cli/main.py`)
+- **Services Layer**: Orchestration and monitoring (`src/cyris/services/orchestrator.py`)
+- **Infrastructure Layer**: Provider abstractions (`src/cyris/infrastructure/providers/`)
+- **Domain Layer**: Pydantic entities (`src/cyris/domain/entities/`)
+- **Tools Layer**: SSH, user, VM utilities (`src/cyris/tools/`)
+- **Configuration Layer**: Settings and YAML parsing (`src/cyris/config/`)
+- **Core Layer**: Exceptions, logging, concurrency (`src/cyris/core/`)
 
----
+### Automation Framework 🤖
+- **Packer Integration**: Automated VM image building (22 tests)
+- **Terraform Integration**: Infrastructure-as-code for libvirt (23 tests)
+- **AWS Integration**: Cloud deployment automation (28 tests)
+- **Total**: 73 tests, 100% pass rate, eliminates manual provisioning
 
-## Architecture Overview
+### Legacy Compatibility
+- **Legacy Main**: Original implementation (`legacy/main/cyris.py`)
+- **Instantiation Scripts**: Attack emulation (`instantiation/`)
 
-CyRIS follows a modern layered architecture with legacy compatibility:
+## Development Setup
 
-### Modern Architecture (Preferred)
-- **CLI Layer**: Click-based command interface with Rich UI
-- **Services Layer**: Business logic orchestration, monitoring, gateway services
-- **Domain Layer**: Core business entities and data models
-- **Infrastructure Layer**: Provider abstractions, network management, virtualization
-- **Tools Layer**: SSH management, user management, VM utilities
-- **Configuration Layer**: Pydantic-based settings and YAML parsing
-
-### Legacy Compatibility Layer
-- **Legacy Main**: Original implementation for backward compatibility
-- **Instantiation Scripts**: Attack emulation and deployment scripts
-
-### **🤖 NEW: Automation Framework** 
-- **Packer Integration**: Automated VM image building and customization (22 tests ✅)
-- **Terraform Integration**: Infrastructure-as-code for libvirt (23 tests ✅)  
-- **AWS Integration**: Cloud deployment automation (28 tests ✅)
-- **Total Coverage**: 73 tests, 100% pass rate, eliminates manual VM provisioning
-
----
-
-## Module Structure Diagram
-
-```mermaid
-graph TD
-    A["(Root) CyRIS"] --> B["src/cyris/"];
-    B --> C["cli"];
-    B --> D["services"];  
-    B --> E["infrastructure"];
-    B --> F["domain"];
-    B --> G["config"];
-    B --> H["tools"];
-    B --> I["core"];
-    
-    A --> J["legacy"];
-    J --> K["main"];
-    
-    A --> L["instantiation"];
-    A --> M["tests"];
-    A --> N["examples"];
-    A --> O["docs"];
-
-    click C "/home/ubuntu/cyris/src/cyris/cli/CLAUDE.md" "View CLI module docs"
-    click D "/home/ubuntu/cyris/src/cyris/services/CLAUDE.md" "View Services module docs"  
-    click E "/home/ubuntu/cyris/src/cyris/infrastructure/CLAUDE.md" "View Infrastructure module docs"
-    click F "/home/ubuntu/cyris/src/cyris/domain/CLAUDE.md" "View Domain module docs"
-    click G "/home/ubuntu/cyris/src/cyris/config/CLAUDE.md" "View Config module docs"
-    click H "/home/ubuntu/cyris/src/cyris/tools/CLAUDE.md" "View Tools module docs"
-    click I "/home/ubuntu/cyris/src/cyris/core/CLAUDE.md" "View Core module docs"
-    click K "/home/ubuntu/cyris/legacy/main/CLAUDE.md" "View Legacy Main module docs"
-    click L "/home/ubuntu/cyris/instantiation/CLAUDE.md" "View Instantiation module docs"
-    click M "/home/ubuntu/cyris/tests/CLAUDE.md" "View Tests module docs"
-```
-
----
-
-## Module Index
-
-| Module | Type | Responsibility | Entry Points | Status | Coverage |
-|--------|------|----------------|--------------|---------|----------|
-| **[src/cyris/cli](src/cyris/cli/CLAUDE.md)** | Modern CLI | Click-based command-line interface with Rich UI | `main.py` | ✅ Active | Complete |
-| **[src/cyris/services](src/cyris/services/CLAUDE.md)** | Core Services | Business logic orchestration, range management | `orchestrator.py` | ✅ Active | Complete |
-| **[src/cyris/infrastructure](src/cyris/infrastructure/CLAUDE.md)** | Infrastructure | Provider abstractions, network management | `providers/base_provider.py` | ✅ Active | Complete |
-| **[src/cyris/infrastructure/automation](docs/automation/README.md)** | 🤖 Automation | Packer, Terraform, AWS automation | `packer_builder.py` | 🚀 **NEW** | 73 Tests ✅ |
-| **[src/cyris/domain](src/cyris/domain/CLAUDE.md)** | Domain Entities | Core business entities and data models | `entities/__init__.py` | ✅ Active | Complete |
-| **[src/cyris/config](src/cyris/config/CLAUDE.md)** | Configuration | Pydantic settings, YAML parsing | `settings.py` | ✅ Active | Complete |
-| **[src/cyris/tools](src/cyris/tools/CLAUDE.md)** | Utility Tools | SSH, user management, VM utilities | `ssh_manager.py` | ✅ Active | Complete |
-| **[src/cyris/core](src/cyris/core/CLAUDE.md)** | Core Utilities | Concurrency, reliability, exceptions | `exceptions.py` | ✅ Active | Complete |
-| **[legacy/main](legacy/main/CLAUDE.md)** | Legacy Core | Original implementation, compatibility | `cyris.py` | 🔄 Legacy | Partial |
-| **[instantiation](instantiation/CLAUDE.md)** | Legacy Scripts | Attack emulation, deployment scripts | `vm_clone/` | 🔄 Legacy | Basic |
-| **[tests](tests/CLAUDE.md)** | Test Suite | Unit, integration, e2e testing | `conftest.py` | ✅ Active | Complete |
-| **[examples](examples/CLAUDE.md)** | Examples | YAML configuration templates | `basic.yml` | 📖 Reference | Complete |
-| **[docs](docs/CLAUDE.md)** | Documentation | Architecture docs, guides | `design/` | 📖 Reference | Partial |
-
----
-
-## Running and Development
-
-### Environment Setup
+### Environment Activation (Required)
 ```bash
-# Activate virtual environment
+# CRITICAL: Always activate virtual environment before any Python operations
 source .venv/bin/activate
 
-# Install dependencies
+# Verify Python path points to virtual environment
+which python3
+# Should show: /home/ubuntu/cyris/.venv/bin/python3
+```
+
+### Dependency Management
+
+The project uses **dual dependency management**:
+
+#### Poetry (Preferred for Development)
+```bash
+# Install dependencies with Poetry
+poetry install
+
+# Add new dependency
+poetry add <package_name>
+
+# Add development dependency
+poetry add --group dev <package_name>
+
+# Update dependencies
+poetry update
+
+# Run commands in Poetry environment
+poetry run pytest
+poetry run black src/
+```
+
+#### Pip (Fallback/Production)
+```bash
+# Alternative: Install with pip (after activating .venv)
 pip install -r requirements.txt
 
-# Verify installation
-./cyris validate
+# Minimal installation
+pip install -r requirements-minimal.txt
 ```
 
-### Basic Usage
+## Command Line Usage
+
+### Unified Entry Script Routing
+
+The `./cyris` script automatically routes between modern and legacy interfaces:
+
 ```bash
-# Create cyber range
+# Modern commands (routed to src/cyris/cli/main.py)
 ./cyris create examples/basic.yml
-
-# Check status
-./cyris status basic --verbose
-
-# List all ranges
 ./cyris list --all --verbose
+./cyris status <range_id> --verbose
+./cyris destroy <range_id>
+./cyris validate
+./cyris --help
 
-# Destroy range
-./cyris destroy basic
+# Legacy commands (routed to legacy/main/cyris.py)  
+./cyris examples/basic.yml CONFIG
+./cyris <yaml_file> config.ini
 
-# Legacy compatibility
-./cyris legacy examples/basic.yml CONFIG
+# Direct legacy access
+python legacy/main/cyris.py examples/basic.yml CONFIG
 ```
 
-### Development Commands
+### CLI Debug Information
+
+The unified entry script logs detailed debug information to `debug_main.log`:
+- Command routing decisions (modern vs legacy)
+- Python path modifications
+- Import success/failure details
+- Useful for troubleshooting CLI issues
+
+### Modern CLI Operations
+
 ```bash
-# Run tests
-pytest
+# Environment validation
+./cyris validate
 
-# Run specific test suites
-pytest tests/unit/
-pytest tests/integration/
-pytest tests/e2e/
+# Range lifecycle management
+./cyris create examples/basic.yml --mode=create-only
+./cyris create examples/basic.yml --mode=recreate
+./cyris create examples/basic.yml --mode=skip-existing
 
-# Code formatting
-black src/ tests/
+# Status and monitoring
+./cyris status <range_id> --verbose  # Shows IP, reachability, task summaries
+./cyris list --all --verbose         # All ranges with details
 
-# Type checking
-mypy src/
+# Configuration management
+./cyris config-show
+./cyris config-init
+./cyris ssh-info <range_id>
 ```
-
----
 
 ## Testing Strategy
 
-### Test Architecture
-- **Unit Tests**: Individual component testing with mocking
-- **Integration Tests**: Service interaction testing
-- **E2E Tests**: Full workflow testing with real VMs
-- **Legacy Tests**: Compatibility and regression testing
+### Real Test Structure
 
-### Test Coverage Requirements
-- **Minimum Coverage**: 80% for new code
-- **Critical Paths**: 95% for orchestrator, CLI commands, infrastructure
-- **Mock Strategy**: Use testcontainers for integration, real VMs for e2e
+Tests are organized in a mixed structure (not the idealized unit/integration/e2e folders):
 
-### Testing Guidelines
-- Always **observe real CLI output** before writing assertions
-- Each test must cover: **pre-check → execution → verification**
-- Keep failure evidence in CI logs (command output, grep results, etc.)
+```bash
+# Root-level integration tests
+test_kvm_auto_comprehensive.py    # Comprehensive KVM automation
+test_fixed_cyris_workflow.py      # End-to-end workflow testing
+test_sudo_workflow.py             # Sudo management testing
+test_comprehensive_verification.py # Full system validation
 
----
-
-## Coding Standards
-
-### Python Style
-- **Formatter**: Black (line length 88)
-- **Linter**: Flake8 + MyPy for type checking
-- **Import Style**: Absolute imports preferred
-- **Docstrings**: Google style for public APIs
-
-### Architecture Principles
-- **Separation of Concerns**: Clear layer boundaries
-- **Dependency Injection**: Use settings and configuration objects
-- **Error Handling**: Structured exceptions with context
-- **Logging**: Structured logging with structlog
-
-### Code Organization
-- **Modern Code**: Follow layered architecture in `src/cyris/`
-- **Legacy Code**: Maintain stability, avoid modifications unless critical
-- **Tests**: Mirror source structure in `tests/`
-
----
-
-## AI Usage Guidelines
-
-### Current Status — Key Gaps
-
-1. **Task Orchestration (CRITICAL)**
-   - Connect YAML `tasks` to real VM execution (e.g., user creation must actually happen)
-   - Must include **post-execution verification** to avoid false positives
-
-2. **SSH Key Injection / Authentication (HIGH)**
-   - Public keys must be injected at VM creation (cloud-init)
-   - Unified, configurable default credentials (password vs. key). No hardcoding
-
-3. **IP Address Sync (MEDIUM)**
-   - Align topology-assigned IPs and DHCP-assigned real IPs
-   - Use **exact VM name → IP mapping** (no fuzzy matches across ranges)
-
-4. **CLI Status Accuracy (LOW)**
-   - `cyris status` output must match backend discovery (IP / reachability / health)
-
-5. **End-to-End Verification Loop**
-   - Complete: **Create → Configure → Execute Tasks → Verify** with observable structured results
-
-### Where to Work — Code Map
-
-- **Service / Orchestration**: `src/cyris/services/orchestrator.py` - task dispatch, VM targeting, readiness, results
-- **Tools**: `ssh_manager.py`, `user_manager.py`, `vm_ip_manager.py` - SSH auth, user/permission tasks, IP discovery
-- **Infrastructure / Network**: `topology_manager.py` - IP assignment + reconciliation
-- **CLI**: Commands + Rich UI - ensure `status` reflects backend truth
-
-### Implementation Requirements
-
-1. **Precise VM Targeting**
-   - Store VM name → real IP mapping; no substring matching
-   - Write back discovered IPs to metadata (single source of truth)
-
-2. **SSH & Keys**
-   - Inject public key at creation
-   - Configurable auth (password or key)
-   - Unified retry/timeout strategy; detailed failure messages
-
-3. **Task Execution & Verification**
-   - Always validate after execution (exit code + evidence)
-   - Results must be **strongly typed** (`TaskResult`) with consistent access
-
-4. **CLI & Observability**
-   - `status` must show VM state, IP, reachability, and task summaries
-   - On errors, provide actionable next steps (e.g., bridge check, key injection)
-
-5. **Consistency & Recovery**
-   - If DHCP vs. topology mismatch: trust discovered IP, sync back
-   - Provide safe cleanup/destroy for partial failures
-
-### YAML Description — Contract
-
-```yaml
-host_settings:      # physical host
-guest_settings:     # VM template  
-clone_settings:     # cloned instances (hosts/guests/tasks)
+# Organized test directory
+tests/conftest.py                  # Shared fixtures
+tests/unit/test_*.py              # Unit tests
+tests/integration/                 # Service integration tests
+tests/e2e/                        # End-to-end tests
+tests/test_*.py                   # Mixed integration tests
 ```
 
-**Guidelines:**
-- Use modern field names (e.g., `gw_mgmt_addr`, `gw_account`)
-- Merge tasks from `clone_settings` into guest objects before execution
-- Maintain **stable guest identifiers** (VM name → IP → results)
-- `task_results` must include: `{vm_name, vm_ip, task_id, task_type, success, message, evidence}`
+### Test Execution
 
-### VM IP Discovery — Keep
+```bash
+# Run all tests (requires activated .venv)
+pytest
 
-Priority order: `topology → libvirt → virsh → arp → dhcp → bridge`
+# Root-level integration tests (real infrastructure)
+pytest test_kvm_auto_comprehensive.py -v
+pytest test_fixed_cyris_workflow.py -v
 
-- Must output a **single authoritative IP**
-- Sync to `ranges_metadata.json`
-- Provide diagnostics (method used, timestamp, confidence)
+# Organized test suites  
+pytest tests/unit/ -v
+pytest tests/integration/ -v
+pytest tests/e2e/ -v
 
-### Security Notes
+# With coverage (configured in pyproject.toml)
+pytest --cov=cyris --cov-report=html --cov-report=term-missing
 
-- Attack/emulation scripts are **for isolated training only**, never run in production
-- Cleanup scripts must ensure domains, bridges, and disks are fully removed
+# Run specific test patterns
+pytest -k "test_ssh" -v
+pytest -k "test_automation" -v
+
+# Single test file with maximum verbosity
+pytest tests/unit/test_entities.py -v -s
+```
+
+### Test Configuration
+
+Coverage automatically excludes legacy code:
+```toml
+[tool.coverage.run]
+omit = [
+    "*/main/*",        # Legacy main code
+    "*/instantiation/*", # Legacy scripts  
+    "*/cleanup/*"      # Legacy cleanup
+]
+```
+
+## Code Quality
+
+### Formatting and Linting
+
+```bash
+# Black formatting (excludes legacy directories)
+black src/ tests/
+
+# Type checking with MyPy (legacy excluded)
+mypy src/
+
+# Flake8 linting
+flake8 src/ tests/
+
+# Pre-commit hooks (if configured)
+pre-commit run --all-files
+```
+
+### Legacy Code Boundaries
+
+**Modern Code** (format with Black, type-check with MyPy):
+- `src/cyris/` - All modern architecture layers
+- `tests/` - Test code
+
+**Legacy Code** (maintain as-is, minimal changes):
+- `legacy/main/` - Original implementation
+- `instantiation/` - Attack emulation scripts
+- `cleanup/` - Cleanup utilities
+
+## Critical Implementation Areas
+
+### 1. Task Orchestration (HIGH PRIORITY)
+**Location**: `src/cyris/services/orchestrator.py`
+- Connect YAML `tasks` to real VM execution
+- Must include post-execution verification
+- Results must be strongly typed (`TaskResult`)
+
+### 2. SSH Key Management
+**Location**: `src/cyris/tools/ssh_manager.py`
+- Public key injection at VM creation (cloud-init)
+- Unified retry/timeout strategy
+- Configurable authentication (password vs key)
+
+### 3. IP Address Synchronization
+**Location**: `src/cyris/tools/vm_ip_manager.py`, `src/cyris/infrastructure/network/topology_manager.py`
+- Exact VM name → IP mapping (no fuzzy matching)
+- Priority: topology → libvirt → virsh → arp → dhcp → bridge
+- Sync discovered IPs to `ranges_metadata.json`
+
+### 4. CLI Status Accuracy
+**Location**: `src/cyris/cli/commands/`
+- `cyris status` must show real backend state
+- Display VM state, IP, reachability, task summaries
+- Provide actionable error messages
+
+## YAML Configuration Contract
+
+```yaml
+host_settings:      # Physical host configuration
+guest_settings:     # VM template definitions
+clone_settings:     # Cloned instances with tasks
+```
+
+**Key Requirements**:
+- Use modern field names (`gw_mgmt_addr`, `gw_account`)
+- Merge tasks from `clone_settings` into guest objects
+- Maintain stable guest identifiers (VM name → IP → results)
+- Task results format: `{vm_name, vm_ip, task_id, task_type, success, message, evidence}`
+
+## Entry Points and Key Files
+
+### Primary Entry Points
+- `/home/ubuntu/cyris/cyris` - Unified CLI with routing logic
+- `/home/ubuntu/cyris/src/cyris/cli/main.py` - Modern CLI implementation
+- `/home/ubuntu/cyris/legacy/main/cyris.py` - Legacy compatibility
+
+### Configuration
+- `/home/ubuntu/cyris/pyproject.toml` - Poetry configuration, test settings
+- `/home/ubuntu/cyris/src/cyris/config/settings.py` - Modern configuration
+- `/home/ubuntu/cyris/CONFIG` - Legacy configuration format
+
+### Key Implementation Files
+- `/home/ubuntu/cyris/src/cyris/services/orchestrator.py` - Core orchestration logic
+- `/home/ubuntu/cyris/src/cyris/tools/ssh_manager.py` - SSH operations
+- `/home/ubuntu/cyris/src/cyris/tools/vm_ip_manager.py` - IP discovery and management
+- `/home/ubuntu/cyris/src/cyris/infrastructure/providers/base_provider.py` - Provider abstraction
+
+## Security Notes
+
+- Attack/emulation scripts are **for isolated training only**
+- Never run attack scripts in production environments
+- Cleanup scripts must fully remove domains, bridges, and disks
+- SSH keys must be properly managed and rotated
+
+## Common Development Tasks
+
+### Adding a New CLI Command
+1. Add command in `src/cyris/cli/commands/`
+2. Register in `src/cyris/cli/main.py`
+3. Add tests in `tests/unit/test_cli_commands.py`
+4. Update help documentation
+
+### Adding a New Provider
+1. Implement in `src/cyris/infrastructure/providers/`
+2. Inherit from `base_provider.BaseProvider`
+3. Add provider tests in `tests/integration/`
+4. Register provider in configuration
+
+### Running End-to-End Tests
+1. Ensure libvirt/KVM is properly configured
+2. Run: `pytest test_kvm_auto_comprehensive.py -v -s`
+3. Check `debug_main.log` for routing issues
+4. Verify VMs are properly cleaned up after tests
+
+### Debugging CLI Issues
+1. Check `debug_main.log` for entry script routing
+2. Verify virtual environment activation
+3. Test direct CLI import: `python -c "from cyris.cli.main import main; main()"`
+4. Check Poetry environment: `poetry run ./cyris --help`
 
 ---
 
-## Change Log (Changelog)
-
-### 2025-09-01
-- **[INITIALIZATION]** Updated CLAUDE.md with comprehensive module structure and navigation
-- **[ARCHITECTURE]** Added Mermaid module structure diagram for improved project visualization  
-- **[DOCUMENTATION]** Enhanced module index with detailed responsibility mapping and coverage status
-- 执行任何python代码前，保证激活了.venv的环境。
+**Note**: Always ensure `.venv` is activated before running any Python operations. The project requires specific dependency versions and path configurations that are managed by the virtual environment.
