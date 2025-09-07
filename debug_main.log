@@ -15700,3 +15700,64 @@ sudo: a password is required...
 [DEBUG] fail_step(error): Unexpected error: Failed to create guests for range test-auto-ubuntu
 [DEBUG] progress_manager.complete() called
 [DEBUG] handler.execute() returned: False
+
+[DEBUG] main() started with sys.argv: ['./cyris', '--help']
+[DEBUG] Detected modern command: --help
+[DEBUG] Args: ['--help']
+[DEBUG] Starting modern CLI try block
+[DEBUG] About to import from /home/ubuntu/cyris/src
+[DEBUG] Successfully imported CLI main
+[DEBUG] About to call cli_main with argv: ['cyris', '--help']
+[DEBUG] CLI main() called with args: None
+[DEBUG] About to call cli()...
+
+[DEBUG] main() started with sys.argv: ['./cyris', '--help']
+[DEBUG] Detected modern command: --help
+[DEBUG] Args: ['--help']
+[DEBUG] Starting modern CLI try block
+[DEBUG] About to import from /home/ubuntu/cyris/src
+[DEBUG] Successfully imported CLI main
+[DEBUG] About to call cli_main with argv: ['cyris', '--help']
+[DEBUG] CLI main() called with args: None
+[DEBUG] About to call cli()...
+
+[DEBUG] main() started with sys.argv: ['./cyris', 'create', 'test-kvm-auto-ubuntu.yml']
+[DEBUG] Detected modern command: create
+[DEBUG] Args: ['create', 'test-kvm-auto-ubuntu.yml']
+[DEBUG] Starting modern CLI try block
+[DEBUG] About to import from /home/ubuntu/cyris/src
+[DEBUG] Successfully imported CLI main
+[DEBUG] About to call cli_main with argv: ['cyris', 'create', 'test-kvm-auto-ubuntu.yml']
+[DEBUG] CLI main() called with args: None
+[DEBUG] About to call cli()...
+[DEBUG] cli() called with config=None, verbose=False, version=False
+[DEBUG] Initializing context
+[DEBUG] Loading configuration
+[DEBUG] Looking for default config files
+[DEBUG] Checking config file: /home/ubuntu/cyris/config.yml
+[DEBUG] Found config file: /home/ubuntu/cyris/config.yml, parsing...
+[DEBUG] Configuration loaded successfully
+[DEBUG] cli() function completed successfully
+[DEBUG] create() called with file=test-kvm-auto-ubuntu.yml, dry_run=False, build_only=False, skip_builder=False
+[DEBUG] Imported CreateCommandHandler
+[DEBUG] Got config and verbose, creating handler
+[DEBUG] About to call handler.execute()
+[DEBUG] _run_pre_creation_checks() START
+[DEBUG] About to create Rich progress manager (using simple fallback)
+[DEBUG] Rich progress manager created
+[DEBUG] About to enter progress context
+[DEBUG] Entered progress context, about to enter live context
+[DEBUG] Entered live context, starting try block
+[DEBUG] About to parse YAML and import config parser
+[DEBUG] Imports completed, creating parser instance
+[DEBUG] Parser created, about to parse file
+[DEBUG] File parsed successfully, continuing with checks
+[DEBUG] About to call check_progress.start_step('config')
+[DEBUG] start_step('config') completed
+[DEBUG] About to access config.guests
+[DEBUG] traditional_kvm_guests created: 0
+[DEBUG] kvm_auto_guests created: 1
+[DEBUG] About to log guest counts to progress
+[DEBUG] Logged traditional KVM guests count
+[DEBUG] Logged kvm-auto guests count
+[DEBUG] complete_step('config') called
