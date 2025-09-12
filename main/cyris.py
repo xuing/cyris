@@ -40,6 +40,8 @@ from aws_info import edit_tags, get_info
 # Set global logging level
 #logging.basicConfig(level=logging.DEBUG, format='* %(levelname)s: %(filename)s: %(message)s')
 logging.basicConfig(format='* %(levelname)s: %(filename)s: %(message)s')
+LOGGER = logging.getLogger()
+LOGGER.setLevel(logging.INFO)
 
 
 #############################################################################
@@ -131,7 +133,7 @@ class CyberRangeCreation():
                 self.usage()
                 quit(-1)
             elif opt in ("-d", "--destroy-on-error"):
-                print("* INFO: cyris: In case of error, will try to destroy cyber range.")
+                LOGGER.info("cyris: In case of error, will try to destroy cyber range.")
                 DESTROY_ON_ERROR = True;
             elif opt in ("-v", "--verbose"):
                 DEBUG = True
@@ -139,7 +141,7 @@ class CyberRangeCreation():
 
         # Then with command-line arguments
         if len(args)<2:
-            print("* ERROR: cyris: Not enough command-line arguments.")
+            LOGGER.error("cyris: Not enough command-line arguments.")
             self.usage()
             quit(-1)
 
@@ -151,7 +153,7 @@ class CyberRangeCreation():
         print("#########################################################################")
 
         # Get global parameters from CONFIG file.
-        print("* INFO: cyris: Parse the configuration file.")
+        LOGGER.info("cyris: Parse the configuration file.")
         ABS_PATH, CR_DIR, GW_MODE, GW_ACCOUNT, GW_MGMT_ADDR, GW_INSIDE_ADDR, USER_EMAIL = parse_config.parse_config(args[1])
         # Check that parse was successful
         if ABS_PATH == False:
@@ -202,7 +204,7 @@ class CyberRangeCreation():
 
         if GW_MODE:
             if GW_ACCOUNT is None or GW_MGMT_ADDR is None or GW_INSIDE_ADDR is None:
-                print("* ERROR: cyris: If GW_MODE is enabled in the config file, then GW_ACCOUNT, GW_MGMT_ADDR and")
+                LOGGER.error("cyris: If GW_MODE is enabled in the config file, then GW_ACCOUNT, GW_MGMT_ADDR and")
                 print("         GW_INSIDE_ADDR must also be assigned valid values.")
 
                 self.handle_error()
@@ -251,7 +253,7 @@ class CyberRangeCreation():
         return_value = os.system("{0} > /dev/null 2>&1".format(command))
         exit_status = os.WEXITSTATUS(return_value)
         if exit_status != 0:
-            print("* ERROR: cyris: Passwordless sudo execution is not enabled.")
+            LOGGER.error("cyris: Passwordless sudo execution is not enabled.")
             self.handle_error()
             quit(-1)
 
@@ -319,7 +321,7 @@ class CyberRangeCreation():
                         fcntl.flock(f, fcntl.LOCK_UN)
                         return last_bit
         except IOError as e:
-            print("* ERROR: cyris: IOError:", e)
+            LOGGER.error("cyris: IOError:", e)
             self.handle_error()
             quit(-1)
     #########################################################################
@@ -330,7 +332,7 @@ class CyberRangeCreation():
             with open(filename, "r") as f:
                 doc = yaml.load(f, Loader=yaml.SafeLoader)
         except yaml.YAMLError as exc:
-            print("* ERROR: cyris: Issue with the cyber range description file: ", exc)
+            LOGGER.error("cyris: Issue with the cyber range description file: ", exc)
             return
 
         # for each playbook in the training description
@@ -708,7 +710,7 @@ class CyberRangeCreation():
         exit_status = os.WEXITSTATUS(return_value)
 
         if exit_status != 0:
-            print("* ERROR: cyris: Issue when executing command (exit status = {}):".format(exit_status))
+            LOGGER.error("cyris: Issue when executing command (exit status = {}):".format(exit_status))
             print("  {}".format(command))
             print("  Check the log file for details: {}".format(self.creation_log_file))
             self.handle_error()
@@ -799,7 +801,7 @@ class CyberRangeCreation():
                 return
 
         # This point is only reached on total timeout expiration or error
-        print("* ERROR: cyris: Cannot connect to VM.")
+        LOGGER.error("cyris: Cannot connect to VM.")
         if DEBUG:
             print(f"  Error on connect: {stderr}")
         print(f"  Check the log file for details: {self.creation_log_file}")
@@ -922,7 +924,7 @@ class CyberRangeCreation():
                                                    RANGE_NOTIFICATION_FILE, RANGE_DETAILS_FILE)
             if DEBUG:
                 print(command)
-            print("* INFO: cyris: Send email notification.")
+            LOGGER.info("cyris: Send email notification.")
             self.os_system(self.creation_log_file, command)
 
     #########################################################################
@@ -985,7 +987,7 @@ class CyberRangeCreation():
                                                    RANGE_NOTIFICATION_FILE, RANGE_DETAILS_FILE)
             if DEBUG:
                 print(command)
-            print("* INFO: cyris: Send email notification.")
+            LOGGER.info("cyris: Send email notification.")
             self.os_system(self.creation_log_file, command)
 
 
@@ -1033,11 +1035,11 @@ class CyberRangeCreation():
     def main(self):
 
         # Check prerequisites
-        print("* INFO: cyris: Verify that prerequisite conditions are met.")
+        LOGGER.info("cyris: Verify that prerequisite conditions are met.")
         self.check_prerequsites()
 
         # Parse description
-        print("* INFO: cyris: Check and parse the cyber range description.")
+        LOGGER.info("cyris: Check and parse the cyber range description.")
 
         filename = self.training_description
         if check_description(self.training_description, CR_DIR) == False:
@@ -1058,7 +1060,7 @@ class CyberRangeCreation():
         #####################################################################
         # Preparation work.
 
-        print("* INFO: cyris: Perform the initial setup.")
+        LOGGER.info("cyris: Perform the initial setup.")
 
         ####### Set up names for config files #############
         self.set_config_file_name()
@@ -1113,7 +1115,7 @@ class CyberRangeCreation():
 
         exit_status = os.WEXITSTATUS(return_value)
         if exit_status != 0:
-            print("* ERROR: cyris: Issue when creating the directory '{}'".format(self.directory))
+            LOGGER.error("cyris: Issue when creating the directory '{}'".format(self.directory))
             print("  A cyber range with the same id may already exist (or authentication error).")
             is_fatal = True
             self.handle_error(is_fatal)
@@ -1129,23 +1131,23 @@ class CyberRangeCreation():
         # Deal with KVM
         if basevm_type == "kvm":
             ######## Copy base images to the directory ##########
-            print("* INFO: cyris: Copy the base images.")
+            LOGGER.info("cyris: Copy the base images.")
             command = self.copy_base_images()
             if DEBUG:
                 print(command)
             self.os_system(self.creation_log_file, command)
 
             ######## Start up base images ##########
-            print("* INFO: cyris: Start the base VMs.")
+            LOGGER.info("cyris: Start the base VMs.")
             for guest in self.guests:
                 command = BaseImageLaunch(guest.getBasevmConfigFile(), guest.getBasevmName(), ABS_PATH).command()
                 self.os_system(self.creation_log_file, command)
 
-            print("* INFO: cyris: Check that the base VMs are up.")
+            LOGGER.info("cyris: Check that the base VMs are up.")
             self.check_ssh_connectivity_to_basevms()
 
             ######## SSH-copy-id and add default gw #########
-            print("* INFO: cyris: Prepare the base VMs for setup.")
+            LOGGER.info("cyris: Prepare the base VMs for setup.")
             for guest in self.guests:
                 # ssh-cp-id and setup hostname to basevm
                 command = SSHKeygenHostname(guest.getBasevmAddr(), guest.getRootPasswd(), guest.getGuestId(), MSTNODE_ACCOUNT, ABS_PATH, guest.basevm_os_type).command()
@@ -1173,7 +1175,7 @@ class CyberRangeCreation():
 
         # Deal with AWS
         elif basevm_type == "aws":
-            print("* INFO: cyris_aws: Base VM type is AWS")
+            LOGGER.info("cyris_aws: Base VM type is AWS")
             client = boto3.client('ec2', region_name='us-east-1')
 
             # create a security group
@@ -1199,17 +1201,17 @@ class CyberRangeCreation():
             ins_dic = {}
             for guest in self.guests:
                 basevm_id = guest.getBasevmName()
-                print("* INFO: cyris_aws: Start Create EC2 Instance as base VMs for guest '{0}'... ".format(basevm_id))
+                LOGGER.info("cyris_aws: Start Create EC2 Instance as base VMs for guest '{0}'... ".format(basevm_id))
                 numOfIns = 1
                 ins_ids = create_instances(client, gNames, basevm_id, numOfIns, guest.basevm_os_type)
                 ins_dic[basevm_id] = ins_ids
 
             ######## check the state whether is running ########
-            print("* INFO: cyris_aws: Checking whether the Status of Instances are running...")
+            LOGGER.info("cyris_aws: Checking whether the Status of Instances are running...")
             for guest in self.guests:
                 basevm_id = guest.getBasevmName()
                 ins_ids =  ins_dic[basevm_id]
-                print("* INFO: cyris_aws: - Checking guest '{0}' EC2 Instance...".format(basevm_id))
+                LOGGER.info("cyris_aws: - Checking guest '{0}' EC2 Instance...".format(basevm_id))
                 for i in range(20):
                     res = describe_instance_status(client, ins_ids)
                     if DEBUG: print("* DEBUG: cyris_aws:   Guest '{0}' EC2 Instance => {1}".format(basevm_id, res))
@@ -1217,7 +1219,7 @@ class CyberRangeCreation():
                     time.sleep(5)
 
             ######## get IP ########
-            print("* INFO: cyris: Check that the base VMs are up.")
+            LOGGER.info("cyris: Check that the base VMs are up.")
             for guest in self.guests:
                 basevm_id = guest.getBasevmName()
                 ipAddr = publicIp_get(client,ins_dic[basevm_id])
@@ -1236,14 +1238,14 @@ class CyberRangeCreation():
 
         #####################################################################
         # Cyber range settings commands
-        print("* INFO: cyris: Configure the base VMs for training.")
+        LOGGER.info("cyris: Configure the base VMs for training.")
         dict_guest_cmd_bfcln, dict_guest_prg_afcln = self.cyberrange_instantiation_commands(basevm_type)
         for guest in self.guests:
-            print("* INFO: cyris: - Configure guest: ", guest.getGuestId())
+            LOGGER.info("cyris: - Configure guest: ", guest.getGuestId())
             # cyber range settings commands
             commands = dict_guest_cmd_bfcln[guest.getGuestId()]
             for command in commands:
-                print("* INFO: cyris:   + Action: ", command.getDescription())
+                LOGGER.info("cyris:   + Action: ", command.getDescription())
                 with open(self.creation_log_file, "a") as myfile:
                     if type(command.getCommand()) is list:
                         for i in command.getCommand():
@@ -1288,7 +1290,7 @@ class CyberRangeCreation():
             self.clone_vm_commands(dict_guest_prg_afcln, basevm_type)
 
             ######## shutdown base images ###########
-            print("* INFO: cyris: Shut down the base VMs before cloning.")
+            LOGGER.info("cyris: Shut down the base VMs before cloning.")
             shutdown_command = self.shut_down_baseimg()
             self.os_system(self.creation_log_file, shutdown_command)
 
@@ -1302,7 +1304,7 @@ class CyberRangeCreation():
                 if DEBUG: print("* DEBUG: cyris:   Base VM '{0}' was undefined => CONTINUE".format(guest.getBasevmName()))
 
             ######## parallel distribute base images to hosts ###########
-            print("* INFO: cyris: Distribute the base images for cloning.")
+            LOGGER.info("cyris: Distribute the base images for cloning.")
             # Calculate distribute base images time
             if TIME_MEASURE == True:
                 start_scp = time.time()
@@ -1326,7 +1328,7 @@ class CyberRangeCreation():
                 done_scp = time.time()
 
             ######## parallel do the clone phase on hosts ########
-            print("* INFO: cyris: Start the cloned base images.")
+            LOGGER.info("cyris: Start the cloned base images.")
             # Calculate parallel clone phase
             if TIME_MEASURE == True:
                 start_parallel_clone = time.time()
@@ -1343,11 +1345,11 @@ class CyberRangeCreation():
             self.os_system(self.creation_log_file, "{0} \"{1}\"".format(parallel_ssh_command, clone_command))
 
             ######## check if virtual machines are up #########
-            print("* INFO: cyris: Wait for the cloned VMs to start.")
+            LOGGER.info("cyris: Wait for the cloned VMs to start.")
             self.check_ssh_connectivity_to_cr()
 
-            print("* INFO: cyris: Perform post-cloning setup of the VMs.")
-            print("* INFO: cyris: - Configure network settings")
+            LOGGER.info("cyris: Perform post-cloning setup of the VMs.")
+            LOGGER.info("cyris: - Configure network settings")
 
             ######## set up forwarding rules for routing ########
             fw_command = "chmod +x {0}; {0};".format(self.setup_fwrule_file)
@@ -1382,14 +1384,14 @@ class CyberRangeCreation():
                     break
             # If after clone execution is needed, proceed
             if after_clone_needed:
-                print("* INFO: cyris: - Execute programs after cloning")
+                LOGGER.info("cyris: - Execute programs after cloning")
                 # Install command.
                 install_command = "chmod +x {0}; {0};".format(self.install_prg_afcln_file)
                 if DEBUG: print(install_command)
                 if DEBUG: print("* DEBUG: cyris:  + Run script ", (self.install_prg_afcln_file))
                 for guest in self.guests:
                     program_names = [item.program for item in dict_guest_prg_afcln[guest.getGuestId()]]
-                    print("* INFO: cyris:   + {}: {}".format(guest.getGuestId(), " ".join(list(map(str, program_names)))))
+                    LOGGER.info("cyris:   + {}: {}".format(guest.getGuestId(), " ".join(list(map(str, program_names)))))
                 self.os_system(self.creation_log_file, "{0} \"{1}\"".format(parallel_ssh_command, install_command))
                 if DEBUG: print("Post-cloning programs are installed")
             else:
@@ -1400,7 +1402,7 @@ class CyberRangeCreation():
                 for instance in host.getInstanceList():
                     for clone_guest in instance.getCloneGuestList():
                         if clone_guest.getOsType().find("windows")!=-1:
-                            print("* INFO: logout root account for windows")
+                            LOGGER.info("logout root account for windows")
                             command = "ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no root@{0} tsdiscon 1".format(clone_guest.getNicAddrDict()["eth0"])
                             self.os_system(self.creation_log_file, command)
 
@@ -1439,7 +1441,7 @@ class CyberRangeCreation():
 
             ######## Send detailed information to users ##############
             # If the status is success, then send notification to user.
-            print("* INFO: cyris: Prepare range creation notification and details.")
+            LOGGER.info("cyris: Prepare range creation notification and details.")
             self.send_email("user")
 
             #####################################################################
@@ -1468,18 +1470,18 @@ class CyberRangeCreation():
         elif basevm_type == "aws":
 
             ########## shutdown base images ##########
-            print("* INFO: cyris_aws: Stop the EC2 Instances before cloning.")
+            LOGGER.info("cyris_aws: Stop the EC2 Instances before cloning.")
             stop_ins_ids = []
             for k,v in ins_dic.items():
                 stop_ins_ids += v
                 stop_instances(client, stop_ins_ids)
 
             ########## check whether stop completed for all base VMs before distributing images ##########
-            print("* INFO: cyris_aws: Checking whether stop completed for all EC2 Instances...")
+            LOGGER.info("cyris_aws: Checking whether stop completed for all EC2 Instances...")
             for guest in self.guests:
                 basevm_id = guest.getBasevmName()
                 ins_ids =  ins_dic[basevm_id]
-                print("* INFO: cyris_aws: - Checking guest '{0}' base VM...".format(basevm_id))
+                LOGGER.info("cyris_aws: - Checking guest '{0}' base VM...".format(basevm_id))
                 for i in range(20):
                     res = describe_instance_status(client, ins_ids)
                     if DEBUG: print("* DEBUG: cyris_aws:   Base VM '{0}' => '{1}'".format(guest.getBasevmName(), res))
@@ -1487,7 +1489,7 @@ class CyberRangeCreation():
                     time.sleep(5)
 
             ########## parallel create AMI images on AWS ##########
-            print("* INFO: cyris_aws: Create the AMI images for cloning.")
+            LOGGER.info("cyris_aws: Create the AMI images for cloning.")
             if TIME_MEASURE == True:
                 start_scp = time.time()
 
@@ -1498,7 +1500,7 @@ class CyberRangeCreation():
                 img_dic[ami_name] = img_id
 
             ########## check whether the AMI images are available ##########
-            print("* INFO: cyris_aws: Checking whether the created AMI images are available...")
+            LOGGER.info("cyris_aws: Checking whether the created AMI images are available...")
             for guest in self.guests:
                 img_id = img_dic[guest.getBasevmName()]
                 for i in range(40):
@@ -1511,7 +1513,7 @@ class CyberRangeCreation():
                 done_scp = time.time()
 
             ########## parallel do the clone phase on AWS ##########
-            print("* INFO: cyris_aws: Start the cloned Instances with created AMI images.")
+            LOGGER.info("cyris_aws: Start the cloned Instances with created AMI images.")
             if TIME_MEASURE == True:
                 start_parallel_clone = time.time()
 
@@ -1530,11 +1532,11 @@ class CyberRangeCreation():
                         ins_dic[cloned_name] = ins_ids
 
             ########## check if EC2 Instances are running ##########
-            print("* INFO: cyris_aws: Wait for the cloned instances to start.")
-            print("* INFO: cyris_aws: Checking whether the cloned instances are running...")
+            LOGGER.info("cyris_aws: Wait for the cloned instances to start.")
+            LOGGER.info("cyris_aws: Checking whether the cloned instances are running...")
             for host in self.clone_setting.getCloneHostList():
                 for instance in host.getInstanceList():
-                    print("* INFO: cyris_aws: - Checking instance #{0}...".format(instance.getIndex()))
+                    LOGGER.info("cyris_aws: - Checking instance #{0}...".format(instance.getIndex()))
                     for clone_guest in instance.getCloneGuestList():
                         #print "* DEBUG: cyris_aws: - Checking cloned guest '{0}'...".format(clone_guest.getGuestId())
                         for i in range(20):
@@ -1552,7 +1554,7 @@ class CyberRangeCreation():
 
             ######## Send detailed information to users ##############
             # If the status is success, then send notification to user.
-            print("* INFO: cyris: Prepare range creation notification and details.")
+            LOGGER.info("cyris: Prepare range creation notification and details.")
             self.aws_send_email("user", key_name)
 
             # Write yaml file with detailed information of the created cyber range
@@ -1580,13 +1582,13 @@ class CyberRangeCreation():
                     fcntl.flock(cr_log, fcntl.LOCK_UN)
 
         else:
-            print('* ERROR: cyris: Unsupported base VM type')
+            LOGGER.error('cyris: Unsupported base VM type')
 
 
         #####################################################################
         # Output summary
         print("-------------------------------------------------------------------------")
-        print("* INFO: cyris: Cyber range creation status: SUCCESS")
+        LOGGER.info("cyris: Cyber range creation status: SUCCESS")
         if TIME_MEASURE == True:
             print("  Total processing time: %.2f s" % (done_cloning - start))
             print("  Instantiation details: %s" % (self.range_details_filename))
@@ -1611,7 +1613,7 @@ class CyberRangeCreation():
                         cr_log.write(self.global_log_message)
                         fcntl.flock(cr_log, fcntl.LOCK_UN)
             except IOError as e:
-                print("* ERROR: cyris: IOError:", e)
+                LOGGER.error("cyris: IOError:", e)
 
         # Only run the command below if the running ipaddress file exists
         if not is_fatal and os.path.isfile(self.cur_running_ipaddr_file):
@@ -1623,7 +1625,7 @@ class CyberRangeCreation():
 
         # Destroy cyber range if needed
         if not is_fatal and DESTROY_ON_ERROR:
-            print("* INFO: cyris: Execution error => try to destroy cyber range and clean up.")
+            LOGGER.info("cyris: Execution error => try to destroy cyber range and clean up.")
 
             # Try to destroy the cyber range by either executing the
             # whole-controlled-destruction script if it's been created,
@@ -1636,7 +1638,7 @@ class CyberRangeCreation():
 
         # Display creation status
         print("-------------------------------------------------------------------------")
-        print("* INFO: cyris: Cyber range creation status: FAILURE")
+        LOGGER.info("cyris: Cyber range creation status: FAILURE")
         if not DESTROY_ON_ERROR and self.creation_log_file:
             print("  Check the log file for details: %s" % (self.creation_log_file))
         print("-------------------------------------------------------------------------")
