@@ -11,7 +11,7 @@ sudo apt-get install qemu-kvm libvirt-bin ubuntu-vm-builder bridge-utils
 sudo apt-get install virt-manager
 
 # 3. Install pip.
-sudo apt-get install python-pip
+sudo apt-get install python3-pip
 
 # 4. Install python-paramiko.
 sudo apt-get install python3-paramiko
@@ -29,10 +29,10 @@ sudo apt-get install sshpass
 sudo apt-get install pssh
 
 # 9. Install yaml for python.
-sudo apt-get install python-yaml
+sudo apt-get install python3-yaml
 
 # 10. Install scapy for python.
-sudo apt-get install python-scapy
+sudo apt-get install python3-scapy
 
 # 11. Install sendemail
 sudo apt-get install sendemail

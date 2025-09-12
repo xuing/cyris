@@ -7,7 +7,7 @@ python3 -c "import paramiko" > /dev/null 2>&1;
 if [ $? -eq 1 ]
 then
     #echo "* DEBUG: paramiko is not yet installed"
-    sudo -S apt-get install python-paramiko
+    sudo -S apt-get install python3-paramiko
 else
     #echo "* DEBUG: paramiko is already installed"
     :
