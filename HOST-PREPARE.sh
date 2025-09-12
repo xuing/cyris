@@ -42,3 +42,13 @@ ssh-copy-id localhost
 
 # 13. Other Python 3 packages
 sudo pip3 install python3-psutil
+
+# 14. Install libvirt for python3
+sudo apt-get install -y python3-libvirt
+
+# Create python virtual environment
+sudo apt-get install -y python3-venv
+python3 -m venv --system-site-packages ~/.venv
+source ~/.venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt

@@ -8,6 +8,8 @@
 import time
 import os
 import subprocess
+
+import libvirt
 import yaml
 import sys
 from collections import defaultdict
@@ -93,6 +95,15 @@ DEFAULT_PACKAGE_MANAGER = "yum"
 
 INSTANTIATION_DIR = "instantiation"
 creation_datetime = -1
+
+# Libvirt client
+# export LIBVIRT_URI=qemu+ssh://user@remote-host/system (for system-wide) or /session (for user session)
+LIBVIRT_URI = "qemu:///session"
+VIRT_CLIENT = libvirt.open(LIBVIRT_URI)
+if VIRT_CLIENT == None:
+    LOGGER.error("cyris: Failed to open connection to the hypervisor")
+    quit(-1)
+
 
 #############################################################################
 class CyberRangeCreation():
