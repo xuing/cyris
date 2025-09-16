@@ -75,11 +75,10 @@ def storage_cleanup(range_id, cyris_path, range_path):
     subprocess.call(["rm", "-f", pscp_filename])
     subprocess.call(["rm", "-f", pssh_filename])
 
-# Forceful cleanup via KVM virsh
+# Forceful cleanup via LIBVIRT
 def kvm_cleanup(range_id):
     """
     Forceful cleanup of KVM domains that contain '_cr{range_id}_' in their names.
-    Uses VirtClient instead of calling virsh via subprocess.
     """
 
     range_string = f"_cr{range_id}_"
@@ -149,7 +148,7 @@ def main(argv):
     logging.info("Use scripts generated when the range was created.")
     did_destroy = range_destruction(range_id, range_path)
 
-    # Then we do cleanup via KVM virsh in case normal destruction failed
+    # Then we do cleanup in case normal destruction failed
     if not did_destroy:
         logging.info("Script execution failed => do forceful cleanup.")
         logging.debug("- Clean up storage")
