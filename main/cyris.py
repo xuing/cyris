@@ -9,7 +9,6 @@ import time
 import os
 import subprocess
 
-import libvirt
 import yaml
 import sys
 from collections import defaultdict
@@ -22,6 +21,7 @@ import logging
 import re
 import urllib.parse
 from cyvar import CyVarBase, CyVarForm, CyVarBox
+from main.config import LIBVIRT_URI
 
 # Internal imports.
 from modules import SSHKeygenHostname, EmulateAttacks, ManageUsers, InstallTools, BaseImageLaunch, EmulateMalware, GenerateTrafficCaptureFiles, ModifyRuleset, CopyContent, ExecuteProgram
@@ -39,9 +39,11 @@ from aws_instances import create_instances, describe_instance_status, stop_insta
 from aws_image import create_img, describe_image
 from aws_info import edit_tags, get_info
 
+from virt_client import VirtClient
+
 # Set global logging level
 #logging.basicConfig(level=logging.DEBUG, format='* %(levelname)s: %(filename)s: %(message)s')
-logging.basicConfig(format='* %(levelname)s: %(filename)s: %(message)s')
+logging.basicConfig(level=logging.DEBUG, format="%(levelname)s: %(message)s")
 LOGGER = logging.getLogger()
 LOGGER.setLevel(logging.INFO)
 
@@ -97,12 +99,7 @@ INSTANTIATION_DIR = "instantiation"
 creation_datetime = -1
 
 # Libvirt client
-# export LIBVIRT_URI=qemu+ssh://user@remote-host/system (for system-wide) or /session (for user session)
-LIBVIRT_URI = "qemu:///session"
-VIRT_CLIENT = libvirt.open(LIBVIRT_URI)
-if VIRT_CLIENT == None:
-    LOGGER.error("cyris: Failed to open connection to the hypervisor")
-    quit(-1)
+VIRT = VirtClient(LIBVIRT_URI)
 
 
 #############################################################################
@@ -682,8 +679,7 @@ class CyberRangeCreation():
     def shut_down_baseimg(self):
         shutdown_command = ""
         for guest in self.guests:
-            shutdown_command += "virsh --quiet shutdown {0} > /dev/null;".format(guest.getBasevmName())
-            shutdown_command += "virsh --quiet undefine {0} > /dev/null;".format(guest.getBasevmName())
+            VIRT.shutdown_then_undefine(guest.getBasevmName())
             # Only run the command below if the running ipaddress file exists
             if os.path.isfile(self.cur_running_ipaddr_file):
                 shutdown_command += "sed -i '/{0}/d' {1};".format(guest.getAddrLastBit(), self.cur_running_ipaddr_file)
@@ -804,9 +800,9 @@ class CyberRangeCreation():
 
             # Check whether CHECK_SSH_CONNECTIVITY_INDICATOR string can be found
             if CHECK_SSH_CONNECTIVITY_INDICATOR.encode("utf-8") not in stderr:
-                if DEBUG: print("* DEBUG: cyris:       Check SSH connectivity to {0} => FAILURE".format(if_addr))
+                LOGGER.debug("cyris:       Check SSH connectivity to {0} => FAILURE".format(if_addr))
             else:
-                if DEBUG: print("* DEBUG: cyris:       Check SSH connectivity to {0} => SUCCESS".format(if_addr))
+                LOGGER.debug("cyris:       Check SSH connectivity to {0} => SUCCESS".format(if_addr))
                 # Additional sleep seems to be required before successfully connecting
                 time.sleep(CHECK_SSH_TIMEOUT_ONCE)
                 return
@@ -822,12 +818,12 @@ class CyberRangeCreation():
     #########################################################################
     # Check whether all base VMs can be accessed via SSH
     def check_ssh_connectivity_to_basevms(self):
-        if DEBUG: print("* DEBUG: cyris: Checking SSH connectivity for base VMs...")
+        LOGGER.debug("cyris: Checking SSH connectivity for base VMs...")
 
         # Loop over all guests
         for guest in self.guests:
 
-            if DEBUG: print("* DEBUG: cyris: - Checking base VM for guest '{0}' ({1})...".format(guest.getGuestId(), guest.getBasevmAddr()))
+            LOGGER.debug("cyris: - Checking base VM for guest '{0}' ({1})...".format(guest.getGuestId(), guest.getBasevmAddr()))
 
             # Get interface address for this guest from address list
             if_addr = guest.getBasevmAddr()
@@ -835,7 +831,7 @@ class CyberRangeCreation():
             # Build command for checking SSH connectivity
             OPTIONS = "-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o PasswordAuthentication=no -o ConnectTimeout={0}".format(CHECK_SSH_TIMEOUT_ONCE)
             check_command = "ssh {0} {1} ls".format(OPTIONS, if_addr)
-            if DEBUG: print("* DEBUG: cyris:       Command: {0}".format(check_command))
+            LOGGER.debug("cyris:       Command: {0}".format(check_command))
 
             # Call function that does the actual check
             self.check_ssh_connectivity(check_command, if_addr)
@@ -843,22 +839,22 @@ class CyberRangeCreation():
     #########################################################################
     # Check whether all cloned machines in the cyber range can be accessed via SSH
     def check_ssh_connectivity_to_cr(self):
-        if DEBUG: print("* DEBUG: cyris: Checking SSH connectivity for cyber range...")
+        LOGGER.debug("cyris: Checking SSH connectivity for cyber range...")
 
         # Loop over all hosts
         for host in self.clone_setting.getCloneHostList():
 
-            if DEBUG: print("* DEBUG: cyris: - Checking instances on host '{0}' ({1})...".format(host.getHostId(), host.getMgmtAddr()))
+            LOGGER.debug("cyris: - Checking instances on host '{0}' ({1})...".format(host.getHostId(), host.getMgmtAddr()))
 
             # Loop over all instances on a host
             for instance in host.getInstanceList():
 
-                if DEBUG: print("* DEBUG: cyris:   + Checking instance #{0}...".format(instance.getIndex()))
+                LOGGER.debug("cyris:   + Checking instance #{0}...".format(instance.getIndex()))
 
                 # Loop over all cloned guests in an instance
                 for clone in instance.getCloneGuestList():
 
-                    if DEBUG: print("* DEBUG: cyris:     - Checking cloned guest '{0}'...".format(clone.getGuestId()))
+                    LOGGER.debug("cyris:     - Checking cloned guest '{0}'...".format(clone.getGuestId()))
 
                     # Check whether clone has NICs
                     if clone.getNicAddrDict():
@@ -870,7 +866,7 @@ class CyberRangeCreation():
                         OPTIONS_MGMT = "-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o PasswordAuthentication=no"
                         OPTIONS_CR = OPTIONS_MGMT + " -o ConnectTimeout={0}".format(CHECK_SSH_TIMEOUT_ONCE)
                         check_command = "ssh {} {} 'ssh {} {} ls'".format(OPTIONS_MGMT, host.getMgmtAddr(), OPTIONS_CR, if_addr)
-                        if DEBUG: print("* DEBUG: cyris:       Command: {0}".format(check_command))
+                        LOGGER.debug("cyris:       Command: {0}".format(check_command))
 
                         # Call function that does the actual check
                         self.check_ssh_connectivity(check_command, if_addr)
@@ -1225,7 +1221,7 @@ class CyberRangeCreation():
                 LOGGER.info("cyris_aws: - Checking guest '{0}' EC2 Instance...".format(basevm_id))
                 for i in range(20):
                     res = describe_instance_status(client, ins_ids)
-                    if DEBUG: print("* DEBUG: cyris_aws:   Guest '{0}' EC2 Instance => {1}".format(basevm_id, res))
+                    LOGGER.debug("cyris_aws:   Guest '{0}' EC2 Instance => {1}".format(basevm_id, res))
                     if res == 'running': break
                     time.sleep(5)
 
@@ -1306,13 +1302,21 @@ class CyberRangeCreation():
             self.os_system(self.creation_log_file, shutdown_command)
 
             # Check whether shutdown completed for all base VMs before distributing images
-            if DEBUG: print("* DEBUG: cyris: Checking whether shutdown completed for all base VMs...")
+            LOGGER.debug("cyris: Checking whether shutdown completed for all base VMs...")
             for guest in self.guests:
-                if DEBUG: print("* DEBUG: cyris: - Checking guest '{0}' base VM...".format(guest.getGuestId()))
-                while (subprocess.check_output("virsh list --all ", shell=True).find(guest.getBasevmName().encode("utf-8")) != -1):
-                    if DEBUG: print("* DEBUG: cyris:   Base VM '{0}' is still running => SLEEP".format(guest.getBasevmName()))
-                    time.sleep(2)
-                if DEBUG: print("* DEBUG: cyris:   Base VM '{0}' was undefined => CONTINUE".format(guest.getBasevmName()))
+                LOGGER.debug("cyris: - Checking guest '{0}' base VM...".format(guest.getGuestId()))
+                name = guest.getBasevmName()
+                # NOTE (legacy): virsh list --all shows all virtual machines, including those in 'shut off' state. This caused the original loop to enter an infinite loop.
+                #
+                # Old code for reference:
+                # while (subprocess.check_output("virsh list --all ", shell=True).find(guest.getBasevmName().encode("utf-8")) != -1):
+                #     LOGGER.debug("cyris:   Base VM '{0}' is still running => SLEEP".format(guest.getBasevmName()))
+                #     time.sleep(2)
+                if VIRT.exists(name):
+                    LOGGER.error("cyris:   Base VM '{0}' still exists in the hypervisor. Please shutdown and undefine it manually and try again.".format(name))
+                    raise SystemExit(1)
+                else:
+                    LOGGER.debug("cyris:   Base VM '{0}' was undefined => CONTINUE".format(name))
 
             ######## parallel distribute base images to hosts ###########
             LOGGER.info("cyris: Distribute the base images for cloning.")
@@ -1399,7 +1403,7 @@ class CyberRangeCreation():
                 # Install command.
                 install_command = "chmod +x {0}; {0};".format(self.install_prg_afcln_file)
                 if DEBUG: print(install_command)
-                if DEBUG: print("* DEBUG: cyris:  + Run script ", (self.install_prg_afcln_file))
+                LOGGER.debug("cyris:  + Run script ", (self.install_prg_afcln_file))
                 for guest in self.guests:
                     program_names = [item.program for item in dict_guest_prg_afcln[guest.getGuestId()]]
                     LOGGER.info("cyris:   + {}: {}".format(guest.getGuestId(), " ".join(list(map(str, program_names)))))
@@ -1495,7 +1499,7 @@ class CyberRangeCreation():
                 LOGGER.info("cyris_aws: - Checking guest '{0}' base VM...".format(basevm_id))
                 for i in range(20):
                     res = describe_instance_status(client, ins_ids)
-                    if DEBUG: print("* DEBUG: cyris_aws:   Base VM '{0}' => '{1}'".format(guest.getBasevmName(), res))
+                    LOGGER.debug("cyris_aws:   Base VM '{0}' => '{1}'".format(guest.getBasevmName(), res))
                     if res == 'stopped': break
                     time.sleep(5)
 
@@ -1516,7 +1520,7 @@ class CyberRangeCreation():
                 img_id = img_dic[guest.getBasevmName()]
                 for i in range(40):
                     res = describe_image(client, img_id)
-                    if DEBUG: print("* DEBUG: cyris_aws:   AMI for '{0}' => '{1}'".format(guest.getBasevmName(), res))
+                    LOGGER.debug("cyris_aws:   AMI for '{0}' => '{1}'".format(guest.getBasevmName(), res))
                     if res == 'available': break
                     time.sleep(5)
 
@@ -1554,7 +1558,7 @@ class CyberRangeCreation():
                             cloned_name = "{0}_cr{1}_{2}_{3}".format(clone_guest.getGuestId(), self.clone_setting.getRangeId(),instance.getIndex(),clone_guest.getIndex())
                             ins_ids = ins_dic[cloned_name]
                             res = describe_instance_status(client,ins_ids)
-                            if DEBUG: print("* DEBUG: cyris_aws:   Cloned Guest EC2 Instance '{0}' => {1}".format(cloned_name,res))
+                            LOGGER.debug("cyris_aws:   Cloned Guest EC2 Instance '{0}' => {1}".format(cloned_name,res))
                             if res == 'running':
                                 pub_IP_address = publicIp_get(client,ins_ids)
                                 clone_guest.addNicAddrDict(int(instance.getIndex()),pub_IP_address)

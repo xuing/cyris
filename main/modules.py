@@ -1,3 +1,4 @@
+from main.config import LIBVIRT_URI
 
 #############################################################################
 # Classes of CyRIS features
@@ -267,11 +268,15 @@ class ExecuteProgram(Modules):
         return command
 
 
+from virt_client import VirtClient
+
 class BaseImageLaunch(Modules):
     def __init__(self, xml_config, image_name, abspath):
         Modules.__init__(self, "LaunchBaseImage", abspath)
         self.xml_config = xml_config
         self.image_name = image_name
 
-    def command(self):
-        return "virsh --quiet define {0} > /dev/null; sleep 0.5; virsh --quiet start {1} > /dev/null".format(self.xml_config, self.image_name)
+    def launch(self):
+        vc = VirtClient(LIBVIRT_URI)
+        dom = vc.launch_from_xml(self.xml_config)
+        return f"Domain '{dom.name()}' launched successfully."

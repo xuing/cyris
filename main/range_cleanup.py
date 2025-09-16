@@ -11,6 +11,7 @@ import logging
 import psutil
 
 import parse_config
+from main.cyris import LIBVIRT_URI
 
 logging.basicConfig(level=logging.INFO, format='* %(levelname)s: %(filename)s: %(message)s')
 
@@ -24,6 +25,10 @@ RANGE_PATH = "/home/cyuser/cyris/cyber_range/"
 SETTINGS_DIR = "settings/"
 DESTRUCTION_SCRIPT1 = "whole-controlled-destruction.sh"
 DESTRUCTION_SCRIPT2 = "destruct_cyberrange.sh"          # Not used yet
+
+from virt_client import VirtClient
+
+VIRT = VirtClient(LIBVIRT_URI)
 
 # Try to call the range destruction script prepared by CyRIS
 # Return True on success, False on failure, or if the script does not exist
@@ -72,21 +77,20 @@ def storage_cleanup(range_id, cyris_path, range_path):
 
 # Forceful cleanup via KVM virsh
 def kvm_cleanup(range_id):
+    """
+    Forceful cleanup of KVM domains that contain '_cr{range_id}_' in their names.
+    Uses VirtClient instead of calling virsh via subprocess.
+    """
 
-    range_string = "_cr{}_".format(range_id)
-    command = "virsh list --all"
-    output = subprocess.check_output(command, shell=True)
-    lines = output.splitlines()
+    range_string = f"_cr{range_id}_"
     cleanup_done = False
+
     logging.info("Clean up KVM domains containing 'cr{}'.".format(range_id))
-    for line in lines:
-        if range_string.encode("utf-8") in line:
-            fields = line.split()
-            for field in fields:
-                if range_string.encode("utf-8") in field:
-                    cleanup_done = True
-                    subprocess.call(["virsh", "destroy", field])
-                    subprocess.call(["virsh", "undefine", field])
+    for dom_name in VIRT.list_all():
+        if range_string in dom_name:
+            cleanup_done = True
+            logging.info("Cleaning domain '%s'", dom_name)
+            VIRT.shutdown_then_undefine(dom_name, grace_seconds=30, destroy_on_timeout=True)
 
     if not cleanup_done:
         logging.warning("No relevant KVM domains found.")
